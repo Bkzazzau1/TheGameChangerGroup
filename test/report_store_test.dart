@@ -42,6 +42,31 @@ void main() {
     expect(job, isNull);
   });
 
+  test('report type requires its underlying capability', () {
+    final governance = GovernanceOperationsController.prototypeSeed();
+    final reports = ReportOperationsController.prototypeSeed(governance);
+
+    final auditJob = reports.requestExport(
+      kind: ReportKind.auditTrail,
+      format: ExportFormat.csv,
+      targetScope: GeographicScope.nigeria,
+      actorId: 'STATE-001',
+      role: TgcgRole.stateCoordinator,
+      userScope: GeographicScope.nigeria,
+    );
+    final incidentJob = reports.requestExport(
+      kind: ReportKind.incidentSummary,
+      format: ExportFormat.pdf,
+      targetScope: GeographicScope.nigeria,
+      actorId: 'STATE-001',
+      role: TgcgRole.stateCoordinator,
+      userScope: GeographicScope.nigeria,
+    );
+
+    expect(auditJob, isNull);
+    expect(incidentJob, isNotNull);
+  });
+
   test('export target cannot escape operator geographic scope', () {
     final governance = GovernanceOperationsController.prototypeSeed();
     final reports = ReportOperationsController.prototypeSeed(governance);
@@ -74,6 +99,33 @@ void main() {
     expect(job, isNull);
   });
 
+  test('scoped export history does not expose broader national jobs', () {
+    final governance = GovernanceOperationsController.prototypeSeed();
+    final reports = ReportOperationsController.prototypeSeed(governance);
+    const kaduna = GeographicScope(
+      level: GeographyLevel.state,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KD',
+      stateName: 'Kaduna',
+    );
+
+    expect(reports.jobsForScope(kaduna), isEmpty);
+
+    final job = reports.requestExport(
+      kind: ReportKind.incidentSummary,
+      format: ExportFormat.pdf,
+      targetScope: kaduna,
+      actorId: 'ADMIN-KD',
+      role: TgcgRole.nationalAdministrator,
+      userScope: kaduna,
+    );
+
+    expect(job, isNotNull);
+    expect(reports.jobsForScope(kaduna).map((item) => item.id), contains(job!.id));
+  });
+
   test('job lifecycle retains artifact provenance and creates audit events', () {
     final governance = GovernanceOperationsController.prototypeSeed();
     final reports = ReportOperationsController.prototypeSeed(governance);
@@ -87,8 +139,16 @@ void main() {
       recordCount: 3,
     )!;
 
+    reports.markFailed(
+      job.id,
+      actorId: 'WORKER-01',
+      error: 'Prototype worker failure.',
+    );
+    expect(reports.jobs.first.error, 'Prototype worker failure.');
+
     reports.markGenerating(job.id, actorId: 'WORKER-01');
     expect(reports.jobs.first.status, ExportJobStatus.generating);
+    expect(reports.jobs.first.error, isNull);
 
     reports.markCompleted(
       job.id,
@@ -101,6 +161,7 @@ void main() {
     expect(completed.status, ExportJobStatus.completed);
     expect(completed.fileName, 'evidence-package.zip');
     expect(completed.contentHash, 'sha256:test-hash');
+    expect(completed.error, isNull);
     expect(
       governance.auditEvents.any((event) => event.action == 'report_export_completed'),
       isTrue,
