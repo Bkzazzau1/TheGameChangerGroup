@@ -98,6 +98,32 @@ class CommunicationsController extends ChangeNotifier {
       stateId: 'KD',
       stateName: 'Kaduna',
     );
+    final kadunaNorth = GeographicScope(
+      level: GeographyLevel.lga,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KD',
+      stateName: 'Kaduna',
+      senatorialDistrictId: 'SD/053/KD',
+      senatorialDistrictName: 'Kaduna Central',
+      lgaId: 'KD-KADUNA-NORTH',
+      lgaName: 'Kaduna North',
+    );
+    final kadunaWard01 = GeographicScope(
+      level: GeographyLevel.ward,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KD',
+      stateName: 'Kaduna',
+      senatorialDistrictId: 'SD/053/KD',
+      senatorialDistrictName: 'Kaduna Central',
+      lgaId: 'KD-KADUNA-NORTH',
+      lgaName: 'Kaduna North',
+      wardId: 'KD-KN-W01',
+      wardName: 'Ward 01',
+    );
     final makurdi = GeographicScope(
       level: GeographyLevel.lga,
       country: 'Nigeria',
@@ -105,8 +131,24 @@ class CommunicationsController extends ChangeNotifier {
       zoneName: 'North Central',
       stateId: 'BN',
       stateName: 'Benue',
+      senatorialDistrictId: 'SD/020/BN',
+      senatorialDistrictName: 'Benue North West',
       lgaId: 'BN-MAKURDI',
       lgaName: 'Makurdi',
+    );
+    final makurdiWard01 = GeographicScope(
+      level: GeographyLevel.ward,
+      country: 'Nigeria',
+      zoneId: 'NC',
+      zoneName: 'North Central',
+      stateId: 'BN',
+      stateName: 'Benue',
+      senatorialDistrictId: 'SD/020/BN',
+      senatorialDistrictName: 'Benue North West',
+      lgaId: 'BN-MAKURDI',
+      lgaName: 'Makurdi',
+      wardId: 'BN-MK-W01',
+      wardName: 'Ward 01',
     );
 
     return CommunicationsController._(
@@ -134,11 +176,32 @@ class CommunicationsController extends ChangeNotifier {
           description: 'Kaduna state coordination room.',
         ),
         OperationalRoom(
+          id: 'ROOM-KD-KN',
+          name: 'Kaduna North Field Desk',
+          type: CommunicationRoomType.lga,
+          scope: kadunaNorth,
+          description: 'Kaduna North field coordination.',
+        ),
+        OperationalRoom(
+          id: 'ROOM-KD-KN-W01',
+          name: 'Ward 01 Field Team',
+          type: CommunicationRoomType.ward,
+          scope: kadunaWard01,
+          description: 'Ward 01 polling-unit agents and ward coordination.',
+        ),
+        OperationalRoom(
           id: 'ROOM-BN-MK',
-          name: 'Makurdi LGA Operations',
+          name: 'Makurdi Field Desk',
           type: CommunicationRoomType.lga,
           scope: makurdi,
           description: 'Makurdi field coordination room.',
+        ),
+        OperationalRoom(
+          id: 'ROOM-BN-MK-W01',
+          name: 'Ward 01 Field Team',
+          type: CommunicationRoomType.ward,
+          scope: makurdiWard01,
+          description: 'Ward 01 polling-unit agents and ward coordination.',
         ),
         const OperationalRoom(
           id: 'ROOM-SUPPORT',
@@ -173,6 +236,30 @@ class CommunicationsController extends ChangeNotifier {
           createdAt: now.subtract(const Duration(minutes: 12)),
           deliveryState: MessageDeliveryState.sent,
         ),
+        OperationalMessage(
+          id: 'MSG-0004',
+          roomId: 'ROOM-KD-KN-W01',
+          senderId: 'WARD-01-COORD',
+          body: 'Ward 01 team, confirm your assigned polling unit and keep incident updates inside this room.',
+          createdAt: now.subtract(const Duration(minutes: 10)),
+          deliveryState: MessageDeliveryState.delivered,
+        ),
+        OperationalMessage(
+          id: 'MSG-0005',
+          roomId: 'ROOM-KD-KN',
+          senderId: 'KD-KN-DESK',
+          body: 'Kaduna North field desk is available for local escalation and coordination.',
+          createdAt: now.subtract(const Duration(minutes: 7)),
+          deliveryState: MessageDeliveryState.delivered,
+        ),
+        OperationalMessage(
+          id: 'MSG-0006',
+          roomId: 'ROOM-BN-MK-W01',
+          senderId: 'WARD-01-COORD',
+          body: 'Makurdi Ward 01 team, use this room for local field coordination and polling-unit updates.',
+          createdAt: now.subtract(const Duration(minutes: 8)),
+          deliveryState: MessageDeliveryState.delivered,
+        ),
       ],
       broadcasts: [
         OperationalBroadcast(
@@ -200,6 +287,11 @@ class CommunicationsController extends ChangeNotifier {
   List<OperationalRoom> roomsForScope(GeographicScope userScope) =>
       _rooms.where((room) => _overlaps(userScope, room.scope)).toList(growable: false);
 
+  List<OperationalRoom> localRoomsForFieldAgent(GeographicScope userScope) {
+    if (userScope.lgaId == null) return const [];
+    return _rooms.where((room) => _isLocalFieldRoom(userScope, room)).toList(growable: false);
+  }
+
   List<OperationalMessage> messagesForRoom(String roomId) => _messages
       .where((message) => message.roomId == roomId)
       .toList(growable: false)
@@ -222,7 +314,12 @@ class CommunicationsController extends ChangeNotifier {
     if (!TgcgPermissionPolicy.allows(role, TgcgCapability.sendOperationalMessage)) {
       return false;
     }
-    if (!_overlaps(userScope, room.scope)) return false;
+
+    if (role == TgcgRole.pollingUnitAgent) {
+      if (!_isLocalFieldRoom(userScope, room)) return false;
+    } else if (!_overlaps(userScope, room.scope)) {
+      return false;
+    }
 
     final message = OperationalMessage(
       id: 'MSG-${(_messages.length + 1).toString().padLeft(4, '0')}',
@@ -278,6 +375,25 @@ class CommunicationsController extends ChangeNotifier {
       scope: targetScope,
     );
     notifyListeners();
+    return true;
+  }
+
+  static bool _isLocalFieldRoom(
+    GeographicScope userScope,
+    OperationalRoom room,
+  ) {
+    if (userScope.stateId == null || userScope.lgaId == null) return false;
+    if (room.type != CommunicationRoomType.lga &&
+        room.type != CommunicationRoomType.ward) {
+      return false;
+    }
+    if (room.scope.stateId != userScope.stateId ||
+        room.scope.lgaId != userScope.lgaId) {
+      return false;
+    }
+    if (room.type == CommunicationRoomType.ward) {
+      return userScope.wardId != null && room.scope.wardId == userScope.wardId;
+    }
     return true;
   }
 
