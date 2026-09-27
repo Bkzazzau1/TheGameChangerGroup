@@ -69,9 +69,14 @@ class _VolatileOfflineDatabase implements OfflineDatabaseBackend {
       _receipts[outboxId];
 
   @override
-  Future<void> close() async {
+  Future<void> clearAll() async {
     _entities.clear();
     _outbox.clear();
     _receipts.clear();
+  }
+
+  @override
+  Future<void> close() async {
+    await clearAll();
   }
 }
