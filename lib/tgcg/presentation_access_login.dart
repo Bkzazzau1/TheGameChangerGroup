@@ -5,8 +5,20 @@ import 'membership/membership_store.dart';
 import 'session.dart';
 import 'ui/tgcg_design.dart';
 
-class PresentationAccessLogin extends StatelessWidget {
-  const PresentationAccessLogin({super.key});
+class PresentationAccessLogin extends StatefulWidget {
+  const PresentationAccessLogin({
+    super.key,
+    required this.onResetPresentation,
+  });
+
+  final Future<void> Function() onResetPresentation;
+
+  @override
+  State<PresentationAccessLogin> createState() => _PresentationAccessLoginState();
+}
+
+class _PresentationAccessLoginState extends State<PresentationAccessLogin> {
+  bool resetting = false;
 
   @override
   Widget build(BuildContext context) => Stack(
@@ -15,30 +27,110 @@ class PresentationAccessLogin extends StatelessWidget {
           Positioned(
             right: 18,
             bottom: 18,
-            child: Material(
-              elevation: 8,
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              child: FilledButton.icon(
-                onPressed: () => _showFieldAccess(context),
-                icon: const Icon(Icons.how_to_vote_rounded),
-                label: const Text('Quick Field Access'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: TgcgColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
+            child: SafeArea(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  Material(
+                    elevation: 4,
+                    color: Colors.transparent,
                     borderRadius: BorderRadius.circular(16),
+                    child: OutlinedButton.icon(
+                      onPressed: resetting ? null : () => _reset(context),
+                      icon: resetting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.restart_alt_rounded),
+                      label: Text(
+                        resetting ? 'Restoring...' : 'Reset Presentation',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: TgcgColors.surface,
+                        foregroundColor: TgcgColors.primaryDark,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 15,
+                        ),
+                        side: const BorderSide(color: TgcgColors.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  Material(
+                    elevation: 8,
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    child: FilledButton.icon(
+                      onPressed: resetting ? null : () => _showFieldAccess(context),
+                      icon: const Icon(Icons.how_to_vote_rounded),
+                      label: const Text('Quick Field Access'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: TgcgColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ],
       );
+
+  Future<void> _reset(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reset presentation?'),
+        content: const Text(
+          'Restore the original presentation data and clear actions made during this run?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.restart_alt_rounded),
+            label: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => resetting = true);
+    try {
+      await widget.onResetPresentation();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Presentation restored and ready.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to reset presentation data.')),
+      );
+    } finally {
+      if (mounted) setState(() => resetting = false);
+    }
+  }
 
   void _showFieldAccess(BuildContext context) {
     final membership = MembershipOperations.of(context, listen: false);
