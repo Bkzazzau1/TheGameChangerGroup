@@ -9,6 +9,7 @@ import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
 import 'media/media_intelligence_page.dart';
+import 'meeting/meeting_room_page.dart';
 import 'membership/membership_page.dart';
 import 'offline/offline_persistence.dart';
 import 'reports/reports_page.dart';
@@ -116,6 +117,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.mediaIntelligence => const MediaIntelligencePage(),
         TgcgModule.communications => const CommunicationsPage(),
         TgcgModule.discussionRoom => const DiscussionRoomPage(),
+        TgcgModule.meetingRoom => const MeetingRoomPage(),
         TgcgModule.reports => const ReportsPage(),
         TgcgModule.governance => const GovernancePage(),
       };
@@ -189,8 +191,14 @@ const _allDestinations = <_Destination>[
   ),
   _Destination(
     TgcgModule.discussionRoom,
-    'Discussion Room',
-    Icons.forum_rounded,
+    'Discussion Forum',
+    Icons.dynamic_feed_outlined,
+    _NavGroup.coordination,
+  ),
+  _Destination(
+    TgcgModule.meetingRoom,
+    'Meeting Room',
+    Icons.video_camera_front_outlined,
     _NavGroup.coordination,
   ),
   _Destination(
@@ -609,7 +617,8 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.collation => 'Collation',
       TgcgModule.mediaIntelligence => 'Media Intelligence',
       TgcgModule.communications => 'Communications',
-      TgcgModule.discussionRoom => 'Discussion Room',
+      TgcgModule.discussionRoom => 'Discussion Forum',
+      TgcgModule.meetingRoom => 'Meeting Room',
       TgcgModule.reports => 'Reports & Exports',
       TgcgModule.governance => 'Data & Governance',
     };
