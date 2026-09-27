@@ -30,10 +30,11 @@ class _ReportsPageState extends State<ReportsPage> {
     final governance = GovernanceOperations.of(context);
     final reports = ReportOperations.of(context);
     final scope = session.scope;
+    final role = session.role!;
 
     bool canExport(ReportKind kind) => reports.canExportKind(
           kind: kind,
-          role: session.role!,
+          role: role,
           userScope: scope,
           targetScope: scope,
         );
@@ -65,6 +66,10 @@ class _ReportsPageState extends State<ReportsPage> {
         .length;
     final evidenceCount = incidentEvidence + resultEvidence;
 
+    final accreditationAllowed = canExport(ReportKind.accreditationReadiness);
+    final auditAllowed = canExport(ReportKind.auditTrail);
+    final syncAllowed = canExport(ReportKind.syncOutbox);
+
     final catalogue = <_ReportDescriptor>[
       _ReportDescriptor(
         kind: ReportKind.incidentSummary,
@@ -95,11 +100,12 @@ class _ReportsPageState extends State<ReportsPage> {
         subtitle:
             'Agent accreditation, assignment, training and device-readiness status.',
         icon: Icons.badge_outlined,
-        recordCount: agents.length,
-        detail:
-            '${approvedAgents.length} approved • ${readyAgents.length} ready',
+        recordCount: accreditationAllowed ? agents.length : 0,
+        detail: accreditationAllowed
+            ? '${approvedAgents.length} approved • ${readyAgents.length} ready'
+            : 'Additional accreditation permission required',
         formats: const [ExportFormat.pdf, ExportFormat.csv, ExportFormat.json],
-        enabled: canExport(ReportKind.accreditationReadiness),
+        enabled: accreditationAllowed,
       ),
       _ReportDescriptor(
         kind: ReportKind.verifiedCollation,
@@ -130,10 +136,12 @@ class _ReportsPageState extends State<ReportsPage> {
         subtitle:
             'Append-style operational actions, actors, entities, scope and timestamps.',
         icon: Icons.history_rounded,
-        recordCount: audit.length,
-        detail: '${audit.length} audit events',
+        recordCount: auditAllowed ? audit.length : 0,
+        detail: auditAllowed
+            ? '${audit.length} audit events'
+            : 'Additional audit permission required',
         formats: const [ExportFormat.csv, ExportFormat.json, ExportFormat.pdf],
-        enabled: canExport(ReportKind.auditTrail),
+        enabled: auditAllowed,
       ),
       _ReportDescriptor(
         kind: ReportKind.syncOutbox,
@@ -141,18 +149,19 @@ class _ReportsPageState extends State<ReportsPage> {
         subtitle:
             'Queued, failed and conflicting offline mutations. National/system scope only.',
         icon: Icons.sync_problem_outlined,
-        recordCount: scope.level == GeographyLevel.country
-            ? governance.outbox.length
-            : 0,
-        detail: scope.level == GeographyLevel.country
+        recordCount: syncAllowed ? governance.outbox.length : 0,
+        detail: syncAllowed
             ? '${governance.pendingOutbox.length} pending items'
-            : 'Scope metadata required for narrower export',
+            : scope.level == GeographyLevel.country
+                ? 'Additional audit permission required'
+                : 'National/system scope required',
         formats: const [ExportFormat.csv, ExportFormat.json],
-        enabled: canExport(ReportKind.syncOutbox),
+        enabled: syncAllowed,
       ),
     ];
 
-    var history = reports.jobsForScope(scope);
+    final visibleJobs = reports.jobsForScope(scope, role: role);
+    var history = List<ReportExportJob>.from(visibleJobs);
     if (kindFilter != null) {
       history = history.where((job) => job.kind == kindFilter).toList();
     }
@@ -160,12 +169,10 @@ class _ReportsPageState extends State<ReportsPage> {
       history = history.where((job) => job.status == statusFilter).toList();
     }
 
-    final queued = reports
-        .jobsForScope(scope)
+    final queued = visibleJobs
         .where((job) => job.status == ExportJobStatus.queued)
         .length;
-    final completed = reports
-        .jobsForScope(scope)
+    final completed = visibleJobs
         .where((job) => job.status == ExportJobStatus.completed)
         .length;
 
