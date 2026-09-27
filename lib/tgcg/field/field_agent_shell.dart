@@ -46,7 +46,10 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       return Scaffold(
         backgroundColor: TgcgColors.canvas,
         appBar: _appBar(session, allowHome: false),
-        body: FieldAgentHomePage(onOpenModule: (_) {}),
+        body: _FieldAssignmentRequired(
+          session: session,
+          membership: membership,
+        ),
       );
     }
 
@@ -224,6 +227,186 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         4 => TgcgModule.discussionRoom,
         _ => TgcgModule.overview,
       };
+}
+
+class _FieldAssignmentRequired extends StatelessWidget {
+  const _FieldAssignmentRequired({
+    required this.session,
+    required this.membership,
+  });
+
+  final TgcgSessionController session;
+  final MembershipOperationsController membership;
+
+  @override
+  Widget build(BuildContext context) {
+    final agents = membership.agents
+        .where((agent) =>
+            agent.role == TgcgRole.pollingUnitAgent &&
+            agent.status == AccreditationStatus.approved)
+        .toList(growable: false);
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: TgcgColors.primarySoft,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.how_to_vote_rounded,
+                          color: TgcgColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Field Assignment Required',
+                              style: TextStyle(
+                                color: TgcgColors.ink,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Select an approved polling-unit profile to continue.',
+                              style: TextStyle(
+                                color: TgcgColors.muted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  ...agents.map((agent) {
+                    final member = membership.memberById(agent.memberId);
+                    final ready = agent.trainingCompleted &&
+                        agent.biometricEnrolled &&
+                        (agent.deviceId ?? '').trim().isNotEmpty &&
+                        (agent.simFingerprint ?? '').trim().isNotEmpty;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => session.signIn(
+                          role: TgcgRole.pollingUnitAgent,
+                          operatorName: member?.fullName ?? agent.agentId,
+                          accessId: agent.agentId,
+                          scope: agent.scope,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: TgcgColors.surfaceSoft,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: TgcgColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: TgcgColors.primarySoft,
+                                foregroundColor: TgcgColors.primary,
+                                child: Text(
+                                  (member?.fullName ?? agent.agentId)
+                                      .trim()
+                                      .substring(0, 1)
+                                      .toUpperCase(),
+                                  style: const TextStyle(fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      member?.fullName ?? agent.agentId,
+                                      style: const TextStyle(
+                                        color: TgcgColors.ink,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${agent.agentId} • ${agent.scope.lgaName ?? agent.scope.stateName ?? ''}',
+                                      style: const TextStyle(
+                                        color: TgcgColors.muted,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      agent.scope.pollingUnitName ?? agent.scope.label,
+                                      style: const TextStyle(
+                                        color: TgcgColors.muted,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TgcgStatusPill(
+                                label: ready ? 'READY' : 'APPROVED',
+                                color: ready
+                                    ? TgcgColors.success
+                                    : TgcgColors.primary,
+                                compact: true,
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: TgcgColors.muted,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  if (agents.isEmpty)
+                    const TgcgEmptyState(
+                      icon: Icons.badge_outlined,
+                      title: 'No approved field profiles',
+                      message: 'Sign in again with an assigned polling-unit account.',
+                    ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: session.signOut,
+                      icon: const Icon(Icons.login_rounded),
+                      label: const Text('Sign in again'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 AccreditedAgent? _resolveAgent(
