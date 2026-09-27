@@ -1380,10 +1380,10 @@ class _ReviewTileState extends State<_ReviewTile> {
         role: session.role!,
         userScope: session.scope,
       );
-      if (!context.mounted) return;
+      if (!mounted) return;
       if (!ok) _showDenied(context);
     } catch (error) {
-      if (context.mounted) _showError(context, error);
+      if (mounted) _showError(context, error);
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1426,10 +1426,10 @@ class _ReviewTileState extends State<_ReviewTile> {
         role: session.role!,
         userScope: session.scope,
       );
-      if (!context.mounted) return;
+      if (!mounted) return;
       if (!ok) _showDenied(context);
     } catch (error) {
-      if (context.mounted) _showError(context, error);
+      if (mounted) _showError(context, error);
     } finally {
       if (mounted) setState(() => busy = false);
     }

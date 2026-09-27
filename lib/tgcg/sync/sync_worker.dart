@@ -1,5 +1,4 @@
 import '../offline/offline_persistence.dart';
-import 'sync_models.dart';
 
 enum SyncPushDisposition { acknowledged, conflict, failed }
 

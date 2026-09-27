@@ -12,10 +12,10 @@ void main() {
     expect(review.any((item) => item.id == 'RES-0001'), isFalse);
   });
 
-  test('human verification removes a flagged record from review queue', () {
+  test('human verification removes a flagged record from review queue', () async {
     final store = ResultOperationsController.prototypeSeed();
 
-    final verified = store.verify(
+    final verified = await store.verify(
       submissionId: 'RES-0002',
       verifierId: 'NATIONAL-REVIEWER',
       role: TgcgRole.nationalCollationOfficer,
@@ -29,7 +29,7 @@ void main() {
     );
   });
 
-  test('clean new polling-unit submission is not routed to human review', () {
+  test('clean new polling-unit submission is not routed to human review', () async {
     final store = ResultOperationsController.prototypeSeed();
     const scope = GeographicScope(
       level: GeographyLevel.pollingUnit,
@@ -46,7 +46,7 @@ void main() {
       pollingUnitName: 'PU 001',
     );
 
-    final submission = store.submit(
+    final submission = await store.submit(
       pollingUnitScope: scope,
       submittedBy: 'AG-BA-001',
       source: SubmissionSource.app,
@@ -63,7 +63,7 @@ void main() {
     expect(submission.status, RecordStatus.submitted);
   });
 
-  test('second active submission for same polling unit is flagged duplicate', () {
+  test('second active submission for same polling unit is flagged duplicate', () async {
     final store = ResultOperationsController.prototypeSeed();
     const scope = GeographicScope(
       level: GeographyLevel.pollingUnit,
@@ -80,7 +80,7 @@ void main() {
       pollingUnitName: 'PU 001',
     );
 
-    store.submit(
+    await store.submit(
       pollingUnitScope: scope,
       submittedBy: 'AG-EN-001',
       source: SubmissionSource.sms,
@@ -89,7 +89,7 @@ void main() {
       accreditedVoters: 135,
       rejectedVotes: 5,
     );
-    final duplicate = store.submit(
+    final duplicate = await store.submit(
       pollingUnitScope: scope,
       submittedBy: 'AG-EN-002',
       source: SubmissionSource.ussd,
