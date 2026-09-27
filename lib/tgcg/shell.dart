@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'ai/ai_verification_page.dart';
+import 'alerts/alert_center_page.dart';
 import 'collation/collation_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
@@ -15,6 +17,7 @@ import 'membership/national_membership_page.dart';
 import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
 import 'offline/offline_persistence.dart';
+import 'operations/live_operations_page.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
@@ -36,12 +39,11 @@ class _TgcgShellState extends State<TgcgShell> {
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     final allowed = allowedModules(session.role!);
-
     if (!allowed.contains(selectedModule)) {
       selectedModule = TgcgModule.overview;
     }
 
-    final destinations = _allDestinations
+    final destinations = _destinations
         .where((item) => allowed.contains(item.module))
         .toList(growable: false);
 
@@ -56,16 +58,19 @@ class _TgcgShellState extends State<TgcgShell> {
                   elevation: 0,
                   backgroundColor: TgcgColors.surface,
                   surfaceTintColor: Colors.transparent,
-                  titleSpacing: 8,
                   title: const _CompactBrand(),
                   actions: [
-                    _CompactSync(),
+                    const _CompactSync(),
                     const SizedBox(width: 4),
-                    IconButton(
-                      tooltip: 'Notifications',
-                      onPressed: () {},
-                      icon: const Icon(Icons.notifications_none_rounded),
-                    ),
+                    if (allowed.contains(TgcgModule.alertCenter))
+                      IconButton(
+                        tooltip: 'Alert Centre',
+                        onPressed: () => _select(TgcgModule.alertCenter),
+                        icon: const Badge(
+                          smallSize: 7,
+                          child: Icon(Icons.notifications_none_rounded),
+                        ),
+                      ),
                     const SizedBox(width: 6),
                   ],
                 ),
@@ -96,7 +101,11 @@ class _TgcgShellState extends State<TgcgShell> {
                     Expanded(
                       child: Column(
                         children: [
-                          _CommandBar(selectedModule: selectedModule),
+                          _CommandBar(
+                            selectedModule: selectedModule,
+                            showAlerts: allowed.contains(TgcgModule.alertCenter),
+                            onAlerts: () => _select(TgcgModule.alertCenter),
+                          ),
                           Expanded(child: _pageFor(selectedModule)),
                         ],
                       ),
@@ -114,6 +123,9 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.accreditation => const PvcEnrollmentPage(),
         TgcgModule.membershipNetwork => const NationalMembershipPage(),
         TgcgModule.geography => const GeographyPage(),
+        TgcgModule.liveOperations => const LiveOperationsPage(),
+        TgcgModule.aiVerification => const AiVerificationPage(),
+        TgcgModule.alertCenter => const AlertCenterPage(),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.evidenceCapture => const EvidenceCapturePage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
@@ -133,110 +145,32 @@ enum _NavGroup { command, fieldOperations, coordination, control }
 
 class _Destination {
   const _Destination(this.module, this.label, this.icon, this.group);
-
   final TgcgModule module;
   final String label;
   final IconData icon;
   final _NavGroup group;
 }
 
-const _allDestinations = <_Destination>[
-  _Destination(
-    TgcgModule.overview,
-    'Command Overview',
-    Icons.space_dashboard_outlined,
-    _NavGroup.command,
-  ),
-  _Destination(
-    TgcgModule.membershipNetwork,
-    'Registered Members',
-    Icons.groups_2_outlined,
-    _NavGroup.command,
-  ),
-  _Destination(
-    TgcgModule.situationRoom,
-    'Situation Room',
-    Icons.radar_rounded,
-    _NavGroup.command,
-  ),
-  _Destination(
-    TgcgModule.mediaIntelligence,
-    'Media Intelligence',
-    Icons.insights_outlined,
-    _NavGroup.command,
-  ),
-  _Destination(
-    TgcgModule.geography,
-    'Geographic Operations',
-    Icons.public_rounded,
-    _NavGroup.command,
-  ),
-  _Destination(
-    TgcgModule.accreditation,
-    'Member Enrolment',
-    Icons.how_to_reg_outlined,
-    _NavGroup.fieldOperations,
-  ),
-  _Destination(
-    TgcgModule.fieldMonitoring,
-    'Field Monitoring',
-    Icons.sensors_outlined,
-    _NavGroup.fieldOperations,
-  ),
-  _Destination(
-    TgcgModule.evidenceCapture,
-    'Evidence Capture',
-    Icons.perm_media_outlined,
-    _NavGroup.fieldOperations,
-  ),
-  _Destination(
-    TgcgModule.resultCapture,
-    'Result Capture',
-    Icons.ballot_outlined,
-    _NavGroup.fieldOperations,
-  ),
-  _Destination(
-    TgcgModule.collation,
-    'Collation',
-    Icons.account_tree_outlined,
-    _NavGroup.fieldOperations,
-  ),
-  _Destination(
-    TgcgModule.communications,
-    'Communications',
-    Icons.forum_outlined,
-    _NavGroup.coordination,
-  ),
-  _Destination(
-    TgcgModule.discussionRoom,
-    'Discussion Forum',
-    Icons.dynamic_feed_outlined,
-    _NavGroup.coordination,
-  ),
-  _Destination(
-    TgcgModule.meetingRoom,
-    'Meeting Room',
-    Icons.video_camera_front_outlined,
-    _NavGroup.coordination,
-  ),
-  _Destination(
-    TgcgModule.systemMonitoring,
-    'System Monitoring',
-    Icons.monitor_heart_outlined,
-    _NavGroup.control,
-  ),
-  _Destination(
-    TgcgModule.reports,
-    'Reports & Exports',
-    Icons.description_outlined,
-    _NavGroup.control,
-  ),
-  _Destination(
-    TgcgModule.governance,
-    'Data & Governance',
-    Icons.shield_outlined,
-    _NavGroup.control,
-  ),
+const _destinations = <_Destination>[
+  _Destination(TgcgModule.overview, 'Command Overview', Icons.space_dashboard_outlined, _NavGroup.command),
+  _Destination(TgcgModule.liveOperations, 'Live Operations', Icons.travel_explore_rounded, _NavGroup.command),
+  _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
+  _Destination(TgcgModule.membershipNetwork, 'Registered Members', Icons.groups_2_outlined, _NavGroup.command),
+  _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
+  _Destination(TgcgModule.mediaIntelligence, 'Media Intelligence', Icons.insights_outlined, _NavGroup.command),
+  _Destination(TgcgModule.geography, 'Geographic Operations', Icons.public_rounded, _NavGroup.command),
+  _Destination(TgcgModule.accreditation, 'Member Enrolment', Icons.how_to_reg_outlined, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.aiVerification, 'AI Verification', Icons.auto_awesome_rounded, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.fieldMonitoring, 'Field Monitoring', Icons.sensors_outlined, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.evidenceCapture, 'Evidence Capture', Icons.perm_media_outlined, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.resultCapture, 'Result Capture', Icons.ballot_outlined, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.collation, 'Collation', Icons.account_tree_outlined, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.communications, 'Communications', Icons.forum_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.discussionRoom, 'Discussion Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.systemMonitoring, 'System Monitoring', Icons.monitor_heart_outlined, _NavGroup.control),
+  _Destination(TgcgModule.reports, 'Reports & Exports', Icons.description_outlined, _NavGroup.control),
+  _Destination(TgcgModule.governance, 'Data & Governance', Icons.shield_outlined, _NavGroup.control),
 ];
 
 class _Navigation extends StatelessWidget {
@@ -305,12 +239,7 @@ class _Navigation extends StatelessWidget {
 }
 
 class _NavTile extends StatelessWidget {
-  const _NavTile({
-    required this.item,
-    required this.active,
-    required this.onTap,
-  });
-
+  const _NavTile({required this.item, required this.active, required this.onTap});
   final _Destination item;
   final bool active;
   final VoidCallback onTap;
@@ -329,18 +258,12 @@ class _NavTile extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(11),
                 border: active
-                    ? const Border(
-                        left: BorderSide(color: TgcgColors.accent, width: 3),
-                      )
+                    ? const Border(left: BorderSide(color: TgcgColors.accent, width: 3))
                     : null,
               ),
               child: Row(
                 children: [
-                  Icon(
-                    item.icon,
-                    size: 19,
-                    color: active ? Colors.white : const Color(0xFFA9BBB5),
-                  ),
+                  Icon(item.icon, size: 19, color: active ? Colors.white : const Color(0xFFA9BBB5)),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Text(
@@ -364,7 +287,6 @@ class _NavTile extends StatelessWidget {
 
 class _OperatorCard extends StatelessWidget {
   const _OperatorCard({required this.session});
-
   final TgcgSessionController session;
 
   @override
@@ -386,11 +308,7 @@ class _OperatorCard extends StatelessWidget {
                     color: TgcgColors.accent.withValues(alpha: .16),
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: const Icon(
-                    Icons.person_outline_rounded,
-                    color: TgcgColors.accent,
-                    size: 19,
-                  ),
+                  child: const Icon(Icons.person_outline_rounded, color: TgcgColors.accent, size: 19),
                 ),
                 const SizedBox(width: 9),
                 Expanded(
@@ -398,26 +316,17 @@ class _OperatorCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        session.operatorName.isEmpty
-                            ? 'TGCG Operator'
-                            : session.operatorName,
+                        session.operatorName.isEmpty ? 'TGCG Operator' : session.operatorName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11.5,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11.5),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         roleLabel(session.role!),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFA5B8B1),
-                          fontSize: 9.5,
-                        ),
+                        style: const TextStyle(color: Color(0xFFA5B8B1), fontSize: 9.5),
                       ),
                     ],
                   ),
@@ -426,32 +335,21 @@ class _OperatorCard extends StatelessWidget {
                   tooltip: 'Sign out',
                   onPressed: session.signOut,
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(
-                    Icons.logout_rounded,
-                    color: Color(0xFFA5B8B1),
-                    size: 18,
-                  ),
+                  icon: const Icon(Icons.logout_rounded, color: Color(0xFFA5B8B1), size: 18),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(
-                  Icons.location_on_outlined,
-                  color: Color(0xFF80968E),
-                  size: 14,
-                ),
+                const Icon(Icons.location_on_outlined, color: Color(0xFF80968E), size: 14),
                 const SizedBox(width: 5),
                 Expanded(
                   child: Text(
                     session.scope.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF8EA49D),
-                      fontSize: 9.5,
-                    ),
+                    style: const TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5),
                   ),
                 ),
               ],
@@ -462,16 +360,20 @@ class _OperatorCard extends StatelessWidget {
 }
 
 class _CommandBar extends StatelessWidget {
-  const _CommandBar({required this.selectedModule});
+  const _CommandBar({
+    required this.selectedModule,
+    required this.showAlerts,
+    required this.onAlerts,
+  });
 
   final TgcgModule selectedModule;
+  final bool showAlerts;
+  final VoidCallback onAlerts;
 
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final offline = OfflinePersistence.of(context);
-    final pending = offline.pendingOutbox.length;
-
+    final pending = OfflinePersistence.of(context).pendingOutbox.length;
     return Container(
       height: 68,
       padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -483,19 +385,15 @@ class _CommandBar extends StatelessWidget {
         children: [
           Text(
             _moduleLabel(selectedModule),
-            style: const TextStyle(
-              color: TgcgColors.ink,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-            ),
+            style: const TextStyle(color: TgcgColors.ink, fontSize: 14, fontWeight: FontWeight.w900),
           ),
           const SizedBox(width: 20),
           Expanded(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: TextField(
+              child: const TextField(
                 readOnly: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Search agents, polling units, incidents or results',
                   prefixIcon: Icon(Icons.search_rounded, size: 20),
                   isDense: true,
@@ -507,35 +405,28 @@ class _CommandBar extends StatelessWidget {
           TgcgStatusPill(
             label: pending == 0 ? 'SYNCED' : '$pending TO SYNC',
             color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
-            icon: pending == 0
-                ? Icons.cloud_done_outlined
-                : Icons.cloud_upload_outlined,
+            icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
             compact: true,
           ),
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Badge(
-              smallSize: 7,
-              child: Icon(Icons.notifications_none_rounded),
+          if (showAlerts) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              tooltip: 'Alert Centre',
+              onPressed: onAlerts,
+              icon: const Badge(
+                smallSize: 7,
+                child: Icon(Icons.notifications_none_rounded),
+              ),
             ),
-          ),
+          ],
           const SizedBox(width: 4),
           Tooltip(
             message: '${roleLabel(session.role!)} • ${session.scope.label}',
             child: Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                color: TgcgColors.primarySoft,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: const Icon(
-                Icons.person_outline_rounded,
-                color: TgcgColors.primary,
-                size: 19,
-              ),
+              decoration: BoxDecoration(color: TgcgColors.primarySoft, borderRadius: BorderRadius.circular(11)),
+              child: const Icon(Icons.person_outline_rounded, color: TgcgColors.primary, size: 19),
             ),
           ),
         ],
@@ -545,15 +436,15 @@ class _CommandBar extends StatelessWidget {
 }
 
 class _CompactSync extends StatelessWidget {
+  const _CompactSync();
+
   @override
   Widget build(BuildContext context) {
     final pending = OfflinePersistence.of(context).pendingOutbox.length;
     return TgcgStatusPill(
       label: pending == 0 ? 'SYNCED' : '$pending QUEUED',
       color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
-      icon: pending == 0
-          ? Icons.cloud_done_outlined
-          : Icons.cloud_upload_outlined,
+      icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
       compact: true,
     );
   }
@@ -565,7 +456,7 @@ class _Brand extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Row(
         children: [
-          _BrandMark(),
+          TgcgLogo(size: 39),
           SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -573,21 +464,10 @@ class _Brand extends StatelessWidget {
               children: [
                 Text(
                   'TGCG-EMCOP',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .7,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: .7, fontSize: 14),
                 ),
                 SizedBox(height: 2),
-                Text(
-                  'National Operations',
-                  style: TextStyle(
-                    color: Color(0xFF8EA49D),
-                    fontSize: 9.5,
-                  ),
-                ),
+                Text('National Operations', style: TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5)),
               ],
             ),
           ),
@@ -602,26 +482,11 @@ class _CompactBrand extends StatelessWidget {
   Widget build(BuildContext context) => const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _BrandMark(size: 36),
+          TgcgLogo(size: 36),
           SizedBox(width: 8),
-          Text(
-            'TGCG-EMCOP',
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              color: TgcgColors.ink,
-            ),
-          ),
+          Text('TGCG-EMCOP', style: TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink)),
         ],
       );
-}
-
-class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.size = 39});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => TgcgLogo(size: size);
 }
 
 String _groupLabel(_NavGroup group) => switch (group) {
@@ -636,6 +501,9 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.accreditation => 'Member Enrolment',
       TgcgModule.membershipNetwork => 'Registered Members',
       TgcgModule.geography => 'Geographic Operations',
+      TgcgModule.liveOperations => 'Live Operations',
+      TgcgModule.aiVerification => 'AI Verification Centre',
+      TgcgModule.alertCenter => 'Alert Centre',
       TgcgModule.fieldMonitoring => 'Field Monitoring',
       TgcgModule.evidenceCapture => 'Evidence Capture',
       TgcgModule.situationRoom => 'Situation Room',
