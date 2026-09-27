@@ -10,6 +10,9 @@ enum TgcgModule {
   accreditation,
   membershipNetwork,
   geography,
+  liveOperations,
+  aiVerification,
+  alertCenter,
   fieldMonitoring,
   evidenceCapture,
   situationRoom,
@@ -165,6 +168,10 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewGeography)) {
     modules.add(TgcgModule.geography);
+    if (role != TgcgRole.pollingUnitAgent && role != TgcgRole.observer) {
+      modules.add(TgcgModule.liveOperations);
+      modules.add(TgcgModule.alertCenter);
+    }
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewIncidents) ||
       TgcgPermissionPolicy.allows(role, TgcgCapability.createIncident) ||
@@ -181,6 +188,11 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
       TgcgPermissionPolicy.allows(role, TgcgCapability.verifyElectionResult) ||
       TgcgPermissionPolicy.allows(role, TgcgCapability.disputeElectionResult)) {
     modules.add(TgcgModule.resultCapture);
+  }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.verifyElectionResult) ||
+      TgcgPermissionPolicy.allows(role, TgcgCapability.manageMembership) ||
+      TgcgPermissionPolicy.allows(role, TgcgCapability.manageEvidence)) {
+    modules.add(TgcgModule.aiVerification);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewCollation)) {
     modules.add(TgcgModule.collation);
