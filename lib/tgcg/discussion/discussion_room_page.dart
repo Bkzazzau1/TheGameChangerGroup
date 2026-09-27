@@ -50,7 +50,6 @@ class _DiscussionThread {
     required this.time,
     required this.replies,
     this.pinned = false,
-    this.resolved = false,
   });
 
   final String id;
@@ -62,7 +61,7 @@ class _DiscussionThread {
   final String time;
   final List<_DiscussionReply> replies;
   bool pinned;
-  bool resolved;
+  bool resolved = false;
 }
 
 class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
@@ -283,7 +282,7 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
                   : () => _postReply(context, session, selected!),
               onToggleResolved: selected == null || !canCreate
                   ? null
-                  : () => setState(() => selected!.resolved = !selected!.resolved),
+                  : () => setState(() => selected!.resolved = !selected.resolved),
             );
 
             if (constraints.maxWidth < 760) {
