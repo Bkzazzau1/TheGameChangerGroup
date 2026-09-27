@@ -25,48 +25,75 @@ class TgcgDashboardPage extends StatelessWidget {
     final fieldReports = field.reportsForScope(scope);
     final submissions = results.submissionsForScope(scope);
     final review = results.reviewQueueForScope(scope);
-    final registeredMembers = membership.membersForScope(scope);
+    final members = membership.membersForScope(scope);
     final agents = membership.agentsForScope(scope);
     final approvedAgents = agents
         .where((agent) => agent.status == AccreditationStatus.approved)
         .toList(growable: false);
     final readyAgents = approvedAgents
-        .where((agent) =>
-            agent.trainingCompleted &&
-            agent.biometricEnrolled &&
-            agent.deviceId != null)
+        .where(
+          (agent) =>
+              agent.trainingCompleted &&
+              agent.biometricEnrolled &&
+              agent.deviceId != null,
+        )
         .toList(growable: false);
     final openIncidents = incidents
-        .where((item) =>
-            item.status != IncidentStatus.resolved &&
-            item.status != IncidentStatus.closed)
+        .where(
+          (item) =>
+              item.status != IncidentStatus.resolved &&
+              item.status != IncidentStatus.closed,
+        )
         .toList(growable: false);
-    final criticalAndHigh = openIncidents
-        .where((item) =>
-            item.severity == IncidentSeverity.critical ||
-            item.severity == IncidentSeverity.high)
-        .toList(growable: false);
+    final highPriority = openIncidents
+        .where(
+          (item) =>
+              item.severity == IncidentSeverity.high ||
+              item.severity == IncidentSeverity.critical,
+        )
+        .length;
 
     final collationEngine = CollationEngine.prototypeSeed();
     final collation = collationEngine.summarize(scope, results.submissions);
-    final childScopes = collationEngine.childScopes(scope);
+
+    // Geography navigation comes from the canonical national registry, not
+    // from the small result-collation seed. At national level this therefore
+    // always exposes all six geopolitical zones.
+    final childScopes = membership.geography.childScopes(scope);
+    final coverage = childScopes
+        .map(
+          (child) => _CoverageData(
+            scope: child,
+            members: membership.memberCountForScope(child),
+            agents: membership.agentCountForScope(child),
+            incidents: field
+                .incidentsForScope(child)
+                .where(
+                  (item) =>
+                      item.status != IncidentStatus.resolved &&
+                      item.status != IncidentStatus.closed,
+                )
+                .length,
+            results: results.submissionsForScope(child).length,
+          ),
+        )
+        .toList(growable: false);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 760;
-        final pagePadding = compact ? 16.0 : 24.0;
+        final padding = compact ? 16.0 : 24.0;
+
         return ListView(
-          padding: EdgeInsets.fromLTRB(pagePadding, 22, pagePadding, 32),
+          padding: EdgeInsets.fromLTRB(padding, 22, padding, 36),
           children: [
             TgcgPageHeader(
               eyebrow: scope.level == GeographyLevel.country
-                  ? 'National command centre'
-                  : 'Authorized operational scope',
-              title: session.role == TgcgRole.pollingUnitAgent
-                  ? 'Polling Unit Workspace'
-                  : 'Operations Command',
+                  ? 'NATIONAL COMMAND CENTRE'
+                  : 'AUTHORIZED OPERATIONAL SCOPE',
+              title: 'Operations Command',
               subtitle:
-                  '${roleLabel(session.role!)} • ${scope.label}. Live field operations, membership coverage, verified result progress and command exceptions in one workspace.',
+                  '${roleLabel(session.role!)} • ${scope.label}. Membership, field operations, incidents, agents and verified-result activity in one command view.',
               trailing: compact
                   ? null
                   : const TgcgStatusPill(
@@ -77,82 +104,73 @@ class TgcgDashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _MetricGrid(
-              incidents: openIncidents.length,
-              highPriority: criticalAndHigh.length,
+              openIncidents: openIncidents.length,
+              highPriority: highPriority,
+              registeredMembers: members.length,
               submissions: submissions.length,
               review: review.length,
-              registeredMembers: registeredMembers.length,
+              verifiedPollingUnits: collation.verifiedPollingUnitCount,
               approvedAgents: approvedAgents.length,
               readyAgents: readyAgents.length,
-              verifiedPollingUnits: collation.verifiedPollingUnitCount,
-              expectedPollingUnits: collation.expectedPollingUnitCount,
               modules: modules,
               onOpenModule: onOpenModule,
             ),
             const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, inner) {
-                final map = _OperationsMapPanel(
-                  scope: scope,
-                  engine: collationEngine,
-                  submissions: results.submissions,
-                  childScopes: childScopes,
-                  incidentCount: openIncidents.length,
-                  onOpenGeography: modules.contains(TgcgModule.geography)
-                      ? () => onOpenModule(TgcgModule.geography)
-                      : null,
-                );
-                final progress = _ElectionProgressPanel(
-                  summary: collation,
-                  readyAgents: readyAgents.length,
-                  approvedAgents: approvedAgents.length,
-                  fieldReports: fieldReports.length,
-                  onOpenCollation: modules.contains(TgcgModule.collation)
-                      ? () => onOpenModule(TgcgModule.collation)
-                      : null,
-                );
-                if (inner.maxWidth < 980) {
-                  return Column(
-                    children: [map, const SizedBox(height: 16), progress],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 7, child: map),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 4, child: progress),
-                  ],
-                );
-              },
+            _CoveragePanel(
+              scope: scope,
+              coverage: coverage,
+              totalMembers: members.length,
+              totalAgents: agents.length,
+              onOpenMembership: modules.contains(TgcgModule.membershipNetwork)
+                  ? () => onOpenModule(TgcgModule.membershipNetwork)
+                  : null,
+              onOpenGeography: modules.contains(TgcgModule.geography)
+                  ? () => onOpenModule(TgcgModule.geography)
+                  : null,
             ),
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, inner) {
-                final events = _CriticalEventFeed(
+                final progress = _OperationsProgressPanel(
+                  collation: collation,
+                  readyAgents: readyAgents.length,
+                  approvedAgents: approvedAgents.length,
+                  fieldReports: fieldReports.length,
+                  openIncidents: openIncidents.length,
+                  onOpenCollation: modules.contains(TgcgModule.collation)
+                      ? () => onOpenModule(TgcgModule.collation)
+                      : null,
+                );
+                final events = _PriorityEventsPanel(
                   incidents: openIncidents,
                   reviewCount: review.length,
                   modules: modules,
                   onOpenModule: onOpenModule,
                 );
-                final actions = _QuickCommandPanel(
-                  modules: modules,
-                  onOpenModule: onOpenModule,
-                );
-                if (inner.maxWidth < 900) {
+
+                if (inner.maxWidth < 940) {
                   return Column(
-                    children: [events, const SizedBox(height: 16), actions],
+                    children: [
+                      progress,
+                      const SizedBox(height: 16),
+                      events,
+                    ],
                   );
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 6, child: events),
+                    Expanded(flex: 4, child: progress),
                     const SizedBox(width: 16),
-                    Expanded(flex: 4, child: actions),
+                    Expanded(flex: 6, child: events),
                   ],
                 );
               },
+            ),
+            const SizedBox(height: 16),
+            _QuickCommandPanel(
+              modules: modules,
+              onOpenModule: onOpenModule,
             ),
           ],
         );
@@ -163,28 +181,26 @@ class TgcgDashboardPage extends StatelessWidget {
 
 class _MetricGrid extends StatelessWidget {
   const _MetricGrid({
-    required this.incidents,
+    required this.openIncidents,
     required this.highPriority,
+    required this.registeredMembers,
     required this.submissions,
     required this.review,
-    required this.registeredMembers,
+    required this.verifiedPollingUnits,
     required this.approvedAgents,
     required this.readyAgents,
-    required this.verifiedPollingUnits,
-    required this.expectedPollingUnits,
     required this.modules,
     required this.onOpenModule,
   });
 
-  final int incidents;
+  final int openIncidents;
   final int highPriority;
+  final int registeredMembers;
   final int submissions;
   final int review;
-  final int registeredMembers;
+  final int verifiedPollingUnits;
   final int approvedAgents;
   final int readyAgents;
-  final int verifiedPollingUnits;
-  final int expectedPollingUnits;
   final Set<TgcgModule> modules;
   final ValueChanged<TgcgModule> onOpenModule;
 
@@ -200,417 +216,311 @@ class _MetricGrid extends StatelessWidget {
                       : 1;
           const gap = 12.0;
           final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              TgcgMetricCard(
-                width: width,
-                label: 'Open incidents',
-                value: '$incidents',
-                detail: '$highPriority high / critical',
-                icon: Icons.warning_amber_rounded,
-                tone: incidents == 0
-                    ? TgcgMetricTone.success
-                    : TgcgMetricTone.warning,
-                onTap: modules.contains(TgcgModule.situationRoom)
-                    ? () => onOpenModule(TgcgModule.situationRoom)
-                    : null,
-              ),
-              if (modules.contains(TgcgModule.membershipNetwork))
-                TgcgMetricCard(
-                  width: width,
-                  label: 'Registered members',
-                  value: '$registeredMembers',
-                  detail: 'Nationwide membership network',
-                  icon: Icons.groups_2_outlined,
-                  tone: TgcgMetricTone.info,
-                  onTap: () => onOpenModule(TgcgModule.membershipNetwork),
-                ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Results received',
-                value: '$submissions',
-                detail: '$review awaiting human review',
-                icon: Icons.ballot_outlined,
-                tone: TgcgMetricTone.info,
-                onTap: modules.contains(TgcgModule.resultCapture)
-                    ? () => onOpenModule(TgcgModule.resultCapture)
-                    : null,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Verified polling units',
-                value: '$verifiedPollingUnits',
-                detail: '$expectedPollingUnits expected in current scope',
-                icon: Icons.fact_check_outlined,
-                tone: TgcgMetricTone.success,
-                onTap: modules.contains(TgcgModule.collation)
-                    ? () => onOpenModule(TgcgModule.collation)
-                    : null,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Approved agents',
-                value: '$approvedAgents',
-                detail: '$readyAgents operationally ready',
-                icon: Icons.badge_outlined,
-                tone: TgcgMetricTone.neutral,
-                onTap: modules.contains(TgcgModule.accreditation)
-                    ? () => onOpenModule(TgcgModule.accreditation)
-                    : null,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Human review',
-                value: '$review',
-                detail: 'OCR, duplicate or arithmetic flags',
-                icon: Icons.psychology_alt_outlined,
-                tone: TgcgMetricTone.ai,
-                onTap: modules.contains(TgcgModule.resultCapture)
-                    ? () => onOpenModule(TgcgModule.resultCapture)
-                    : null,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Agent readiness',
-                value: approvedAgents == 0
-                    ? '0%'
-                    : '${((readyAgents / approvedAgents) * 100).round()}%',
-                detail: 'Training + identity + bound device',
-                icon: Icons.verified_user_outlined,
-                tone: TgcgMetricTone.success,
-                onTap: modules.contains(TgcgModule.accreditation)
-                    ? () => onOpenModule(TgcgModule.accreditation)
-                    : null,
-              ),
-            ],
-          );
+
+          final cards = <Widget>[
+            TgcgMetricCard(
+              width: width,
+              label: 'Registered members',
+              value: '$registeredMembers',
+              detail: 'Membership in current scope',
+              icon: Icons.groups_2_outlined,
+              tone: TgcgMetricTone.info,
+              onTap: modules.contains(TgcgModule.membershipNetwork)
+                  ? () => onOpenModule(TgcgModule.membershipNetwork)
+                  : null,
+            ),
+            TgcgMetricCard(
+              width: width,
+              label: 'Approved agents',
+              value: '$approvedAgents',
+              detail: '$readyAgents operationally ready',
+              icon: Icons.badge_outlined,
+              tone: TgcgMetricTone.success,
+              onTap: modules.contains(TgcgModule.accreditation)
+                  ? () => onOpenModule(TgcgModule.accreditation)
+                  : null,
+            ),
+            TgcgMetricCard(
+              width: width,
+              label: 'Open incidents',
+              value: '$openIncidents',
+              detail: '$highPriority high / critical',
+              icon: Icons.warning_amber_rounded,
+              tone: openIncidents == 0
+                  ? TgcgMetricTone.success
+                  : TgcgMetricTone.warning,
+              onTap: modules.contains(TgcgModule.situationRoom)
+                  ? () => onOpenModule(TgcgModule.situationRoom)
+                  : null,
+            ),
+            TgcgMetricCard(
+              width: width,
+              label: 'Results received',
+              value: '$submissions',
+              detail: '$review awaiting review',
+              icon: Icons.ballot_outlined,
+              tone: TgcgMetricTone.ai,
+              onTap: modules.contains(TgcgModule.resultCapture)
+                  ? () => onOpenModule(TgcgModule.resultCapture)
+                  : null,
+            ),
+            TgcgMetricCard(
+              width: width,
+              label: 'Verified result PUs',
+              value: '$verifiedPollingUnits',
+              detail: 'Verified submissions included',
+              icon: Icons.fact_check_outlined,
+              tone: TgcgMetricTone.success,
+              onTap: modules.contains(TgcgModule.collation)
+                  ? () => onOpenModule(TgcgModule.collation)
+                  : null,
+            ),
+            TgcgMetricCard(
+              width: width,
+              label: 'Agent readiness',
+              value: approvedAgents == 0
+                  ? '0%'
+                  : '${((readyAgents / approvedAgents) * 100).round()}%',
+              detail: 'Training + identity + device',
+              icon: Icons.verified_user_outlined,
+              tone: TgcgMetricTone.neutral,
+              onTap: modules.contains(TgcgModule.accreditation)
+                  ? () => onOpenModule(TgcgModule.accreditation)
+                  : null,
+            ),
+          ];
+
+          return Wrap(spacing: gap, runSpacing: gap, children: cards);
         },
       );
 }
 
-class _OperationsMapPanel extends StatelessWidget {
-  const _OperationsMapPanel({
+class _CoverageData {
+  const _CoverageData({
     required this.scope,
-    required this.engine,
-    required this.submissions,
-    required this.childScopes,
-    required this.incidentCount,
+    required this.members,
+    required this.agents,
+    required this.incidents,
+    required this.results,
+  });
+
+  final GeographicScope scope;
+  final int members;
+  final int agents;
+  final int incidents;
+  final int results;
+}
+
+class _CoveragePanel extends StatelessWidget {
+  const _CoveragePanel({
+    required this.scope,
+    required this.coverage,
+    required this.totalMembers,
+    required this.totalAgents,
+    required this.onOpenMembership,
     required this.onOpenGeography,
   });
 
   final GeographicScope scope;
-  final CollationEngine engine;
-  final List<ElectionResultSubmission> submissions;
-  final List<GeographicScope> childScopes;
-  final int incidentCount;
+  final List<_CoverageData> coverage;
+  final int totalMembers;
+  final int totalAgents;
+  final VoidCallback? onOpenMembership;
   final VoidCallback? onOpenGeography;
 
-  @override
-  Widget build(BuildContext context) {
-    final visibleChildren = childScopes.take(6).toList(growable: false);
-    return TgcgSectionCard(
-      title: 'Operational geography',
-      subtitle:
-          'Geographic view of polling-unit coverage, incidents and result progress.',
-      trailing: onOpenGeography == null
-          ? null
-          : TextButton.icon(
-              onPressed: onOpenGeography,
-              icon: const Icon(Icons.open_in_new_rounded, size: 16),
-              label: const Text('Open GIS'),
-            ),
-      child: Column(
-        children: [
-          Container(
-            height: 290,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(17),
-              color: const Color(0xFF102E28),
-            ),
-            child: Stack(
-              children: [
-                const Positioned.fill(child: CustomPaint(painter: _GridPainter())),
-                Positioned(
-                  left: 18,
-                  top: 16,
-                  child: TgcgStatusPill(
-                    label: scope.label.toUpperCase(),
-                    color: TgcgColors.accent,
-                    icon: Icons.location_on_outlined,
-                    compact: true,
-                  ),
-                ),
-                Positioned(
-                  right: 18,
-                  top: 16,
-                  child: Row(
-                    children: [
-                      _MapLegendDot(
-                        label: 'Result',
-                        color: TgcgColors.success,
-                      ),
-                      const SizedBox(width: 10),
-                      _MapLegendDot(
-                        label: 'Incident',
-                        color: TgcgColors.danger,
-                      ),
-                    ],
-                  ),
-                ),
-                ...List.generate(visibleChildren.length, (index) {
-                  final child = visibleChildren[index];
-                  final childSummary = engine.summarize(child, submissions);
-                  final positions = const [
-                    Offset(.18, .32),
-                    Offset(.49, .25),
-                    Offset(.75, .37),
-                    Offset(.28, .65),
-                    Offset(.57, .62),
-                    Offset(.82, .70),
-                  ];
-                  final p = positions[index];
-                  return Positioned(
-                    left: p.dx * 610,
-                    top: p.dy * 230,
-                    child: _MapNode(
-                      label: child.label,
-                      progress: childSummary.completionPercent,
-                    ),
-                  );
-                }),
-                if (visibleChildren.isEmpty)
-                  const Center(
-                    child: TgcgStatusPill(
-                      label: 'POLLING UNIT VIEW',
-                      color: TgcgColors.info,
-                      icon: Icons.pin_drop_outlined,
-                    ),
-                  ),
-                Positioned(
-                  left: 18,
-                  right: 18,
-                  bottom: 16,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${visibleChildren.length} geographic areas visible • $incidentCount unresolved incident${incidentCount == 1 ? '' : 's'}',
-                          style: const TextStyle(
-                            color: Color(0xFFB8CEC6),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const Icon(
-                        Icons.layers_outlined,
-                        color: Color(0xFFB8CEC6),
-                        size: 17,
-                      ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'Coverage  •  Incidents  •  Results',
-                        style: TextStyle(
-                          color: Color(0xFFB8CEC6),
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (visibleChildren.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: visibleChildren.map((child) {
-                final summary = engine.summarize(child, submissions);
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: TgcgColors.surfaceSoft,
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: TgcgColors.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 15,
-                        color: TgcgColors.primary,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        child.label,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        '${(summary.completionPercent * 100).round()}%',
-                        style: const TextStyle(
-                          color: TgcgColors.success,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MapNode extends StatelessWidget {
-  const _MapNode({required this.label, required this.progress});
-
-  final String label;
-  final double progress;
+  String get _title => switch (scope.level) {
+        GeographyLevel.country => 'National coverage by geopolitical zone',
+        GeographyLevel.geopoliticalZone => 'Zone coverage by state',
+        GeographyLevel.state => 'State operational geography',
+        GeographyLevel.senatorialDistrict => 'Senatorial district coverage',
+        GeographyLevel.lga => 'LGA coverage',
+        GeographyLevel.ward => 'Ward coverage',
+        GeographyLevel.pollingUnit => 'Polling unit',
+      };
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-        message: '$label • ${(progress * 100).round()}% verified coverage',
-        child: Column(
+  Widget build(BuildContext context) => TgcgSectionCard(
+        title: _title,
+        subtitle:
+            '$totalMembers registered members • $totalAgents agents • ${scope.label}',
+        trailing: Wrap(
+          spacing: 6,
           children: [
-            Container(
-              width: 17,
-              height: 17,
-              decoration: BoxDecoration(
-                color: progress > 0 ? TgcgColors.success : TgcgColors.warning,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2.5),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black38, blurRadius: 10),
-                ],
+            if (onOpenMembership != null)
+              TextButton.icon(
+                onPressed: onOpenMembership,
+                icon: const Icon(Icons.groups_2_outlined, size: 17),
+                label: const Text('Members'),
               ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              constraints: const BoxConstraints(maxWidth: 120),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xDD0B2520),
-                borderRadius: BorderRadius.circular(8),
+            if (onOpenGeography != null)
+              TextButton.icon(
+                onPressed: onOpenGeography,
+                icon: const Icon(Icons.public_outlined, size: 17),
+                label: const Text('Geography'),
               ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
           ],
         ),
+        child: coverage.isEmpty
+            ? const TgcgEmptyState(
+                icon: Icons.location_on_outlined,
+                title: 'Current operational scope',
+                message: 'This is the lowest geographic level available here.',
+              )
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 1100
+                      ? 3
+                      : constraints.maxWidth >= 680
+                          ? 2
+                          : 1;
+                  const gap = 10.0;
+                  final width =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: coverage.map((item) {
+                      final active = item.members > 0 ||
+                          item.agents > 0 ||
+                          item.incidents > 0 ||
+                          item.results > 0;
+                      return Container(
+                        width: width,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: active
+                              ? TgcgColors.primarySoft
+                              : TgcgColors.surfaceSoft,
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: TgcgColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  item.scope.level == GeographyLevel.state
+                                      ? Icons.location_city_outlined
+                                      : Icons.public_outlined,
+                                  color: TgcgColors.primary,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 7),
+                                Expanded(
+                                  child: Text(
+                                    item.scope.level == GeographyLevel.state
+                                        ? item.scope.stateName ?? item.scope.label
+                                        : item.scope.zoneName ?? item.scope.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: TgcgColors.ink,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                if (active)
+                                  const Icon(
+                                    Icons.circle,
+                                    color: TgcgColors.success,
+                                    size: 8,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _CoverageMetric(
+                                    label: 'Members',
+                                    value: item.members,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _CoverageMetric(
+                                    label: 'Agents',
+                                    value: item.agents,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _CoverageMetric(
+                                    label: 'Incidents',
+                                    value: item.incidents,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _CoverageMetric(
+                                    label: 'Results',
+                                    value: item.results,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
       );
 }
 
-class _MapLegendDot extends StatelessWidget {
-  const _MapLegendDot({required this.label, required this.color});
+class _CoverageMetric extends StatelessWidget {
+  const _CoverageMetric({required this.label, required this.value});
 
   final String label;
-  final Color color;
+  final int value;
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          Text(
+            '$value',
+            style: const TextStyle(
+              color: TgcgColors.ink,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          const SizedBox(width: 5),
+          const SizedBox(height: 2),
           Text(
             label,
             style: const TextStyle(
-              color: Color(0xFFB8CEC6),
-              fontSize: 9.5,
+              color: TgcgColors.muted,
+              fontSize: 8.5,
             ),
           ),
         ],
       );
 }
 
-class _GridPainter extends CustomPainter {
-  const _GridPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = const Color(0x142FC09B)
-      ..strokeWidth = 1;
-    for (double x = 0; x <= size.width; x += 44) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-    }
-    for (double y = 0; y <= size.height; y += 44) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-
-    final route = Paint()
-      ..color = const Color(0x5535B893)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    final path = Path()
-      ..moveTo(size.width * .12, size.height * .56)
-      ..quadraticBezierTo(
-        size.width * .34,
-        size.height * .14,
-        size.width * .52,
-        size.height * .47,
-      )
-      ..quadraticBezierTo(
-        size.width * .72,
-        size.height * .77,
-        size.width * .9,
-        size.height * .36,
-      );
-    canvas.drawPath(path, route);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _ElectionProgressPanel extends StatelessWidget {
-  const _ElectionProgressPanel({
-    required this.summary,
+class _OperationsProgressPanel extends StatelessWidget {
+  const _OperationsProgressPanel({
+    required this.collation,
     required this.readyAgents,
     required this.approvedAgents,
     required this.fieldReports,
+    required this.openIncidents,
     required this.onOpenCollation,
   });
 
-  final CollationSummary summary;
+  final CollationSummary collation;
   final int readyAgents;
   final int approvedAgents;
   final int fieldReports;
+  final int openIncidents;
   final VoidCallback? onOpenCollation;
 
   @override
   Widget build(BuildContext context) {
-    final percent = summary.completionPercent.clamp(0, 1).toDouble();
+    final readiness = approvedAgents == 0 ? 0.0 : readyAgents / approvedAgents;
     return TgcgSectionCard(
-      title: 'Election progress',
-      subtitle: 'Verified-only operational progress in the current scope.',
+      title: 'Operational readiness',
+      subtitle: 'Current field readiness and verified result activity.',
       trailing: onOpenCollation == null
           ? null
           : IconButton(
@@ -622,64 +532,50 @@ class _ElectionProgressPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${(percent * 100).round()}%',
+                '${(readiness * 100).round()}%',
                 style: const TextStyle(
+                  color: TgcgColors.ink,
                   fontSize: 38,
                   height: 1,
                   fontWeight: FontWeight.w900,
-                  color: TgcgColors.ink,
                   letterSpacing: -1,
                 ),
               ),
               const SizedBox(width: 8),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 4),
+              const Expanded(
                 child: Text(
-                  'verified PU coverage',
-                  style: TextStyle(
-                    color: TgcgColors.muted,
-                    fontSize: 10.5,
-                  ),
+                  'agent readiness',
+                  style: TextStyle(color: TgcgColors.muted, fontSize: 10.5),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 13),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: percent,
+              value: readiness.clamp(0, 1).toDouble(),
               minHeight: 10,
               backgroundColor: const Color(0xFFE5ECE9),
               valueColor: const AlwaysStoppedAnimation(TgcgColors.success),
             ),
           ),
-          const SizedBox(height: 18),
-          _ProgressStat(
-            'Verified polling units',
-            '${summary.verifiedPollingUnitCount}',
+          const SizedBox(height: 16),
+          _ProgressRow('Ready agents', '$readyAgents / $approvedAgents'),
+          _ProgressRow('Field reports', '$fieldReports'),
+          _ProgressRow('Open incidents', '$openIncidents'),
+          _ProgressRow(
+            'Verified result PUs',
+            '${collation.verifiedPollingUnitCount}',
           ),
-          _ProgressStat(
-            'Expected polling units',
-            '${summary.expectedPollingUnitCount}',
-          ),
-          _ProgressStat(
-            'Missing polling units',
-            '${summary.missingPollingUnitIds.length}',
-            warning: summary.missingPollingUnitIds.isNotEmpty,
-          ),
-          _ProgressStat(
+          _ProgressRow(
             'Reconciliation conflicts',
-            '${summary.conflictingPollingUnitIds.length}',
-            warning: summary.conflictingPollingUnitIds.isNotEmpty,
+            '${collation.conflictingPollingUnitIds.length}',
+            warning: collation.conflictingPollingUnitIds.isNotEmpty,
           ),
-          const Divider(),
-          _ProgressStat('Ready agents', '$readyAgents / $approvedAgents'),
-          _ProgressStat('Field reports', '$fieldReports'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           const TgcgStatusPill(
             label: 'UNOFFICIAL FIELD DATA',
             color: TgcgColors.warning,
@@ -692,8 +588,8 @@ class _ElectionProgressPanel extends StatelessWidget {
   }
 }
 
-class _ProgressStat extends StatelessWidget {
-  const _ProgressStat(this.label, this.value, {this.warning = false});
+class _ProgressRow extends StatelessWidget {
+  const _ProgressRow(this.label, this.value, {this.warning = false});
 
   final String label;
   final String value;
@@ -726,8 +622,8 @@ class _ProgressStat extends StatelessWidget {
       );
 }
 
-class _CriticalEventFeed extends StatelessWidget {
-  const _CriticalEventFeed({
+class _PriorityEventsPanel extends StatelessWidget {
+  const _PriorityEventsPanel({
     required this.incidents,
     required this.reviewCount,
     required this.modules,
@@ -750,41 +646,36 @@ class _CriticalEventFeed extends StatelessWidget {
       });
 
     return TgcgSectionCard(
-      title: 'Critical events & review queue',
-      subtitle: 'Highest-priority operational exceptions requiring attention.',
+      title: 'Priority events',
+      subtitle: 'Operational items requiring command attention.',
       child: Column(
         children: [
           if (sorted.isEmpty && reviewCount == 0)
             const TgcgEmptyState(
               icon: Icons.task_alt_rounded,
               title: 'No command exceptions',
-              message:
-                  'There are no unresolved incidents or result-review items in this scope.',
+              message: 'No unresolved incidents or result-review items in this scope.',
             )
           else ...[
-            ...sorted.take(4).map((incident) {
-              final color = _severityColor(incident.severity);
-              return _EventRow(
-                icon: Icons.crisis_alert_outlined,
-                iconColor: color,
-                title: incident.title,
-                subtitle:
-                    '${incident.scope.label} • ${_label(incident.status.name)}',
-                trailing: _label(incident.severity.name),
-                onTap: modules.contains(TgcgModule.situationRoom)
-                    ? () => onOpenModule(TgcgModule.situationRoom)
-                    : null,
-              );
-            }),
+            ...sorted.take(5).map(
+                  (incident) => _EventRow(
+                    color: _severityColor(incident.severity),
+                    title: incident.title,
+                    subtitle:
+                        '${incident.scope.label} • ${_label(incident.status.name)}',
+                    trailing: _label(incident.severity.name),
+                    onTap: modules.contains(TgcgModule.situationRoom)
+                        ? () => onOpenModule(TgcgModule.situationRoom)
+                        : null,
+                  ),
+                ),
             if (reviewCount > 0)
               _EventRow(
-                icon: Icons.document_scanner_outlined,
-                iconColor: TgcgColors.ai,
+                color: TgcgColors.ai,
                 title:
                     '$reviewCount result submission${reviewCount == 1 ? '' : 's'} awaiting human review',
-                subtitle:
-                    'Inspect OCR/manual differences, duplicates and arithmetic warnings.',
-                trailing: 'AI REVIEW',
+                subtitle: 'OCR, duplicate and arithmetic review queue',
+                trailing: 'REVIEW',
                 onTap: modules.contains(TgcgModule.resultCapture)
                     ? () => onOpenModule(TgcgModule.resultCapture)
                     : null,
@@ -798,16 +689,14 @@ class _CriticalEventFeed extends StatelessWidget {
 
 class _EventRow extends StatelessWidget {
   const _EventRow({
-    required this.icon,
-    required this.iconColor,
+    required this.color,
     required this.title,
     required this.subtitle,
     required this.trailing,
     this.onTap,
   });
 
-  final IconData icon;
-  final Color iconColor;
+  final Color color;
   final String title;
   final String subtitle;
   final String trailing;
@@ -825,10 +714,10 @@ class _EventRow extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: .09),
+                  color: color.withValues(alpha: .09),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(icon, color: iconColor, size: 19),
+                child: Icon(Icons.crisis_alert_outlined, color: color, size: 19),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -838,17 +727,17 @@ class _EventRow extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
+                        color: TgcgColors.ink,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w900,
-                        color: TgcgColors.ink,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        fontSize: 10,
                         color: TgcgColors.muted,
+                        fontSize: 10,
                       ),
                     ),
                   ],
@@ -858,20 +747,17 @@ class _EventRow extends StatelessWidget {
               Text(
                 trailing,
                 style: TextStyle(
-                  color: iconColor,
+                  color: color,
                   fontSize: 8.5,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: .4,
                 ),
               ),
-              if (onTap != null) ...[
-                const SizedBox(width: 5),
+              if (onTap != null)
                 const Icon(
                   Icons.chevron_right_rounded,
                   color: TgcgColors.muted,
                   size: 18,
                 ),
-              ],
             ],
           ),
         ),
@@ -899,7 +785,7 @@ class _QuickCommandPanel extends StatelessWidget {
       (
         module: TgcgModule.membershipNetwork,
         label: 'Registered Members',
-        detail: 'Zones, states, members & agents',
+        detail: 'Zones, states, members and agents',
         icon: Icons.groups_2_outlined,
         tone: TgcgMetricTone.info,
       ),
@@ -911,18 +797,18 @@ class _QuickCommandPanel extends StatelessWidget {
         tone: TgcgMetricTone.danger,
       ),
       (
-        module: TgcgModule.resultCapture,
-        label: 'Result Workspace',
-        detail: 'Capture & human review',
-        icon: Icons.ballot_outlined,
-        tone: TgcgMetricTone.ai,
-      ),
-      (
         module: TgcgModule.geography,
         label: 'Geographic Operations',
-        detail: 'Polling-unit coverage',
+        detail: 'National operational coverage',
         icon: Icons.public_rounded,
-        tone: TgcgMetricTone.info,
+        tone: TgcgMetricTone.neutral,
+      ),
+      (
+        module: TgcgModule.resultCapture,
+        label: 'Result Workspace',
+        detail: 'Capture and human review',
+        icon: Icons.ballot_outlined,
+        tone: TgcgMetricTone.ai,
       ),
       (
         module: TgcgModule.communications,
@@ -932,75 +818,91 @@ class _QuickCommandPanel extends StatelessWidget {
         tone: TgcgMetricTone.success,
       ),
       (
-        module: TgcgModule.reports,
-        label: 'Reports & Exports',
-        detail: 'Audited operational packages',
-        icon: Icons.description_outlined,
-        tone: TgcgMetricTone.neutral,
+        module: TgcgModule.systemMonitoring,
+        label: 'System Monitoring',
+        detail: 'Health and synchronization',
+        icon: Icons.monitor_heart_outlined,
+        tone: TgcgMetricTone.warning,
       ),
     ].where((item) => modules.contains(item.module)).toList(growable: false);
 
     return TgcgSectionCard(
       title: 'Quick command',
-      subtitle: 'Role-aware shortcuts to your operational tools.',
-      child: Column(
-        children: actions.map((action) {
-          final color = tgcgToneColor(action.tone);
-          return InkWell(
-            onTap: () => onOpenModule(action.module),
-            borderRadius: BorderRadius.circular(13),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                color: TgcgColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: TgcgColors.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
+      subtitle: 'Role-aware shortcuts to operational workspaces.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 980
+              ? 3
+              : constraints.maxWidth >= 620
+                  ? 2
+                  : 1;
+          const gap = 10.0;
+          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: actions.map((action) {
+              final color = tgcgToneColor(action.tone);
+              return SizedBox(
+                width: width,
+                child: InkWell(
+                  onTap: () => onOpenModule(action.module),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(13),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: .09),
-                      borderRadius: BorderRadius.circular(10),
+                      color: TgcgColors.surfaceSoft,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: TgcgColors.border),
                     ),
-                    child: Icon(action.icon, color: color, size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          action.label,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: .09),
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: Icon(action.icon, color: color, size: 19),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                action.label,
+                                style: const TextStyle(
+                                  color: TgcgColors.ink,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                action.detail,
+                                style: const TextStyle(
+                                  color: TgcgColors.muted,
+                                  fontSize: 9.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          action.detail,
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            color: TgcgColors.muted,
-                          ),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: TgcgColors.muted,
+                          size: 13,
                         ),
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 13,
-                    color: TgcgColors.muted,
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            }).toList(),
           );
-        }).toList(),
+        },
       ),
     );
   }
