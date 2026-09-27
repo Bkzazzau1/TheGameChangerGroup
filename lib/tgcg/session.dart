@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'domain/models.dart';
 import 'domain/permissions.dart';
 
+export 'domain/models.dart';
+
 enum TgcgModule {
   overview,
   accreditation,
