@@ -9,6 +9,7 @@ enum TgcgModule {
   overview,
   accreditation,
   membershipNetwork,
+  roleAssignment,
   geography,
   liveOperations,
   aiVerification,
@@ -165,6 +166,7 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (role == TgcgRole.nationalAdministrator) {
     modules.add(TgcgModule.membershipNetwork);
+    modules.add(TgcgModule.roleAssignment);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewGeography)) {
     modules.add(TgcgModule.geography);
