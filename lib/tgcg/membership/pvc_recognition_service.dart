@@ -1,3 +1,4 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
@@ -107,7 +108,7 @@ class PvcRecognitionService {
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final direct = RegExp(
-        r'(?:NAME|FULL\s*NAME)\s*[:.-]?\s*([A-Z][A-Z .\'-]{4,})',
+        r"(?:NAME|FULL\s*NAME)\s*[:.-]?\s*([A-Z][A-Z .'-]{4,})",
         caseSensitive: false,
       ).firstMatch(line);
       if (direct != null) return _titleCase(direct.group(1)!.trim());
@@ -123,7 +124,7 @@ class PvcRecognitionService {
 
   static bool _looksLikeName(String value) {
     final words = value
-        .replaceAll(RegExp(r'[^A-Za-z .\'-]'), '')
+        .replaceAll(RegExp(r"[^A-Za-z .'-]"), '')
         .trim()
         .split(RegExp(r'\s+'));
     return words.length >= 2 && words.every((word) => word.length >= 2);
