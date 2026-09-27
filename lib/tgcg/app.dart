@@ -7,10 +7,10 @@ import 'field/field_agent_shell.dart';
 import 'field/field_operations_store.dart';
 import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
-import 'login_page.dart';
 import 'membership/membership_store.dart';
 import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
+import 'presentation_access_login.dart';
 import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
 import 'session.dart';
@@ -215,7 +215,9 @@ class _AuthenticationGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     if (!session.isAuthenticated) {
-      return const TgcgLoginPage(key: ValueKey('tgcg-login'));
+      return const PresentationAccessLogin(
+        key: ValueKey('presentation-access-login'),
+      );
     }
     if (session.role == TgcgRole.pollingUnitAgent) {
       return const FieldAgentShell(key: ValueKey('field-agent-shell'));
