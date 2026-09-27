@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../communications/communications_page.dart';
 import '../discussion/discussion_room_page.dart';
+import '../meeting/meeting_room_page.dart';
 import '../membership/membership_store.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
@@ -54,48 +55,53 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       TgcgModule.resultCapture,
       TgcgModule.communications,
       TgcgModule.discussionRoom,
+      TgcgModule.meetingRoom,
     };
     if (!allowed.contains(selectedModule)) {
       selectedModule = TgcgModule.overview;
     }
 
+    final inMeeting = selectedModule == TgcgModule.meetingRoom;
+
     return Scaffold(
       backgroundColor: TgcgColors.canvas,
       appBar: _appBar(session, allowHome: true),
       body: _pageFor(selectedModule),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _indexFor(selectedModule),
-        onDestinationSelected: (index) => setState(() {
-          selectedModule = _moduleFor(index);
-        }),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.sensors_outlined),
-            selectedIcon: Icon(Icons.sensors_rounded),
-            label: 'Field',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.ballot_outlined),
-            selectedIcon: Icon(Icons.ballot_rounded),
-            label: 'Result',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.chat_outlined),
-            selectedIcon: Icon(Icons.chat_rounded),
-            label: 'Messages',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.forum_outlined),
-            selectedIcon: Icon(Icons.forum_rounded),
-            label: 'Discuss',
-          ),
-        ],
-      ),
+      bottomNavigationBar: inMeeting
+          ? null
+          : NavigationBar(
+              selectedIndex: _indexFor(selectedModule),
+              onDestinationSelected: (index) => setState(() {
+                selectedModule = _moduleFor(index);
+              }),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.sensors_outlined),
+                  selectedIcon: Icon(Icons.sensors_rounded),
+                  label: 'Field',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.ballot_outlined),
+                  selectedIcon: Icon(Icons.ballot_rounded),
+                  label: 'Result',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.chat_outlined),
+                  selectedIcon: Icon(Icons.chat_rounded),
+                  label: 'Messages',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.dynamic_feed_outlined),
+                  selectedIcon: Icon(Icons.dynamic_feed_rounded),
+                  label: 'Forum',
+                ),
+              ],
+            ),
     );
   }
 
@@ -115,9 +121,11 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'TGCG FIELD',
-                    style: TextStyle(
+                  Text(
+                    selectedModule == TgcgModule.meetingRoom
+                        ? 'TGCG MEETING'
+                        : 'TGCG FIELD',
+                    style: const TextStyle(
                       color: TgcgColors.ink,
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
@@ -138,6 +146,12 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
           ],
         ),
         actions: [
+          if (allowHome && selectedModule != TgcgModule.meetingRoom)
+            IconButton(
+              tooltip: 'Meeting room',
+              onPressed: () => setState(() => selectedModule = TgcgModule.meetingRoom),
+              icon: const Icon(Icons.video_call_outlined),
+            ),
           if (allowHome && selectedModule != TgcgModule.overview)
             IconButton(
               tooltip: 'Field home',
@@ -161,6 +175,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                 TgcgModule.resultCapture => TgcgModule.resultCapture,
                 TgcgModule.communications => TgcgModule.communications,
                 TgcgModule.discussionRoom => TgcgModule.discussionRoom,
+                TgcgModule.meetingRoom => TgcgModule.meetingRoom,
                 _ => TgcgModule.overview,
               };
             }),
@@ -169,6 +184,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.communications => const CommunicationsPage(),
         TgcgModule.discussionRoom => const DiscussionRoomPage(),
+        TgcgModule.meetingRoom => const MeetingRoomPage(),
         _ => FieldAgentHomePage(
             onOpenModule: (next) => setState(() => selectedModule = next),
           ),
