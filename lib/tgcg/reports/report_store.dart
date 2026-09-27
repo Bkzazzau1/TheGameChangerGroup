@@ -108,10 +108,23 @@ class ReportOperationsController extends ChangeNotifier {
 
   List<ReportExportJob> get jobs => List.unmodifiable(_jobs);
 
-  List<ReportExportJob> jobsForScope(GeographicScope scope) => _jobs
-      .where((job) => GeographyRegistry.scopeContains(scope, job.scope))
-      .toList(growable: false)
-    ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+  List<ReportExportJob> jobsForScope(
+    GeographicScope scope, {
+    TgcgRole? role,
+  }) {
+    final jobs = _jobs.where((job) {
+      if (!GeographyRegistry.scopeContains(scope, job.scope)) return false;
+      if (role == null) return true;
+      return canExportKind(
+        kind: job.kind,
+        role: role,
+        userScope: scope,
+        targetScope: job.scope,
+      );
+    }).toList(growable: false)
+      ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+    return jobs;
+  }
 
   bool canExportKind({
     required ReportKind kind,
@@ -133,8 +146,8 @@ class ReportOperationsController extends ChangeNotifier {
         TgcgPermissionPolicy.allows(role, capability);
 
     return switch (kind) {
-      ReportKind.incidentSummary || ReportKind.fieldActivity =>
-        allows(TgcgCapability.viewIncidents),
+      ReportKind.incidentSummary => allows(TgcgCapability.viewIncidents),
+      ReportKind.fieldActivity => allows(TgcgCapability.viewIncidents),
       ReportKind.accreditationReadiness =>
         allows(TgcgCapability.manageMembership) ||
             allows(TgcgCapability.accreditAgents) ||
