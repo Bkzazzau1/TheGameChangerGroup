@@ -588,7 +588,7 @@ class _MapIncidentNode extends StatelessWidget {
                 ? MainAxisAlignment.start
                 : MainAxisAlignment.center,
             children: [
-              Icon(Icons.location_on_rounded, color: Colors.white, size: 19),
+              const Icon(Icons.location_on_rounded, color: Colors.white, size: 19),
               if (selected) ...[
                 const SizedBox(width: 6),
                 Expanded(
@@ -690,7 +690,7 @@ class _IncidentInspector extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            item.summary,
+            item.summary ?? 'No additional incident summary was supplied.',
             style: const TextStyle(
               color: TgcgColors.muted,
               fontSize: 11,
@@ -1220,8 +1220,9 @@ IconData _evidenceIcon(EvidenceType type) => switch (type) {
       EvidenceType.photo => Icons.image_outlined,
       EvidenceType.video => Icons.videocam_outlined,
       EvidenceType.audio => Icons.mic_none_rounded,
-      EvidenceType.resultForm => Icons.description_outlined,
       EvidenceType.document => Icons.attach_file_rounded,
+      EvidenceType.resultForm => Icons.description_outlined,
+      EvidenceType.location => Icons.location_on_outlined,
     };
 
 String _timeLabel(DateTime value) {
