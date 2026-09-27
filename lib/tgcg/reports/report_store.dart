@@ -113,6 +113,41 @@ class ReportOperationsController extends ChangeNotifier {
       .toList(growable: false)
     ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
 
+  bool canExportKind({
+    required ReportKind kind,
+    required TgcgRole role,
+    required GeographicScope userScope,
+    required GeographicScope targetScope,
+  }) {
+    if (!TgcgPermissionPolicy.may(
+      role,
+      userScope,
+      TgcgCapability.exportReports,
+      targetScope: targetScope,
+    )) {
+      return false;
+    }
+    if (!GeographyRegistry.scopeContains(userScope, targetScope)) return false;
+
+    bool allows(TgcgCapability capability) =>
+        TgcgPermissionPolicy.allows(role, capability);
+
+    return switch (kind) {
+      ReportKind.incidentSummary || ReportKind.fieldActivity =>
+        allows(TgcgCapability.viewIncidents),
+      ReportKind.accreditationReadiness =>
+        allows(TgcgCapability.manageMembership) ||
+            allows(TgcgCapability.accreditAgents) ||
+            allows(TgcgCapability.manageAgentAssignments),
+      ReportKind.verifiedCollation => allows(TgcgCapability.viewCollation),
+      ReportKind.evidencePackage => allows(TgcgCapability.viewEvidence),
+      ReportKind.auditTrail => allows(TgcgCapability.viewAudit),
+      ReportKind.syncOutbox =>
+        targetScope.level == GeographyLevel.country &&
+            allows(TgcgCapability.viewAudit),
+    };
+  }
+
   ReportExportJob? requestExport({
     required ReportKind kind,
     required ExportFormat format,
@@ -122,15 +157,12 @@ class ReportOperationsController extends ChangeNotifier {
     required GeographicScope userScope,
     int? recordCount,
   }) {
-    if (!TgcgPermissionPolicy.may(
-      role,
-      userScope,
-      TgcgCapability.exportReports,
+    if (!canExportKind(
+      kind: kind,
+      role: role,
+      userScope: userScope,
       targetScope: targetScope,
     )) {
-      return null;
-    }
-    if (!GeographyRegistry.scopeContains(userScope, targetScope)) {
       return null;
     }
 
