@@ -6,6 +6,8 @@ import 'dashboard_page.dart';
 import 'domain/models.dart';
 import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
+import 'geography/geography_page.dart';
+import 'membership/membership_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
 
@@ -86,16 +88,8 @@ class _TgcgShellState extends State<TgcgShell> {
 
   Widget _pageFor(TgcgModule module) => switch (module) {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
-        TgcgModule.accreditation => const _ModulePlaceholder(
-            title: 'Membership & Accreditation',
-            subtitle: 'Members, agent accreditation, role assignment, training and geographic assignment.',
-            icon: Icons.badge_outlined,
-          ),
-        TgcgModule.geography => const _ModulePlaceholder(
-            title: 'Geographic Operations',
-            subtitle: 'National → zone → state → senatorial district → LGA → ward → polling-unit operations.',
-            icon: Icons.map_outlined,
-          ),
+        TgcgModule.accreditation => const MembershipPage(),
+        TgcgModule.geography => const GeographyPage(),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
