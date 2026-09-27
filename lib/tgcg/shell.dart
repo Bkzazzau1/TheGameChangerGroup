@@ -11,6 +11,7 @@ import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
 import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
+import 'membership/national_membership_page.dart';
 import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
 import 'offline/offline_persistence.dart';
@@ -111,6 +112,7 @@ class _TgcgShellState extends State<TgcgShell> {
   Widget _pageFor(TgcgModule module) => switch (module) {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
         TgcgModule.accreditation => const PvcEnrollmentPage(),
+        TgcgModule.membershipNetwork => const NationalMembershipPage(),
         TgcgModule.geography => const GeographyPage(),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.evidenceCapture => const EvidenceCapturePage(),
@@ -143,6 +145,12 @@ const _allDestinations = <_Destination>[
     TgcgModule.overview,
     'Command Overview',
     Icons.space_dashboard_outlined,
+    _NavGroup.command,
+  ),
+  _Destination(
+    TgcgModule.membershipNetwork,
+    'Registered Members',
+    Icons.groups_2_outlined,
     _NavGroup.command,
   ),
   _Destination(
@@ -626,6 +634,7 @@ String _groupLabel(_NavGroup group) => switch (group) {
 String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.overview => 'Command Overview',
       TgcgModule.accreditation => 'Member Enrolment',
+      TgcgModule.membershipNetwork => 'Registered Members',
       TgcgModule.geography => 'Geographic Operations',
       TgcgModule.fieldMonitoring => 'Field Monitoring',
       TgcgModule.evidenceCapture => 'Evidence Capture',
