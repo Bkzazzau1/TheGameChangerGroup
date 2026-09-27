@@ -8,65 +8,159 @@ class MembershipOperationsController extends ChangeNotifier {
     required GeographyRegistry geography,
     required List<TgcgMember> members,
     required List<AccreditedAgent> agents,
+    required Map<String, GeographicScope> memberScopes,
   })  : _geography = geography,
         _members = members,
-        _agents = agents;
+        _agents = agents,
+        _memberScopes = memberScopes;
 
   factory MembershipOperationsController.prototypeSeed(
     GeographyRegistry geography,
   ) {
     final now = DateTime.utc(2026, 9, 27, 7, 30);
-    final kd = geography.pollingUnit('KD-KN-W01-PU001')!.scope;
-    final bn = geography.pollingUnit('BN-MK-W01-PU004')!.scope;
-    final la = geography.pollingUnit('LA-IK-W03-PU012')!.scope;
+    final kdPu = geography.pollingUnit('KD-KN-W01-PU001')!.scope;
+    final bnPu = geography.pollingUnit('BN-MK-W01-PU004')!.scope;
+    final laPu = geography.pollingUnit('LA-IK-W03-PU012')!.scope;
+
+    GeographicScope stateScope(String name) => geography.states
+        .firstWhere((item) => item.name == name)
+        .scope;
+
+    final members = <TgcgMember>[
+      TgcgMember(
+        id: 'MEM-0001',
+        fullName: 'Amina Yusuf',
+        phoneNumber: '+2348000000001',
+        membershipNumber: 'TGCG-000001',
+        createdAt: now.subtract(const Duration(days: 45)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0002',
+        fullName: 'Samuel Terna',
+        phoneNumber: '+2348000000002',
+        membershipNumber: 'TGCG-000002',
+        createdAt: now.subtract(const Duration(days: 38)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0003',
+        fullName: 'Chinedu Okafor',
+        phoneNumber: '+2348000000003',
+        membershipNumber: 'TGCG-000003',
+        createdAt: now.subtract(const Duration(days: 30)),
+        status: RecordStatus.submitted,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0004',
+        fullName: 'Bisi Adeyemi',
+        phoneNumber: '+2348000000004',
+        membershipNumber: 'TGCG-000004',
+        createdAt: now.subtract(const Duration(days: 21)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0005',
+        fullName: 'Hauwa Bello',
+        phoneNumber: '+2348000000005',
+        membershipNumber: 'TGCG-000005',
+        createdAt: now.subtract(const Duration(days: 18)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0006',
+        fullName: 'Ibrahim Musa',
+        phoneNumber: '+2348000000006',
+        membershipNumber: 'TGCG-000006',
+        createdAt: now.subtract(const Duration(days: 17)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0007',
+        fullName: 'Ifeanyi Nwosu',
+        phoneNumber: '+2348000000007',
+        membershipNumber: 'TGCG-000007',
+        createdAt: now.subtract(const Duration(days: 14)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0008',
+        fullName: 'Ebiye George',
+        phoneNumber: '+2348000000008',
+        membershipNumber: 'TGCG-000008',
+        createdAt: now.subtract(const Duration(days: 13)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0009',
+        fullName: 'Tunde Adebayo',
+        phoneNumber: '+2348000000009',
+        membershipNumber: 'TGCG-000009',
+        createdAt: now.subtract(const Duration(days: 11)),
+        status: RecordStatus.submitted,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0010',
+        fullName: 'Grace Yakubu',
+        phoneNumber: '+2348000000010',
+        membershipNumber: 'TGCG-000010',
+        createdAt: now.subtract(const Duration(days: 9)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0011',
+        fullName: 'Fatima Adamu',
+        phoneNumber: '+2348000000011',
+        membershipNumber: 'TGCG-000011',
+        createdAt: now.subtract(const Duration(days: 7)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      TgcgMember(
+        id: 'MEM-0012',
+        fullName: 'Ini Etim',
+        phoneNumber: '+2348000000012',
+        membershipNumber: 'TGCG-000012',
+        createdAt: now.subtract(const Duration(days: 5)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+    ];
 
     return MembershipOperationsController._(
       geography: geography,
-      members: [
-        TgcgMember(
-          id: 'MEM-0001',
-          fullName: 'Amina Yusuf',
-          phoneNumber: '+2348000000001',
-          membershipNumber: 'TGCG-000001',
-          createdAt: now.subtract(const Duration(days: 45)),
-          status: RecordStatus.verified,
-          origin: RecordOrigin.systemDerived,
-        ),
-        TgcgMember(
-          id: 'MEM-0002',
-          fullName: 'Samuel Terna',
-          phoneNumber: '+2348000000002',
-          membershipNumber: 'TGCG-000002',
-          createdAt: now.subtract(const Duration(days: 38)),
-          status: RecordStatus.verified,
-          origin: RecordOrigin.systemDerived,
-        ),
-        TgcgMember(
-          id: 'MEM-0003',
-          fullName: 'Chinedu Okafor',
-          phoneNumber: '+2348000000003',
-          membershipNumber: 'TGCG-000003',
-          createdAt: now.subtract(const Duration(days: 30)),
-          status: RecordStatus.submitted,
-          origin: RecordOrigin.systemDerived,
-        ),
-        TgcgMember(
-          id: 'MEM-0004',
-          fullName: 'Bisi Adeyemi',
-          phoneNumber: '+2348000000004',
-          membershipNumber: 'TGCG-000004',
-          createdAt: now.subtract(const Duration(days: 21)),
-          status: RecordStatus.verified,
-          origin: RecordOrigin.systemDerived,
-        ),
-      ],
+      members: members,
+      memberScopes: {
+        'MEM-0001': stateScope('Kaduna'),
+        'MEM-0002': stateScope('Benue'),
+        'MEM-0003': stateScope('Enugu'),
+        'MEM-0004': stateScope('Lagos'),
+        'MEM-0005': stateScope('Adamawa'),
+        'MEM-0006': stateScope('Kano'),
+        'MEM-0007': stateScope('Anambra'),
+        'MEM-0008': stateScope('Rivers'),
+        'MEM-0009': stateScope('Oyo'),
+        'MEM-0010': stateScope('Federal Capital Territory'),
+        'MEM-0011': stateScope('Bauchi'),
+        'MEM-0012': stateScope('Akwa Ibom'),
+      },
       agents: [
         AccreditedAgent(
           id: 'ACC-0001',
           memberId: 'MEM-0001',
           agentId: 'AG-KD-001',
           role: TgcgRole.pollingUnitAgent,
-          scope: kd,
+          scope: kdPu,
           status: AccreditationStatus.approved,
           createdAt: now.subtract(const Duration(days: 20)),
           registeredPhoneNumber: '+2348000000001',
@@ -81,7 +175,7 @@ class MembershipOperationsController extends ChangeNotifier {
           memberId: 'MEM-0002',
           agentId: 'AG-BN-014',
           role: TgcgRole.pollingUnitAgent,
-          scope: bn,
+          scope: bnPu,
           status: AccreditationStatus.approved,
           createdAt: now.subtract(const Duration(days: 18)),
           registeredPhoneNumber: '+2348000000002',
@@ -95,11 +189,89 @@ class MembershipOperationsController extends ChangeNotifier {
           memberId: 'MEM-0004',
           agentId: 'AG-LA-032',
           role: TgcgRole.pollingUnitAgent,
-          scope: la,
+          scope: laPu,
           status: AccreditationStatus.pending,
           createdAt: now.subtract(const Duration(days: 9)),
           registeredPhoneNumber: '+2348000000004',
           biometricEnrolled: false,
+          trainingCompleted: true,
+          origin: RecordOrigin.systemDerived,
+        ),
+        AccreditedAgent(
+          id: 'ACC-0004',
+          memberId: 'MEM-0005',
+          agentId: 'AG-AD-021',
+          role: TgcgRole.stateCoordinator,
+          scope: stateScope('Adamawa'),
+          status: AccreditationStatus.approved,
+          createdAt: now.subtract(const Duration(days: 8)),
+          registeredPhoneNumber: '+2348000000005',
+          biometricEnrolled: true,
+          trainingCompleted: true,
+          origin: RecordOrigin.systemDerived,
+        ),
+        AccreditedAgent(
+          id: 'ACC-0005',
+          memberId: 'MEM-0006',
+          agentId: 'AG-KN-015',
+          role: TgcgRole.stateCoordinator,
+          scope: stateScope('Kano'),
+          status: AccreditationStatus.approved,
+          createdAt: now.subtract(const Duration(days: 8)),
+          registeredPhoneNumber: '+2348000000006',
+          biometricEnrolled: true,
+          trainingCompleted: true,
+          origin: RecordOrigin.systemDerived,
+        ),
+        AccreditedAgent(
+          id: 'ACC-0006',
+          memberId: 'MEM-0007',
+          agentId: 'AG-AN-018',
+          role: TgcgRole.stateCoordinator,
+          scope: stateScope('Anambra'),
+          status: AccreditationStatus.approved,
+          createdAt: now.subtract(const Duration(days: 7)),
+          registeredPhoneNumber: '+2348000000007',
+          biometricEnrolled: true,
+          trainingCompleted: true,
+          origin: RecordOrigin.systemDerived,
+        ),
+        AccreditedAgent(
+          id: 'ACC-0007',
+          memberId: 'MEM-0008',
+          agentId: 'AG-RI-011',
+          role: TgcgRole.stateCoordinator,
+          scope: stateScope('Rivers'),
+          status: AccreditationStatus.approved,
+          createdAt: now.subtract(const Duration(days: 6)),
+          registeredPhoneNumber: '+2348000000008',
+          biometricEnrolled: true,
+          trainingCompleted: true,
+          origin: RecordOrigin.systemDerived,
+        ),
+        AccreditedAgent(
+          id: 'ACC-0008',
+          memberId: 'MEM-0009',
+          agentId: 'AG-OY-008',
+          role: TgcgRole.stateCoordinator,
+          scope: stateScope('Oyo'),
+          status: AccreditationStatus.pending,
+          createdAt: now.subtract(const Duration(days: 5)),
+          registeredPhoneNumber: '+2348000000009',
+          biometricEnrolled: true,
+          trainingCompleted: true,
+          origin: RecordOrigin.systemDerived,
+        ),
+        AccreditedAgent(
+          id: 'ACC-0009',
+          memberId: 'MEM-0010',
+          agentId: 'AG-FCT-006',
+          role: TgcgRole.stateCoordinator,
+          scope: stateScope('Federal Capital Territory'),
+          status: AccreditationStatus.approved,
+          createdAt: now.subtract(const Duration(days: 4)),
+          registeredPhoneNumber: '+2348000000010',
+          biometricEnrolled: true,
           trainingCompleted: true,
           origin: RecordOrigin.systemDerived,
         ),
@@ -110,6 +282,7 @@ class MembershipOperationsController extends ChangeNotifier {
   final GeographyRegistry _geography;
   final List<TgcgMember> _members;
   final List<AccreditedAgent> _agents;
+  final Map<String, GeographicScope> _memberScopes;
 
   GeographyRegistry get geography => _geography;
   List<TgcgMember> get members => List.unmodifiable(_members);
@@ -122,8 +295,24 @@ class MembershipOperationsController extends ChangeNotifier {
     return null;
   }
 
+  GeographicScope? registrationScopeForMember(String memberId) =>
+      _memberScopes[memberId];
+
+  List<TgcgMember> membersForScope(GeographicScope scope) => _members
+      .where((member) {
+        final memberScope = _memberScopes[member.id];
+        return memberScope != null &&
+            GeographyRegistry.scopeContains(scope, memberScope);
+      })
+      .toList(growable: false);
+
+  int memberCountForScope(GeographicScope scope) =>
+      membersForScope(scope).length;
+
   List<AccreditedAgent> agentsForScope(GeographicScope scope) =>
-      _agents.where((agent) => GeographyRegistry.scopeContains(scope, agent.scope)).toList(growable: false);
+      _agents
+          .where((agent) => GeographyRegistry.scopeContains(scope, agent.scope))
+          .toList(growable: false);
 
   int assignedPollingUnitsWithin(GeographicScope scope) => agentsForScope(scope)
       .where((agent) =>
@@ -138,18 +327,21 @@ class MembershipOperationsController extends ChangeNotifier {
     required String fullName,
     required String phoneNumber,
     String? email,
+    GeographicScope registrationScope = GeographicScope.nigeria,
   }) {
     final member = TgcgMember(
       id: 'MEM-${(_members.length + 1).toString().padLeft(4, '0')}',
       fullName: fullName.trim(),
       phoneNumber: phoneNumber.trim(),
       email: email?.trim().isEmpty == true ? null : email?.trim(),
-      membershipNumber: 'TGCG-${(_members.length + 1).toString().padLeft(6, '0')}',
+      membershipNumber:
+          'TGCG-${(_members.length + 1).toString().padLeft(6, '0')}',
       createdAt: DateTime.now().toUtc(),
       status: RecordStatus.submitted,
       origin: RecordOrigin.localEntry,
     );
     _members.insert(0, member);
+    _memberScopes[member.id] = registrationScope;
     notifyListeners();
     return member;
   }
@@ -164,7 +356,9 @@ class MembershipOperationsController extends ChangeNotifier {
   }) {
     if (scope.level == GeographyLevel.pollingUnit &&
         _geography.pollingUnit(scope.pollingUnitId ?? '') == null) {
-      throw ArgumentError('Polling-unit assignment must use canonical geography.');
+      throw ArgumentError(
+        'Polling-unit assignment must use canonical geography.',
+      );
     }
 
     final agent = AccreditedAgent(
@@ -253,11 +447,13 @@ class MembershipOperations extends InheritedNotifier<MembershipOperationsControl
     bool listen = true,
   }) {
     if (listen) {
-      final value = context.dependOnInheritedWidgetOfExactType<MembershipOperations>();
+      final value =
+          context.dependOnInheritedWidgetOfExactType<MembershipOperations>();
       assert(value != null, 'MembershipOperations is missing above this context.');
       return value!.notifier!;
     }
-    final element = context.getElementForInheritedWidgetOfExactType<MembershipOperations>();
+    final element =
+        context.getElementForInheritedWidgetOfExactType<MembershipOperations>();
     final value = element?.widget as MembershipOperations?;
     assert(value != null, 'MembershipOperations is missing above this context.');
     return value!.notifier!;
