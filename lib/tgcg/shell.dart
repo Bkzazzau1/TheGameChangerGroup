@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'collation/collation_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
+import 'discussion/discussion_room_page.dart';
 import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
+import 'media/media_intelligence_page.dart';
 import 'membership/membership_page.dart';
 import 'offline/offline_persistence.dart';
 import 'reports/reports_page.dart';
@@ -111,7 +113,9 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.situationRoom => const SituationRoomPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const CollationPage(),
+        TgcgModule.mediaIntelligence => const MediaIntelligencePage(),
         TgcgModule.communications => const CommunicationsPage(),
+        TgcgModule.discussionRoom => const DiscussionRoomPage(),
         TgcgModule.reports => const ReportsPage(),
         TgcgModule.governance => const GovernancePage(),
       };
@@ -139,6 +143,12 @@ const _allDestinations = <_Destination>[
     TgcgModule.situationRoom,
     'Situation Room',
     Icons.radar_rounded,
+    _NavGroup.command,
+  ),
+  _Destination(
+    TgcgModule.mediaIntelligence,
+    'Media Intelligence',
+    Icons.insights_outlined,
     _NavGroup.command,
   ),
   _Destination(
@@ -175,6 +185,12 @@ const _allDestinations = <_Destination>[
     TgcgModule.communications,
     'Communications',
     Icons.forum_outlined,
+    _NavGroup.coordination,
+  ),
+  _Destination(
+    TgcgModule.discussionRoom,
+    'Discussion Room',
+    Icons.forum_rounded,
     _NavGroup.coordination,
   ),
   _Destination(
@@ -591,7 +607,9 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.situationRoom => 'Situation Room',
       TgcgModule.resultCapture => 'Result Capture',
       TgcgModule.collation => 'Collation',
+      TgcgModule.mediaIntelligence => 'Media Intelligence',
       TgcgModule.communications => 'Communications',
+      TgcgModule.discussionRoom => 'Discussion Room',
       TgcgModule.reports => 'Reports & Exports',
       TgcgModule.governance => 'Data & Governance',
     };
