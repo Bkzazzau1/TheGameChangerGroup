@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'domain/models.dart';
+import 'field/field_operations_store.dart';
 import 'session.dart';
 
 class TgcgDashboardPage extends StatelessWidget {
@@ -11,8 +13,19 @@ class TgcgDashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
+    final store = FieldOperations.of(context);
     final role = session.role!;
     final modules = allowedModules(role);
+    final scopedIncidents = store.incidentsForScope(session.scope);
+    final scopedReports = store.reportsForScope(session.scope);
+    final openIncidents = scopedIncidents
+        .where((item) => item.status != IncidentStatus.resolved && item.status != IncidentStatus.closed)
+        .toList(growable: false);
+    final highPriority = openIncidents
+        .where((item) =>
+            item.severity == IncidentSeverity.high || item.severity == IncidentSeverity.critical)
+        .length;
+    final evidenceCount = scopedIncidents.fold<int>(0, (total, item) => total + item.evidence.length);
 
     return ListView(
       padding: const EdgeInsets.all(28),
@@ -36,96 +49,77 @@ class TgcgDashboardPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '${roleLabel(role)} • ${session.scope.label}',
-                    style: const TextStyle(color: TgcgApp.muted, height: 1.5),
-                  ),
+                  Text('${roleLabel(role)} • ${session.scope.label}',
+                      style: const TextStyle(color: TgcgApp.muted, height: 1.5)),
                 ],
               ),
             ),
-            _StatusBadge(
-              label: 'PROTOTYPE DATA',
-              icon: Icons.science_outlined,
-              color: const Color(0xFF8B6513),
-            ),
+            const _StatusBadge(),
           ],
         ),
         const SizedBox(height: 22),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth > 1040
-                ? 4
-                : constraints.maxWidth > 620
-                    ? 2
-                    : 1;
-            const gap = 12.0;
-            final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                _MetricCard(
-                  width: width,
-                  label: 'Polling units',
-                  value: '176,846',
-                  detail: 'National master-data target',
-                  icon: Icons.location_on_outlined,
-                ),
-                _MetricCard(
-                  width: width,
-                  label: 'LGAs',
-                  value: '774',
-                  detail: 'National geographic coverage',
-                  icon: Icons.location_city_outlined,
-                ),
-                _MetricCard(
-                  width: width,
-                  label: 'Open incidents',
-                  value: '24',
-                  detail: 'Demonstration operational feed',
-                  icon: Icons.warning_amber_rounded,
-                  accent: const Color(0xFFB45F06),
-                ),
-                _MetricCard(
-                  width: width,
-                  label: 'Pending review',
-                  value: '17',
-                  detail: 'Demo result/evidence queue',
-                  icon: Icons.fact_check_outlined,
-                  accent: const Color(0xFF6550B5),
-                ),
-              ],
-            );
-          },
-        ),
+        LayoutBuilder(builder: (context, constraints) {
+          final columns = constraints.maxWidth > 1040 ? 4 : constraints.maxWidth > 620 ? 2 : 1;
+          const gap = 12.0;
+          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              _MetricCard(
+                width: width,
+                label: 'Open incidents',
+                value: '${openIncidents.length}',
+                detail: 'Live prototype store in your scope',
+                icon: Icons.warning_amber_rounded,
+                accent: const Color(0xFFB45F06),
+              ),
+              _MetricCard(
+                width: width,
+                label: 'High priority',
+                value: '$highPriority',
+                detail: 'High and critical incidents',
+                icon: Icons.crisis_alert_outlined,
+                accent: const Color(0xFFD92D20),
+              ),
+              _MetricCard(
+                width: width,
+                label: 'Field reports',
+                value: '${scopedReports.length}',
+                detail: 'Structured reports in current scope',
+                icon: Icons.feed_outlined,
+              ),
+              _MetricCard(
+                width: width,
+                label: 'Evidence retained',
+                value: '$evidenceCount',
+                detail: 'Linked prototype evidence records',
+                icon: Icons.attach_file_rounded,
+                accent: const Color(0xFF6550B5),
+              ),
+            ],
+          );
+        }),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < 930) {
-              return Column(
-                children: [
-                  _OperationalQueue(onOpenModule: onOpenModule, modules: modules),
-                  const SizedBox(height: 16),
-                  _CoveragePanel(onOpenModule: onOpenModule, modules: modules),
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 6,
-                  child: _OperationalQueue(onOpenModule: onOpenModule, modules: modules),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 5,
-                  child: _CoveragePanel(onOpenModule: onOpenModule, modules: modules),
-                ),
-              ],
-            );
-          },
-        ),
+        LayoutBuilder(builder: (context, constraints) {
+          final queue = _OperationalQueue(
+            incidents: openIncidents,
+            onOpenModule: onOpenModule,
+            modules: modules,
+          );
+          final coverage = _CoveragePanel(onOpenModule: onOpenModule, modules: modules);
+          if (constraints.maxWidth < 930) {
+            return Column(children: [queue, const SizedBox(height: 16), coverage]);
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 6, child: queue),
+              const SizedBox(width: 16),
+              Expanded(flex: 5, child: coverage),
+            ],
+          );
+        }),
         const SizedBox(height: 16),
         _QuickActions(onOpenModule: onOpenModule, modules: modules),
       ],
@@ -134,64 +128,64 @@ class TgcgDashboardPage extends StatelessWidget {
 }
 
 class _OperationalQueue extends StatelessWidget {
-  const _OperationalQueue({required this.onOpenModule, required this.modules});
+  const _OperationalQueue({
+    required this.incidents,
+    required this.onOpenModule,
+    required this.modules,
+  });
 
+  final List<FieldIncident> incidents;
   final ValueChanged<TgcgModule> onOpenModule;
   final Set<TgcgModule> modules;
 
   @override
-  Widget build(BuildContext context) => _Panel(
-        title: 'Operational queue',
-        subtitle: 'Prototype items showing the command workflow structure',
-        child: Column(
-          children: [
-            _QueueItem(
-              icon: Icons.crisis_alert_outlined,
-              title: 'Critical incident requires acknowledgement',
-              subtitle: 'Field monitoring • High priority • 8 min ago',
-              action: modules.contains(TgcgModule.situationRoom)
-                  ? () => onOpenModule(TgcgModule.situationRoom)
-                  : null,
-            ),
+  Widget build(BuildContext context) {
+    final sorted = [...incidents]
+      ..sort((a, b) => _severityRank(b.severity).compareTo(_severityRank(a.severity)));
+    return _Panel(
+      title: 'Operational queue',
+      subtitle: 'Current unresolved field items in your authorized scope',
+      child: Column(
+        children: [
+          if (sorted.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text('No unresolved field incidents in this scope.'),
+            )
+          else
+            ...sorted.take(4).map((incident) => _QueueItem(
+                  icon: Icons.crisis_alert_outlined,
+                  title: incident.title,
+                  subtitle:
+                      '${incident.scope.label} • ${_label(incident.severity.name)} • ${_label(incident.status.name)}',
+                  action: modules.contains(TgcgModule.situationRoom)
+                      ? () => onOpenModule(TgcgModule.situationRoom)
+                      : modules.contains(TgcgModule.fieldMonitoring)
+                          ? () => onOpenModule(TgcgModule.fieldMonitoring)
+                          : null,
+                )),
+          if (modules.contains(TgcgModule.resultCapture))
             _QueueItem(
               icon: Icons.document_scanner_outlined,
-              title: 'Result submission requires human review',
-              subtitle: 'OCR/manual-entry disagreement • Demo record',
-              action: modules.contains(TgcgModule.resultCapture)
-                  ? () => onOpenModule(TgcgModule.resultCapture)
-                  : null,
+              title: 'Result verification workflow ready',
+              subtitle: 'Integrity engine available; operational UI migration is next.',
+              action: () => onOpenModule(TgcgModule.resultCapture),
             ),
-            _QueueItem(
-              icon: Icons.badge_outlined,
-              title: 'Agent assignment pending verification',
-              subtitle: 'Accreditation • Geographic scope incomplete',
-              action: modules.contains(TgcgModule.accreditation)
-                  ? () => onOpenModule(TgcgModule.accreditation)
-                  : null,
-            ),
-            _QueueItem(
-              icon: Icons.sync_problem_outlined,
-              title: 'Offline sync queue contains unsent records',
-              subtitle: 'Durable outbox • Awaiting connectivity',
-              action: modules.contains(TgcgModule.governance)
-                  ? () => onOpenModule(TgcgModule.governance)
-                  : null,
-            ),
-          ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 }
 
 class _CoveragePanel extends StatelessWidget {
   const _CoveragePanel({required this.onOpenModule, required this.modules});
-
   final ValueChanged<TgcgModule> onOpenModule;
   final Set<TgcgModule> modules;
 
   @override
   Widget build(BuildContext context) => _Panel(
         title: 'National readiness snapshot',
-        subtitle: 'Demonstration values until connected to verified operational data',
+        subtitle: 'Prototype readiness values until verified operational feeds are connected',
         child: Column(
           children: [
             const _ProgressRow('Agent assignment', .76, '76%'),
@@ -215,38 +209,34 @@ class _CoveragePanel extends StatelessWidget {
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.onOpenModule, required this.modules});
-
   final ValueChanged<TgcgModule> onOpenModule;
   final Set<TgcgModule> modules;
 
   @override
   Widget build(BuildContext context) {
     final actions = <({TgcgModule module, String label, IconData icon})>[
-      (module: TgcgModule.fieldMonitoring, label: 'Report incident', icon: Icons.add_alert_outlined),
+      (module: TgcgModule.fieldMonitoring, label: 'Open field monitoring', icon: Icons.radar_outlined),
+      (module: TgcgModule.situationRoom, label: 'Situation room', icon: Icons.dashboard_customize_outlined),
       (module: TgcgModule.resultCapture, label: 'Submit result', icon: Icons.ballot_outlined),
       (module: TgcgModule.collation, label: 'Open collation', icon: Icons.account_tree_outlined),
       (module: TgcgModule.accreditation, label: 'Manage agents', icon: Icons.badge_outlined),
-      (module: TgcgModule.communications, label: 'Communications', icon: Icons.chat_bubble_outline_rounded),
       (module: TgcgModule.governance, label: 'Audit & sync', icon: Icons.shield_outlined),
     ].where((item) => modules.contains(item.module)).toList();
 
     return _Panel(
       title: 'Quick actions',
-      subtitle: 'Actions shown are filtered by the current role',
+      subtitle: 'Actions are filtered by the current role',
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
         children: actions
-            .map(
-              (action) => OutlinedButton.icon(
-                onPressed: () => onOpenModule(action.module),
-                icon: Icon(action.icon),
-                label: Text(action.label),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-              ),
-            )
+            .map((action) => OutlinedButton.icon(
+                  onPressed: () => onOpenModule(action.module),
+                  icon: Icon(action.icon),
+                  label: Text(action.label),
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+                ))
             .toList(),
       ),
     );
@@ -262,7 +252,6 @@ class _MetricCard extends StatelessWidget {
     required this.icon,
     this.accent = TgcgApp.primary,
   });
-
   final double width;
   final String label;
   final String value;
@@ -294,12 +283,8 @@ class _MetricCard extends StatelessWidget {
                     children: [
                       Text(value,
                           style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: TgcgApp.ink,
-                          )),
-                      Text(label,
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                              fontSize: 22, fontWeight: FontWeight.w900, color: TgcgApp.ink)),
+                      Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(detail,
                           style: const TextStyle(fontSize: 10.5, color: TgcgApp.muted)),
@@ -315,7 +300,6 @@ class _MetricCard extends StatelessWidget {
 
 class _Panel extends StatelessWidget {
   const _Panel({required this.title, required this.subtitle, required this.child});
-
   final String title;
   final String subtitle;
   final Widget child;
@@ -329,13 +313,9 @@ class _Panel extends StatelessWidget {
             children: [
               Text(title,
                   style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    color: TgcgApp.ink,
-                  )),
+                      fontSize: 17, fontWeight: FontWeight.w900, color: TgcgApp.ink)),
               const SizedBox(height: 4),
-              Text(subtitle,
-                  style: const TextStyle(fontSize: 11, color: TgcgApp.muted)),
+              Text(subtitle, style: const TextStyle(fontSize: 11, color: TgcgApp.muted)),
               const SizedBox(height: 15),
               child,
             ],
@@ -345,13 +325,7 @@ class _Panel extends StatelessWidget {
 }
 
 class _QueueItem extends StatelessWidget {
-  const _QueueItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.action,
-  });
-
+  const _QueueItem({required this.icon, required this.title, required this.subtitle, this.action});
   final IconData icon;
   final String title;
   final String subtitle;
@@ -385,8 +359,7 @@ class _QueueItem extends StatelessWidget {
                   ],
                 ),
               ),
-              if (action != null)
-                const Icon(Icons.chevron_right_rounded, color: TgcgApp.muted),
+              if (action != null) const Icon(Icons.chevron_right_rounded, color: TgcgApp.muted),
             ],
           ),
         ),
@@ -395,7 +368,6 @@ class _QueueItem extends StatelessWidget {
 
 class _ProgressRow extends StatelessWidget {
   const _ProgressRow(this.label, this.value, this.valueLabel);
-
   final String label;
   final double value;
   final String valueLabel;
@@ -405,13 +377,11 @@ class _ProgressRow extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 13),
         child: Column(
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
-                Text(valueLabel,
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.primary)),
-              ],
-            ),
+            Row(children: [
+              Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+              Text(valueLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.primary)),
+            ]),
             const SizedBox(height: 6),
             LinearProgressIndicator(
               value: value,
@@ -425,33 +395,41 @@ class _ProgressRow extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label, required this.icon, required this.color});
-
-  final String label;
-  final IconData icon;
-  final Color color;
+  const _StatusBadge();
 
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: .08),
+          color: const Color(0xFF8B6513).withValues(alpha: .08),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: .22)),
+          border: Border.all(color: const Color(0xFF8B6513).withValues(alpha: .22)),
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 6),
-            Text(label,
+            Icon(Icons.science_outlined, size: 15, color: Color(0xFF8B6513)),
+            SizedBox(width: 6),
+            Text('PROTOTYPE DATA',
                 style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .5,
-                )),
+                    color: Color(0xFF8B6513),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .5)),
           ],
         ),
       );
+}
+
+int _severityRank(IncidentSeverity severity) => switch (severity) {
+      IncidentSeverity.critical => 5,
+      IncidentSeverity.high => 4,
+      IncidentSeverity.medium => 3,
+      IncidentSeverity.low => 2,
+      IncidentSeverity.info => 1,
+    };
+
+String _label(String value) {
+  final spaced = value.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) => '${match.group(1)} ${match.group(2)}');
+  return spaced.isEmpty ? spaced : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
 }
