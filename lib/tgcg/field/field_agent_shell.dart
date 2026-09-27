@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../communications/communications_page.dart';
+import '../discussion/discussion_room_page.dart';
 import '../membership/membership_store.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
@@ -52,6 +53,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       TgcgModule.fieldMonitoring,
       TgcgModule.resultCapture,
       TgcgModule.communications,
+      TgcgModule.discussionRoom,
     };
     if (!allowed.contains(selectedModule)) {
       selectedModule = TgcgModule.overview;
@@ -83,9 +85,14 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
             label: 'Result',
           ),
           NavigationDestination(
+            icon: Icon(Icons.chat_outlined),
+            selectedIcon: Icon(Icons.chat_rounded),
+            label: 'Messages',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.forum_outlined),
             selectedIcon: Icon(Icons.forum_rounded),
-            label: 'Messages',
+            label: 'Discuss',
           ),
         ],
       ),
@@ -153,6 +160,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                 TgcgModule.fieldMonitoring => TgcgModule.fieldMonitoring,
                 TgcgModule.resultCapture => TgcgModule.resultCapture,
                 TgcgModule.communications => TgcgModule.communications,
+                TgcgModule.discussionRoom => TgcgModule.discussionRoom,
                 _ => TgcgModule.overview,
               };
             }),
@@ -160,6 +168,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.communications => const CommunicationsPage(),
+        TgcgModule.discussionRoom => const DiscussionRoomPage(),
         _ => FieldAgentHomePage(
             onOpenModule: (next) => setState(() => selectedModule = next),
           ),
@@ -170,6 +179,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         TgcgModule.fieldMonitoring => 1,
         TgcgModule.resultCapture => 2,
         TgcgModule.communications => 3,
+        TgcgModule.discussionRoom => 4,
         _ => 0,
       };
 
@@ -177,6 +187,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         1 => TgcgModule.fieldMonitoring,
         2 => TgcgModule.resultCapture,
         3 => TgcgModule.communications,
+        4 => TgcgModule.discussionRoom,
         _ => TgcgModule.overview,
       };
 }
