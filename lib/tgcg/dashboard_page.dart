@@ -25,6 +25,7 @@ class TgcgDashboardPage extends StatelessWidget {
     final fieldReports = field.reportsForScope(scope);
     final submissions = results.submissionsForScope(scope);
     final review = results.reviewQueueForScope(scope);
+    final registeredMembers = membership.membersForScope(scope);
     final agents = membership.agentsForScope(scope);
     final approvedAgents = agents
         .where((agent) => agent.status == AccreditationStatus.approved)
@@ -65,7 +66,7 @@ class TgcgDashboardPage extends StatelessWidget {
                   ? 'Polling Unit Workspace'
                   : 'Operations Command',
               subtitle:
-                  '${roleLabel(session.role!)} • ${scope.label}. Live field operations, verified result progress and command exceptions in one workspace.',
+                  '${roleLabel(session.role!)} • ${scope.label}. Live field operations, membership coverage, verified result progress and command exceptions in one workspace.',
               trailing: compact
                   ? null
                   : const TgcgStatusPill(
@@ -80,6 +81,7 @@ class TgcgDashboardPage extends StatelessWidget {
               highPriority: criticalAndHigh.length,
               submissions: submissions.length,
               review: review.length,
+              registeredMembers: registeredMembers.length,
               approvedAgents: approvedAgents.length,
               readyAgents: readyAgents.length,
               verifiedPollingUnits: collation.verifiedPollingUnitCount,
@@ -165,6 +167,7 @@ class _MetricGrid extends StatelessWidget {
     required this.highPriority,
     required this.submissions,
     required this.review,
+    required this.registeredMembers,
     required this.approvedAgents,
     required this.readyAgents,
     required this.verifiedPollingUnits,
@@ -177,6 +180,7 @@ class _MetricGrid extends StatelessWidget {
   final int highPriority;
   final int submissions;
   final int review;
+  final int registeredMembers;
   final int approvedAgents;
   final int readyAgents;
   final int verifiedPollingUnits;
@@ -188,7 +192,7 @@ class _MetricGrid extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
           final columns = constraints.maxWidth >= 1180
-              ? 6
+              ? 4
               : constraints.maxWidth >= 780
                   ? 3
                   : constraints.maxWidth >= 500
@@ -206,11 +210,23 @@ class _MetricGrid extends StatelessWidget {
                 value: '$incidents',
                 detail: '$highPriority high / critical',
                 icon: Icons.warning_amber_rounded,
-                tone: incidents == 0 ? TgcgMetricTone.success : TgcgMetricTone.warning,
+                tone: incidents == 0
+                    ? TgcgMetricTone.success
+                    : TgcgMetricTone.warning,
                 onTap: modules.contains(TgcgModule.situationRoom)
                     ? () => onOpenModule(TgcgModule.situationRoom)
                     : null,
               ),
+              if (modules.contains(TgcgModule.membershipNetwork))
+                TgcgMetricCard(
+                  width: width,
+                  label: 'Registered members',
+                  value: '$registeredMembers',
+                  detail: 'Nationwide membership network',
+                  icon: Icons.groups_2_outlined,
+                  tone: TgcgMetricTone.info,
+                  onTap: () => onOpenModule(TgcgModule.membershipNetwork),
+                ),
               TgcgMetricCard(
                 width: width,
                 label: 'Results received',
@@ -226,7 +242,7 @@ class _MetricGrid extends StatelessWidget {
                 width: width,
                 label: 'Verified polling units',
                 value: '$verifiedPollingUnits',
-                detail: '$expectedPollingUnits expected in prototype registry',
+                detail: '$expectedPollingUnits expected in current scope',
                 icon: Icons.fact_check_outlined,
                 tone: TgcgMetricTone.success,
                 onTap: modules.contains(TgcgModule.collation)
@@ -297,7 +313,7 @@ class _OperationsMapPanel extends StatelessWidget {
     return TgcgSectionCard(
       title: 'Operational geography',
       subtitle:
-          'GIS command preview for polling-unit coverage, incidents and result progress. Production geometry will come from PostGIS/Mapbox.',
+          'Geographic view of polling-unit coverage, incidents and result progress.',
       trailing: onOpenGeography == null
           ? null
           : TextButton.icon(
@@ -332,9 +348,15 @@ class _OperationsMapPanel extends StatelessWidget {
                   top: 16,
                   child: Row(
                     children: [
-                      _MapLegendDot(label: 'Result', color: TgcgColors.success),
+                      _MapLegendDot(
+                        label: 'Result',
+                        color: TgcgColors.success,
+                      ),
                       const SizedBox(width: 10),
-                      _MapLegendDot(label: 'Incident', color: TgcgColors.danger),
+                      _MapLegendDot(
+                        label: 'Incident',
+                        color: TgcgColors.danger,
+                      ),
                     ],
                   ),
                 ),
@@ -383,11 +405,18 @@ class _OperationsMapPanel extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const Icon(Icons.layers_outlined, color: Color(0xFFB8CEC6), size: 17),
+                      const Icon(
+                        Icons.layers_outlined,
+                        color: Color(0xFFB8CEC6),
+                        size: 17,
+                      ),
                       const SizedBox(width: 6),
                       const Text(
                         'Coverage  •  Incidents  •  Results',
-                        style: TextStyle(color: Color(0xFFB8CEC6), fontSize: 10),
+                        style: TextStyle(
+                          color: Color(0xFFB8CEC6),
+                          fontSize: 10,
+                        ),
                       ),
                     ],
                   ),
@@ -403,7 +432,8 @@ class _OperationsMapPanel extends StatelessWidget {
               children: visibleChildren.map((child) {
                 final summary = engine.summarize(child, submissions);
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: TgcgColors.surfaceSoft,
                     borderRadius: BorderRadius.circular(11),
@@ -412,11 +442,18 @@ class _OperationsMapPanel extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 15, color: TgcgColors.primary),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 15,
+                        color: TgcgColors.primary,
+                      ),
                       const SizedBox(width: 5),
                       Text(
                         child.label,
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const SizedBox(width: 7),
                       Text(
@@ -496,9 +533,19 @@ class _MapLegendDot extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(color: Color(0xFFB8CEC6), fontSize: 9.5)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFB8CEC6),
+              fontSize: 9.5,
+            ),
+          ),
         ],
       );
 }
@@ -590,7 +637,13 @@ class _ElectionProgressPanel extends StatelessWidget {
               const SizedBox(width: 8),
               const Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Text('verified PU coverage', style: TextStyle(color: TgcgColors.muted, fontSize: 10.5)),
+                child: Text(
+                  'verified PU coverage',
+                  style: TextStyle(
+                    color: TgcgColors.muted,
+                    fontSize: 10.5,
+                  ),
+                ),
               ),
             ],
           ),
@@ -605,10 +658,24 @@ class _ElectionProgressPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          _ProgressStat('Verified polling units', '${summary.verifiedPollingUnitCount}'),
-          _ProgressStat('Expected polling units', '${summary.expectedPollingUnitCount}'),
-          _ProgressStat('Missing polling units', '${summary.missingPollingUnitIds.length}', warning: summary.missingPollingUnitIds.isNotEmpty),
-          _ProgressStat('Reconciliation conflicts', '${summary.conflictingPollingUnitIds.length}', warning: summary.conflictingPollingUnitIds.isNotEmpty),
+          _ProgressStat(
+            'Verified polling units',
+            '${summary.verifiedPollingUnitCount}',
+          ),
+          _ProgressStat(
+            'Expected polling units',
+            '${summary.expectedPollingUnitCount}',
+          ),
+          _ProgressStat(
+            'Missing polling units',
+            '${summary.missingPollingUnitIds.length}',
+            warning: summary.missingPollingUnitIds.isNotEmpty,
+          ),
+          _ProgressStat(
+            'Reconciliation conflicts',
+            '${summary.conflictingPollingUnitIds.length}',
+            warning: summary.conflictingPollingUnitIds.isNotEmpty,
+          ),
           const Divider(),
           _ProgressStat('Ready agents', '$readyAgents / $approvedAgents'),
           _ProgressStat('Field reports', '$fieldReports'),
@@ -637,7 +704,15 @@ class _ProgressStat extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: const TextStyle(color: TgcgColors.muted, fontSize: 11))),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: TgcgColors.muted,
+                  fontSize: 11,
+                ),
+              ),
+            ),
             Text(
               value,
               style: TextStyle(
@@ -668,7 +743,8 @@ class _CriticalEventFeed extends StatelessWidget {
   Widget build(BuildContext context) {
     final sorted = [...incidents]
       ..sort((a, b) {
-        final severity = _severityRank(b.severity).compareTo(_severityRank(a.severity));
+        final severity =
+            _severityRank(b.severity).compareTo(_severityRank(a.severity));
         if (severity != 0) return severity;
         return b.reportedAt.compareTo(a.reportedAt);
       });
@@ -682,7 +758,8 @@ class _CriticalEventFeed extends StatelessWidget {
             const TgcgEmptyState(
               icon: Icons.task_alt_rounded,
               title: 'No command exceptions',
-              message: 'There are no unresolved incidents or result-review items in this scope.',
+              message:
+                  'There are no unresolved incidents or result-review items in this scope.',
             )
           else ...[
             ...sorted.take(4).map((incident) {
@@ -691,7 +768,8 @@ class _CriticalEventFeed extends StatelessWidget {
                 icon: Icons.crisis_alert_outlined,
                 iconColor: color,
                 title: incident.title,
-                subtitle: '${incident.scope.label} • ${_label(incident.status.name)}',
+                subtitle:
+                    '${incident.scope.label} • ${_label(incident.status.name)}',
                 trailing: _label(incident.severity.name),
                 onTap: modules.contains(TgcgModule.situationRoom)
                     ? () => onOpenModule(TgcgModule.situationRoom)
@@ -702,8 +780,10 @@ class _CriticalEventFeed extends StatelessWidget {
               _EventRow(
                 icon: Icons.document_scanner_outlined,
                 iconColor: TgcgColors.ai,
-                title: '$reviewCount result submission${reviewCount == 1 ? '' : 's'} awaiting human review',
-                subtitle: 'Inspect OCR/manual differences, duplicates and arithmetic warnings.',
+                title:
+                    '$reviewCount result submission${reviewCount == 1 ? '' : 's'} awaiting human review',
+                subtitle:
+                    'Inspect OCR/manual differences, duplicates and arithmetic warnings.',
                 trailing: 'AI REVIEW',
                 onTap: modules.contains(TgcgModule.resultCapture)
                     ? () => onOpenModule(TgcgModule.resultCapture)
@@ -755,20 +835,42 @@ class _EventRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: TgcgColors.ink)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                        color: TgcgColors.ink,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(subtitle, style: const TextStyle(fontSize: 10, color: TgcgColors.muted)),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: TgcgColors.muted,
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 trailing,
-                style: TextStyle(color: iconColor, fontSize: 8.5, fontWeight: FontWeight.w900, letterSpacing: .4),
+                style: TextStyle(
+                  color: iconColor,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .4,
+                ),
               ),
               if (onTap != null) ...[
                 const SizedBox(width: 5),
-                const Icon(Icons.chevron_right_rounded, color: TgcgColors.muted, size: 18),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: TgcgColors.muted,
+                  size: 18,
+                ),
               ],
             ],
           ),
@@ -777,14 +879,30 @@ class _EventRow extends StatelessWidget {
 }
 
 class _QuickCommandPanel extends StatelessWidget {
-  const _QuickCommandPanel({required this.modules, required this.onOpenModule});
+  const _QuickCommandPanel({
+    required this.modules,
+    required this.onOpenModule,
+  });
 
   final Set<TgcgModule> modules;
   final ValueChanged<TgcgModule> onOpenModule;
 
   @override
   Widget build(BuildContext context) {
-    final actions = <({TgcgModule module, String label, String detail, IconData icon, TgcgMetricTone tone})>[
+    final actions = <({
+      TgcgModule module,
+      String label,
+      String detail,
+      IconData icon,
+      TgcgMetricTone tone,
+    })>[
+      (
+        module: TgcgModule.membershipNetwork,
+        label: 'Registered Members',
+        detail: 'Zones, states, members & agents',
+        icon: Icons.groups_2_outlined,
+        tone: TgcgMetricTone.info,
+      ),
       (
         module: TgcgModule.situationRoom,
         label: 'Situation Room',
@@ -855,13 +973,29 @@ class _QuickCommandPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(action.label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                        Text(
+                          action.label,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(action.detail, style: const TextStyle(fontSize: 9.5, color: TgcgColors.muted)),
+                        Text(
+                          action.detail,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            color: TgcgColors.muted,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: TgcgColors.muted),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                    color: TgcgColors.muted,
+                  ),
                 ],
               ),
             ),
@@ -893,5 +1027,7 @@ String _label(String value) {
     RegExp(r'([a-z])([A-Z])'),
     (match) => '${match.group(1)} ${match.group(2)}',
   );
-  return spaced.isEmpty ? spaced : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
+  return spaced.isEmpty
+      ? spaced
+      : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
 }
