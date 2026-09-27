@@ -1,15 +1,21 @@
 import 'package:flutter/widgets.dart';
 
 import '../domain/models.dart';
+import '../offline/offline_payloads.dart';
+import '../offline/offline_persistence.dart';
 
 class FieldOperationsController extends ChangeNotifier {
   FieldOperationsController._({
     required List<FieldIncident> incidents,
     required List<FieldReport> reports,
+    OfflinePersistenceController? persistence,
   })  : _incidents = incidents,
-        _reports = reports;
+        _reports = reports,
+        _persistence = persistence;
 
-  factory FieldOperationsController.prototypeSeed() {
+  factory FieldOperationsController.prototypeSeed({
+    OfflinePersistenceController? persistence,
+  }) {
     final now = DateTime.utc(2026, 9, 27, 6, 30);
 
     GeographicScope lga({
@@ -77,6 +83,7 @@ class FieldOperationsController extends ChangeNotifier {
         );
 
     return FieldOperationsController._(
+      persistence: persistence,
       incidents: [
         FieldIncident(
           id: 'INC-0001',
@@ -171,6 +178,7 @@ class FieldOperationsController extends ChangeNotifier {
 
   final List<FieldIncident> _incidents;
   final List<FieldReport> _reports;
+  final OfflinePersistenceController? _persistence;
 
   List<FieldIncident> get incidents => List.unmodifiable(_incidents);
   List<FieldReport> get reports => List.unmodifiable(_reports);
@@ -195,7 +203,7 @@ class FieldOperationsController extends ChangeNotifier {
         (total, incident) => total + incident.evidence.length,
       );
 
-  FieldIncident createIncident({
+  Future<FieldIncident> createIncident({
     required String title,
     required String category,
     required IncidentSeverity severity,
@@ -205,7 +213,7 @@ class FieldOperationsController extends ChangeNotifier {
     double? latitude,
     double? longitude,
     List<EvidenceAttachment> evidence = const [],
-  }) {
+  }) async {
     final incident = FieldIncident(
       id: 'INC-${(_incidents.length + 1).toString().padLeft(4, '0')}',
       title: title.trim(),
@@ -221,19 +229,27 @@ class FieldOperationsController extends ChangeNotifier {
       evidence: List.unmodifiable(evidence),
       origin: RecordOrigin.localEntry,
     );
+    await _persistence?.persistMutation(
+      entityType: 'field_incident',
+      entityId: incident.id,
+      mutationType: SyncMutationType.create,
+      payload: fieldIncidentToJson(incident),
+      scopeKey: scopeStorageKey(scope),
+      ownerId: reporterId,
+    );
     _incidents.insert(0, incident);
     notifyListeners();
     return incident;
   }
 
-  FieldReport submitFieldReport({
+  Future<FieldReport> submitFieldReport({
     required String category,
     required String summary,
     required GeographicScope scope,
     required String reporterId,
     String? incidentId,
     List<EvidenceAttachment> evidence = const [],
-  }) {
+  }) async {
     final report = FieldReport(
       id: 'RPT-${(_reports.length + 1).toString().padLeft(4, '0')}',
       category: category.trim(),
@@ -245,6 +261,14 @@ class FieldOperationsController extends ChangeNotifier {
       incidentId: incidentId,
       evidence: List.unmodifiable(evidence),
       origin: RecordOrigin.localEntry,
+    );
+    await _persistence?.persistMutation(
+      entityType: 'field_report',
+      entityId: report.id,
+      mutationType: SyncMutationType.create,
+      payload: fieldReportToJson(report),
+      scopeKey: scopeStorageKey(scope),
+      ownerId: reporterId,
     );
     _reports.insert(0, report);
     notifyListeners();
