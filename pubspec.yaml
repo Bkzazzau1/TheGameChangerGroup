@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  cross_file: ^0.3.5+5
   cryptography: ^2.9.0
   flutter_secure_storage: ^11.2.0
   geolocator: ^14.0.3
