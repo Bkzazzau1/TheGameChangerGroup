@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../communications/communications_page.dart';
 import '../discussion/discussion_room_page.dart';
 import '../evidence/evidence_capture_page.dart';
-import '../meeting/meeting_room_page.dart';
 import '../membership/membership_store.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'field_agent_communications_page.dart';
+import 'field_agent_dashboard_page.dart';
 import 'field_agent_home_page.dart';
+import 'field_agent_meeting_page.dart';
 import 'field_monitoring_page.dart';
 
 class FieldAgentShell extends StatefulWidget {
@@ -76,6 +77,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       bottomNavigationBar: focused
           ? null
           : NavigationBar(
+              height: 68,
               selectedIndex: _indexFor(selectedModule),
               onDestinationSelected: (index) => setState(() {
                 selectedModule = _moduleFor(index);
@@ -87,9 +89,9 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                   label: 'Home',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.sensors_outlined),
-                  selectedIcon: Icon(Icons.sensors_rounded),
-                  label: 'Field',
+                  icon: Icon(Icons.warning_amber_outlined),
+                  selectedIcon: Icon(Icons.warning_amber_rounded),
+                  label: 'Report',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.ballot_outlined),
@@ -97,8 +99,8 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                   label: 'Result',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.chat_outlined),
-                  selectedIcon: Icon(Icons.chat_rounded),
+                  icon: Icon(Icons.chat_bubble_outline_rounded),
+                  selectedIcon: Icon(Icons.chat_bubble_rounded),
                   label: 'Messages',
                 ),
                 NavigationDestination(
@@ -118,7 +120,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         elevation: 0,
         backgroundColor: TgcgColors.surface,
         surfaceTintColor: Colors.transparent,
-        titleSpacing: 16,
+        titleSpacing: 14,
         title: Row(
           children: [
             const TgcgLogo(size: 34),
@@ -128,11 +130,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    selectedModule == TgcgModule.meetingRoom
-                        ? 'TGCG MEETING'
-                        : selectedModule == TgcgModule.evidenceCapture
-                            ? 'TGCG EVIDENCE'
-                            : 'TGCG FIELD',
+                    _titleFor(selectedModule),
                     style: const TextStyle(
                       color: TgcgColors.ink,
                       fontSize: 13,
@@ -140,12 +138,13 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                     ),
                   ),
                   Text(
-                    session.scope.pollingUnitName ?? 'Polling-unit operations',
+                    _subtitleFor(session),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: TgcgColors.muted,
                       fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -165,14 +164,14 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
             ),
           if (allowHome && selectedModule != TgcgModule.meetingRoom)
             IconButton(
-              tooltip: 'Meeting room',
+              tooltip: 'Local meeting',
               onPressed: () =>
                   setState(() => selectedModule = TgcgModule.meetingRoom),
               icon: const Icon(Icons.video_call_outlined),
             ),
           if (allowHome && selectedModule != TgcgModule.overview)
             IconButton(
-              tooltip: 'Field home',
+              tooltip: 'Home',
               onPressed: () =>
                   setState(() => selectedModule = TgcgModule.overview),
               icon: const Icon(Icons.home_outlined),
@@ -182,31 +181,39 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
             onPressed: session.signOut,
             icon: const Icon(Icons.logout_rounded),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
         ],
       );
 
+  String _titleFor(TgcgModule module) => switch (module) {
+        TgcgModule.meetingRoom => 'LOCAL MEETING',
+        TgcgModule.evidenceCapture => 'EVIDENCE CAPTURE',
+        TgcgModule.communications => 'LOCAL MESSAGES',
+        TgcgModule.resultCapture => 'RESULT SUBMISSION',
+        TgcgModule.fieldMonitoring => 'FIELD REPORTING',
+        TgcgModule.discussionRoom => 'FIELD FORUM',
+        _ => 'POLLING AGENT',
+      };
+
+  String _subtitleFor(TgcgSessionController session) {
+    if (selectedModule == TgcgModule.communications ||
+        selectedModule == TgcgModule.meetingRoom) {
+      return '${session.scope.wardName ?? 'Ward'} • ${session.scope.lgaName ?? 'LGA'}';
+    }
+    return session.scope.pollingUnitName ?? 'Polling-unit operations';
+  }
+
   Widget _pageFor(TgcgModule module) => switch (module) {
-        TgcgModule.overview => FieldAgentHomePage(
-            onOpenModule: (next) => setState(() {
-              selectedModule = switch (next) {
-                TgcgModule.fieldMonitoring => TgcgModule.fieldMonitoring,
-                TgcgModule.evidenceCapture => TgcgModule.evidenceCapture,
-                TgcgModule.resultCapture => TgcgModule.resultCapture,
-                TgcgModule.communications => TgcgModule.communications,
-                TgcgModule.discussionRoom => TgcgModule.discussionRoom,
-                TgcgModule.meetingRoom => TgcgModule.meetingRoom,
-                _ => TgcgModule.overview,
-              };
-            }),
+        TgcgModule.overview => FieldAgentDashboardPage(
+            onOpenModule: (next) => setState(() => selectedModule = next),
           ),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.evidenceCapture => const EvidenceCapturePage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
-        TgcgModule.communications => const CommunicationsPage(),
+        TgcgModule.communications => const FieldAgentCommunicationsPage(),
         TgcgModule.discussionRoom => const DiscussionRoomPage(),
-        TgcgModule.meetingRoom => const MeetingRoomPage(),
-        _ => FieldAgentHomePage(
+        TgcgModule.meetingRoom => const FieldAgentMeetingPage(),
+        _ => FieldAgentDashboardPage(
             onOpenModule: (next) => setState(() => selectedModule = next),
           ),
       };
