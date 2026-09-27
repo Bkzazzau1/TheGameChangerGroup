@@ -1,4 +1,5 @@
 import '../domain/models.dart';
+import 'nigeria_lga_catalog.dart';
 
 class CanonicalZone {
   const CanonicalZone({required this.id, required this.name});
@@ -36,6 +37,35 @@ class CanonicalState {
         zoneName: zoneName,
         stateId: id,
         stateName: name,
+      );
+}
+
+class CanonicalLga {
+  const CanonicalLga({
+    required this.id,
+    required this.name,
+    required this.stateId,
+    required this.stateName,
+    required this.zoneId,
+    required this.zoneName,
+  });
+
+  final String id;
+  final String name;
+  final String stateId;
+  final String stateName;
+  final String zoneId;
+  final String zoneName;
+
+  GeographicScope get scope => GeographicScope(
+        level: GeographyLevel.lga,
+        country: 'Nigeria',
+        zoneId: zoneId,
+        zoneName: zoneName,
+        stateId: stateId,
+        stateName: stateName,
+        lgaId: id,
+        lgaName: name,
       );
 }
 
@@ -252,6 +282,37 @@ class GeographyRegistry {
       .where((item) => item.zoneId == zoneId)
       .toList(growable: false);
 
+  List<CanonicalLga> get lgas => states
+      .expand((item) => lgasForState(item.id))
+      .toList(growable: false);
+
+  int get nationalLgaCount => lgas.length;
+
+  List<CanonicalLga> lgasForState(String stateId) {
+    final stateItem = state(stateId);
+    if (stateItem == null) return const [];
+    final slugs = nigeriaLgaSlugsByStateId[stateId] ?? const <String>[];
+    return slugs
+        .map(
+          (slug) => CanonicalLga(
+            id: '$stateId-${slug.toUpperCase().replaceAll("'", '')}',
+            name: nigeriaLgaDisplayName(slug),
+            stateId: stateItem.id,
+            stateName: stateItem.name,
+            zoneId: stateItem.zoneId,
+            zoneName: stateItem.zoneName,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  CanonicalLga? lga(String id) {
+    for (final item in lgas) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
   CanonicalPollingUnit? pollingUnit(String id) {
     for (final unit in pollingUnits) {
       if (unit.code == id || unit.scope.pollingUnitId == id) return unit;
@@ -272,6 +333,12 @@ class GeographyRegistry {
       return statesForZone(parent.zoneId ?? '')
           .map((item) => item.scope)
           .toList(growable: false);
+    }
+    if (parent.level == GeographyLevel.state) {
+      final stateLgas = lgasForState(parent.stateId ?? '');
+      if (stateLgas.isNotEmpty) {
+        return stateLgas.map((item) => item.scope).toList(growable: false);
+      }
     }
 
     final values = <String, GeographicScope>{};
