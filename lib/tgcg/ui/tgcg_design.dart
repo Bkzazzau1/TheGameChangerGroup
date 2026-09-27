@@ -43,6 +43,24 @@ Color tgcgToneColor(TgcgMetricTone tone) => switch (tone) {
       TgcgMetricTone.ai => TgcgColors.ai,
     };
 
+class TgcgLogo extends StatelessWidget {
+  const TgcgLogo({super.key, this.size = 40});
+
+  static const asset = 'assets/brand/tgcg_logo.png';
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+        asset,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        semanticLabel: 'The Game Changer Group logo',
+      );
+}
+
 class TgcgPageHeader extends StatelessWidget {
   const TgcgPageHeader({
     super.key,

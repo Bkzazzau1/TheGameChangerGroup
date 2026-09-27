@@ -541,7 +541,7 @@ class _CompactBrand extends StatelessWidget {
   Widget build(BuildContext context) => const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _BrandMark(size: 33, light: true),
+          _BrandMark(size: 36),
           SizedBox(width: 8),
           Text(
             'TGCG-EMCOP',
@@ -552,25 +552,12 @@ class _CompactBrand extends StatelessWidget {
 }
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.size = 39, this.light = false});
+  const _BrandMark({this.size = 39});
 
   final double size;
-  final bool light;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: light ? TgcgColors.primary : TgcgColors.accent,
-          borderRadius: BorderRadius.circular(size * .29),
-        ),
-        child: Icon(
-          Icons.hub_rounded,
-          color: light ? Colors.white : TgcgColors.primaryDark,
-          size: size * .5,
-        ),
-      );
+  Widget build(BuildContext context) => TgcgLogo(size: size);
 }
 
 String _groupLabel(_NavGroup group) => switch (group) {

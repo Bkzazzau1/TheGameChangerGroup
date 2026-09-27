@@ -1,11 +1,11 @@
 {
-    "name": "tgcg_emcop",
-    "short_name": "tgcg_emcop",
+    "name": "TGCG-EMCOP",
+    "short_name": "TGCG-EMCOP",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#123D33",
+    "theme_color": "#123D33",
+    "description": "The Game Changer Group Election Monitoring & Collation Programme.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

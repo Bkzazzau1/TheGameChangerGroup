@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'session.dart';
+import 'ui/tgcg_design.dart';
 
 class TgcgLoginPage extends StatefulWidget {
   const TgcgLoginPage({super.key});
@@ -78,16 +79,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
           children: [
             Row(
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white24),
-                  ),
-                  child: const Icon(Icons.hub_rounded, color: Colors.white),
-                ),
+                TgcgLogo(size: compact ? 52 : 64),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Column(
