@@ -18,6 +18,7 @@ import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
 import 'offline/offline_persistence.dart';
 import 'operations/live_operations_page.dart';
+import 'presentation/presentation_tour_sheet.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
@@ -34,6 +35,14 @@ class _TgcgShellState extends State<TgcgShell> {
   TgcgModule selectedModule = TgcgModule.overview;
 
   void _select(TgcgModule module) => setState(() => selectedModule = module);
+
+  void _openTour(Set<TgcgModule> allowed) {
+    showPresentationTour(
+      context,
+      allowedModules: allowed,
+      onOpenModule: _select,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +70,12 @@ class _TgcgShellState extends State<TgcgShell> {
                   title: const _CompactBrand(),
                   actions: [
                     const _CompactSync(),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 2),
+                    IconButton(
+                      tooltip: 'Presentation Tour',
+                      onPressed: () => _openTour(allowed),
+                      icon: const Icon(Icons.slideshow_rounded),
+                    ),
                     if (allowed.contains(TgcgModule.alertCenter))
                       IconButton(
                         tooltip: 'Alert Centre',
@@ -105,6 +119,7 @@ class _TgcgShellState extends State<TgcgShell> {
                             selectedModule: selectedModule,
                             showAlerts: allowed.contains(TgcgModule.alertCenter),
                             onAlerts: () => _select(TgcgModule.alertCenter),
+                            onTour: () => _openTour(allowed),
                           ),
                           Expanded(child: _pageFor(selectedModule)),
                         ],
@@ -364,11 +379,13 @@ class _CommandBar extends StatelessWidget {
     required this.selectedModule,
     required this.showAlerts,
     required this.onAlerts,
+    required this.onTour,
   });
 
   final TgcgModule selectedModule;
   final bool showAlerts;
   final VoidCallback onAlerts;
+  final VoidCallback onTour;
 
   @override
   Widget build(BuildContext context) {
@@ -408,8 +425,18 @@ class _CommandBar extends StatelessWidget {
             icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
             compact: true,
           ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: onTour,
+            icon: const Icon(Icons.slideshow_rounded, size: 17),
+            label: const Text('Tour'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
           if (showAlerts) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             IconButton(
               tooltip: 'Alert Centre',
               onPressed: onAlerts,
