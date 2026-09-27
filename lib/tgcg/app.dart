@@ -6,6 +6,7 @@ import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
 import 'login_page.dart';
 import 'membership/membership_store.dart';
+import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
 import 'session.dart';
 import 'shell.dart';
@@ -34,6 +35,8 @@ class _TgcgAppState extends State<TgcgApp> {
 
   late final CommunicationsController communicationsController =
       CommunicationsController.prototypeSeed(governanceOperationsController);
+  late final ReportOperationsController reportOperationsController =
+      ReportOperationsController.prototypeSeed(governanceOperationsController);
 
   @override
   void dispose() {
@@ -42,6 +45,7 @@ class _TgcgAppState extends State<TgcgApp> {
     resultOperationsController.dispose();
     membershipOperationsController.dispose();
     communicationsController.dispose();
+    reportOperationsController.dispose();
     governanceOperationsController.dispose();
     super.dispose();
   }
@@ -51,55 +55,58 @@ class _TgcgAppState extends State<TgcgApp> {
         controller: sessionController,
         child: GovernanceOperations(
           controller: governanceOperationsController,
-          child: Communications(
-            controller: communicationsController,
-            child: MembershipOperations(
-              controller: membershipOperationsController,
-              child: FieldOperations(
-                controller: fieldOperationsController,
-                child: ResultOperations(
-                  controller: resultOperationsController,
-                  child: MaterialApp(
-                    debugShowCheckedModeBanner: false,
-                    title: 'TGCG-EMCOP',
-                    theme: ThemeData(
-                      useMaterial3: true,
-                      scaffoldBackgroundColor: TgcgApp.canvas,
-                      colorScheme: ColorScheme.fromSeed(
-                        seedColor: TgcgApp.primary,
-                        primary: TgcgApp.primary,
-                        secondary: TgcgApp.accent,
-                        surface: Colors.white,
-                      ),
-                      cardTheme: CardThemeData(
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          side: const BorderSide(color: Color(0xFFE3E8E6)),
+          child: ReportOperations(
+            controller: reportOperationsController,
+            child: Communications(
+              controller: communicationsController,
+              child: MembershipOperations(
+                controller: membershipOperationsController,
+                child: FieldOperations(
+                  controller: fieldOperationsController,
+                  child: ResultOperations(
+                    controller: resultOperationsController,
+                    child: MaterialApp(
+                      debugShowCheckedModeBanner: false,
+                      title: 'TGCG-EMCOP',
+                      theme: ThemeData(
+                        useMaterial3: true,
+                        scaffoldBackgroundColor: TgcgApp.canvas,
+                        colorScheme: ColorScheme.fromSeed(
+                          seedColor: TgcgApp.primary,
+                          primary: TgcgApp.primary,
+                          secondary: TgcgApp.accent,
+                          surface: Colors.white,
                         ),
-                      ),
-                      inputDecorationTheme: InputDecorationTheme(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFDDE5E2)),
+                        cardTheme: CardThemeData(
+                          elevation: 0,
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: const BorderSide(color: Color(0xFFE3E8E6)),
+                          ),
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFDDE5E2)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: TgcgApp.primary,
-                            width: 1.5,
+                        inputDecorationTheme: InputDecorationTheme(
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: Color(0xFFDDE5E2)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: Color(0xFFDDE5E2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                              color: TgcgApp.primary,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
+                      home: const _AuthenticationGate(),
                     ),
-                    home: const _AuthenticationGate(),
                   ),
                 ),
               ),
