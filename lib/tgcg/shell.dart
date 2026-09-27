@@ -5,6 +5,7 @@ import 'dashboard_page.dart';
 import 'domain/models.dart';
 import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
+import 'results/result_capture_page.dart';
 import 'session.dart';
 
 class TgcgShell extends StatefulWidget {
@@ -96,11 +97,7 @@ class _TgcgShellState extends State<TgcgShell> {
           ),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
-        TgcgModule.resultCapture => const _ModulePlaceholder(
-            title: 'Result Capture & Verification',
-            subtitle: 'APP, image, SMS, USSD and manual result submission with integrity checks.',
-            icon: Icons.ballot_outlined,
-          ),
+        TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const _ModulePlaceholder(
             title: 'Collation',
             subtitle: 'Verified result aggregation and reconciliation from polling unit to national scope.',
