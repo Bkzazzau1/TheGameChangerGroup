@@ -31,30 +31,73 @@ class TgcgApp extends StatefulWidget {
 }
 
 class _TgcgAppState extends State<TgcgApp> {
-  final sessionController = TgcgSessionController();
-  final offlinePersistenceController = OfflinePersistenceController();
-  final membershipOperationsController = MembershipOperationsController.prototypeSeed(
-    GeographyRegistry.prototypeSeed(),
-  );
-  final governanceOperationsController = GovernanceOperationsController.prototypeSeed();
-
-  late final FieldOperationsController fieldOperationsController =
-      FieldOperationsController.prototypeSeed(
-        persistence: offlinePersistenceController,
-      );
-  late final ResultOperationsController resultOperationsController =
-      ResultOperationsController.prototypeSeed(
-        persistence: offlinePersistenceController,
-      );
-  late final CommunicationsController communicationsController =
-      CommunicationsController.prototypeSeed(governanceOperationsController);
-  late final ReportOperationsController reportOperationsController =
-      ReportOperationsController.prototypeSeed(governanceOperationsController);
+  late TgcgSessionController sessionController;
+  late OfflinePersistenceController offlinePersistenceController;
+  late MembershipOperationsController membershipOperationsController;
+  late GovernanceOperationsController governanceOperationsController;
+  late FieldOperationsController fieldOperationsController;
+  late ResultOperationsController resultOperationsController;
+  late CommunicationsController communicationsController;
+  late ReportOperationsController reportOperationsController;
 
   @override
   void initState() {
     super.initState();
+    _createControllers();
     unawaited(offlinePersistenceController.initialize());
+  }
+
+  void _createControllers() {
+    sessionController = TgcgSessionController();
+    offlinePersistenceController = OfflinePersistenceController();
+    membershipOperationsController = MembershipOperationsController.prototypeSeed(
+      GeographyRegistry.prototypeSeed(),
+    );
+    governanceOperationsController = GovernanceOperationsController.prototypeSeed();
+    fieldOperationsController = FieldOperationsController.prototypeSeed(
+      persistence: offlinePersistenceController,
+    );
+    resultOperationsController = ResultOperationsController.prototypeSeed(
+      persistence: offlinePersistenceController,
+    );
+    communicationsController =
+        CommunicationsController.prototypeSeed(governanceOperationsController);
+    reportOperationsController =
+        ReportOperationsController.prototypeSeed(governanceOperationsController);
+  }
+
+  Future<void> _resetPresentation() async {
+    final oldSession = sessionController;
+    final oldOffline = offlinePersistenceController;
+    final oldMembership = membershipOperationsController;
+    final oldGovernance = governanceOperationsController;
+    final oldField = fieldOperationsController;
+    final oldResults = resultOperationsController;
+    final oldCommunications = communicationsController;
+    final oldReports = reportOperationsController;
+
+    try {
+      await oldOffline.clearPresentationData();
+    } catch (_) {
+      // Recreating all in-memory controllers still restores the presentation
+      // even if local persistence is unavailable on this platform.
+    }
+    await oldOffline.close();
+    if (!mounted) return;
+
+    setState(_createControllers);
+    unawaited(offlinePersistenceController.initialize());
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldSession.dispose();
+      oldField.dispose();
+      oldResults.dispose();
+      oldMembership.dispose();
+      oldCommunications.dispose();
+      oldReports.dispose();
+      oldGovernance.dispose();
+      oldOffline.dispose();
+    });
   }
 
   @override
@@ -93,7 +136,9 @@ class _TgcgAppState extends State<TgcgApp> {
                         debugShowCheckedModeBanner: false,
                         title: 'TGCG-EMCOP',
                         theme: _theme(),
-                        home: const _AuthenticationGate(),
+                        home: _AuthenticationGate(
+                          onResetPresentation: _resetPresentation,
+                        ),
                       ),
                     ),
                   ),
@@ -209,14 +254,17 @@ class _TgcgAppState extends State<TgcgApp> {
 }
 
 class _AuthenticationGate extends StatelessWidget {
-  const _AuthenticationGate();
+  const _AuthenticationGate({required this.onResetPresentation});
+
+  final Future<void> Function() onResetPresentation;
 
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     if (!session.isAuthenticated) {
-      return const PresentationAccessLogin(
-        key: ValueKey('presentation-access-login'),
+      return PresentationAccessLogin(
+        key: const ValueKey('presentation-access-login'),
+        onResetPresentation: onResetPresentation,
       );
     }
     if (session.role == TgcgRole.pollingUnitAgent) {
