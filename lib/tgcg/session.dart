@@ -43,6 +43,20 @@ class TgcgSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateScope(GeographicScope scope) {
+    final unchanged = _scope.level == scope.level &&
+        _scope.country == scope.country &&
+        _scope.zoneId == scope.zoneId &&
+        _scope.stateId == scope.stateId &&
+        _scope.senatorialDistrictId == scope.senatorialDistrictId &&
+        _scope.lgaId == scope.lgaId &&
+        _scope.wardId == scope.wardId &&
+        _scope.pollingUnitId == scope.pollingUnitId;
+    if (unchanged) return;
+    _scope = scope;
+    notifyListeners();
+  }
+
   void signOut() {
     _role = null;
     _operatorName = '';
