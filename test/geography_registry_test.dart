@@ -12,6 +12,7 @@ void main() {
       expect(unit, isNotNull);
       expect(unit!.scope.level, GeographyLevel.pollingUnit);
       expect(unit.scope.stateName, 'Kaduna');
+      expect(unit.scope.senatorialDistrictName, 'Kaduna Central');
       expect(unit.scope.lgaName, 'Kaduna North');
     });
 
@@ -31,35 +32,70 @@ void main() {
       );
     });
 
-    test('nationwide LGA catalogue contains 774 local governments', () {
+    test('nationwide geography contains 109 districts and 774 LGAs', () {
+      expect(registry.nationalSenatorialDistrictCount, 109);
       expect(registry.nationalLgaCount, 774);
     });
 
-    test('state drill-down exposes real LGAs and preserves sample PU hierarchy', () {
+    test('state drill-down follows district then LGA hierarchy', () {
       final northWest = registry
           .childScopes(GeographicScope.nigeria)
           .firstWhere((scope) => scope.zoneId == 'NW');
       final kaduna = registry
           .childScopes(northWest)
           .firstWhere((scope) => scope.stateId == 'KD');
-      final kadunaLgas = registry.childScopes(kaduna);
-      final kadunaNorth = kadunaLgas
-          .firstWhere((scope) => scope.lgaId == 'KD-KADUNA-NORTH');
+      final kadunaDistricts = registry.childScopes(kaduna);
+      final kadunaCentral = kadunaDistricts.firstWhere(
+        (scope) => scope.senatorialDistrictId == 'SD/053/KD',
+      );
+      final centralLgas = registry.childScopes(kadunaCentral);
+      final kadunaNorth = centralLgas.firstWhere(
+        (scope) => scope.lgaId == 'KD-KADUNA-NORTH',
+      );
       final wards = registry.childScopes(kadunaNorth);
       final ward = wards.single;
       final pollingUnits = registry.childScopes(ward);
 
       expect(kaduna.level, GeographyLevel.state);
-      expect(kadunaLgas.length, 23);
+      expect(kadunaDistricts.length, 3);
       expect(
-        kadunaLgas.every((scope) => scope.level == GeographyLevel.lga),
+        kadunaDistricts.every(
+          (scope) => scope.level == GeographyLevel.senatorialDistrict,
+        ),
+        isTrue,
+      );
+      expect(kadunaCentral.senatorialDistrictName, 'Kaduna Central');
+      expect(centralLgas.length, 7);
+      expect(
+        centralLgas.every((scope) => scope.level == GeographyLevel.lga),
         isTrue,
       );
       expect(kadunaNorth.lgaName, 'Kaduna North');
       expect(ward.level, GeographyLevel.ward);
       expect(pollingUnits.length, 2);
       expect(
-        pollingUnits.every((scope) => scope.level == GeographyLevel.pollingUnit),
+        pollingUnits.every(
+          (scope) => scope.level == GeographyLevel.pollingUnit,
+        ),
+        isTrue,
+      );
+    });
+
+    test('FCT has one senatorial district covering six area councils', () {
+      final northCentral = registry
+          .childScopes(GeographicScope.nigeria)
+          .firstWhere((scope) => scope.zoneId == 'NC');
+      final fct = registry
+          .childScopes(northCentral)
+          .firstWhere((scope) => scope.stateId == 'FCT');
+      final districts = registry.childScopes(fct);
+      final areaCouncils = registry.childScopes(districts.single);
+
+      expect(districts.length, 1);
+      expect(districts.single.senatorialDistrictId, 'SD/109/FCT');
+      expect(areaCouncils.length, 6);
+      expect(
+        areaCouncils.every((scope) => scope.level == GeographyLevel.lga),
         isTrue,
       );
     });
