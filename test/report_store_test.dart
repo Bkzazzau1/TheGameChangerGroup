@@ -126,6 +126,47 @@ void main() {
     expect(reports.jobsForScope(kaduna).map((item) => item.id), contains(job!.id));
   });
 
+  test('history hides report kinds the viewer cannot access', () {
+    final governance = GovernanceOperationsController.prototypeSeed();
+    final reports = ReportOperationsController.prototypeSeed(governance);
+    const kaduna = GeographicScope(
+      level: GeographyLevel.state,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KD',
+      stateName: 'Kaduna',
+    );
+
+    final auditJob = reports.requestExport(
+      kind: ReportKind.auditTrail,
+      format: ExportFormat.csv,
+      targetScope: kaduna,
+      actorId: 'ADMIN-001',
+      role: TgcgRole.nationalAdministrator,
+      userScope: GeographicScope.nigeria,
+    );
+    final incidentJob = reports.requestExport(
+      kind: ReportKind.incidentSummary,
+      format: ExportFormat.pdf,
+      targetScope: kaduna,
+      actorId: 'ADMIN-001',
+      role: TgcgRole.nationalAdministrator,
+      userScope: GeographicScope.nigeria,
+    );
+
+    expect(auditJob, isNotNull);
+    expect(incidentJob, isNotNull);
+
+    final visible = reports.jobsForScope(
+      kaduna,
+      role: TgcgRole.stateCoordinator,
+    );
+
+    expect(visible.map((job) => job.id), contains(incidentJob!.id));
+    expect(visible.map((job) => job.id), isNot(contains(auditJob!.id)));
+  });
+
   test('job lifecycle retains artifact provenance and creates audit events', () {
     final governance = GovernanceOperationsController.prototypeSeed();
     final reports = ReportOperationsController.prototypeSeed(governance);
