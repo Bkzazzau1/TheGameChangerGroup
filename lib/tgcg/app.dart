@@ -9,6 +9,7 @@ import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
 import 'login_page.dart';
 import 'membership/membership_store.dart';
+import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
 import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
@@ -88,6 +89,7 @@ class _TgcgAppState extends State<TgcgApp> {
                     child: ResultOperations(
                       controller: resultOperationsController,
                       child: MaterialApp(
+                        navigatorKey: tgcgNavigatorKey,
                         debugShowCheckedModeBanner: false,
                         title: 'TGCG-EMCOP',
                         theme: _theme(),

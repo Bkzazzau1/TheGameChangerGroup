@@ -19,6 +19,9 @@ dependencies:
   path_provider: ^2.1.6
   record: ^6.2.1
   sqlite3: ^3.6.0
+  camera: ^0.12.1
+  camera_windows: ^0.3.0
+  image_picker_platform_interface: ^2.11.1
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';

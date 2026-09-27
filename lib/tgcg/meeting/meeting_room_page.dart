@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/permissions.dart';
+import '../media/local_camera_view.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 
@@ -12,8 +13,7 @@ class _Participant {
     required this.name,
     required this.role,
     this.muted = false,
-    this.cameraOn = true,
-  });
+  }) : cameraOn = true;
 
   final String name;
   final String role;
@@ -861,6 +861,9 @@ class _LiveMeetingStage extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final participants = <_Participant>[
+                      if (!meeting.participants
+                          .any((person) => person.name == operatorName))
+                        _Participant(name: operatorName, role: 'You'),
                       ...meeting.participants,
                     ];
                     final columns = constraints.maxWidth >= 950
@@ -884,6 +887,7 @@ class _LiveMeetingStage extends StatelessWidget {
                             micOn: isMe ? micOn : !person.muted,
                             cameraOn: isMe ? cameraOn : person.cameraOn,
                             presenting: isMe && presenting,
+                            isSelf: isMe,
                           );
                         }).toList(),
                       ),
@@ -955,6 +959,7 @@ class _ParticipantTile extends StatelessWidget {
     required this.micOn,
     required this.cameraOn,
     required this.presenting,
+    this.isSelf = false,
   });
 
   final double width;
@@ -962,6 +967,7 @@ class _ParticipantTile extends StatelessWidget {
   final bool micOn;
   final bool cameraOn;
   final bool presenting;
+  final bool isSelf;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -975,10 +981,13 @@ class _ParticipantTile extends StatelessWidget {
             width: presenting ? 2 : 1,
           ),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
             Center(
-              child: cameraOn
+              child: cameraOn && isSelf
+                  ? const LocalCameraView()
+                  : cameraOn
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [

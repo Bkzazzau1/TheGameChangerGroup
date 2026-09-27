@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
+import '../media/device_media.dart';
 import '../offline/offline_persistence.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -73,10 +73,10 @@ class _EvidenceCapturePageState extends State<EvidenceCapturePage> {
             busy: _busy,
             recording: _recording,
             reference: _reference,
-            onPhoto: () => _capture(context, () => _service.capturePhoto()),
-            onVideo: () => _capture(context, () => _service.captureVideo()),
-            onLocation: () => _capture(context, () => _service.captureLocation()),
-            onAudio: () => _toggleAudio(context),
+            onPhoto: () => _capture(() => _service.capturePhoto()),
+            onVideo: () => _capture(() => _service.captureVideo()),
+            onLocation: () => _capture(() => _service.captureLocation()),
+            onAudio: _toggleAudio,
           );
           final ledger = _EvidenceLedger(items: _captured);
           if (constraints.maxWidth < 980) {
@@ -95,12 +95,12 @@ class _EvidenceCapturePageState extends State<EvidenceCapturePage> {
     );
   }
 
-  Future<void> _toggleAudio(BuildContext context) async {
+  Future<void> _toggleAudio() async {
     if (_recording) {
       setState(() => _busy = true);
       try {
         final evidence = await _service.stopAudioRecording();
-        if (evidence != null) await _save(context, evidence);
+        if (evidence != null && mounted) await _save(evidence);
         if (mounted) setState(() => _recording = false);
       } catch (error) {
         _showError(error);
@@ -121,13 +121,12 @@ class _EvidenceCapturePageState extends State<EvidenceCapturePage> {
   }
 
   Future<void> _capture(
-    BuildContext context,
     Future<CapturedEvidence?> Function() action,
   ) async {
     setState(() => _busy = true);
     try {
       final evidence = await action();
-      if (evidence != null) await _save(context, evidence);
+      if (evidence != null && mounted) await _save(evidence);
     } catch (error) {
       _showError(error);
     } finally {
@@ -135,7 +134,7 @@ class _EvidenceCapturePageState extends State<EvidenceCapturePage> {
     }
   }
 
-  Future<void> _save(BuildContext context, CapturedEvidence evidence) async {
+  Future<void> _save(CapturedEvidence evidence) async {
     final session = TgcgSession.of(context, listen: false);
     final offline = OfflinePersistence.of(context, listen: false);
     final id = 'EVD-${DateTime.now().microsecondsSinceEpoch}';
@@ -169,7 +168,7 @@ class _EvidenceCapturePageState extends State<EvidenceCapturePage> {
   void _showError(Object error) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Capture failed: $error')),
+      SnackBar(content: Text('Capture failed: ${describeDeviceError(error)}')),
     );
   }
 }
