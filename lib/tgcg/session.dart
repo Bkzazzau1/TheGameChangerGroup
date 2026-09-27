@@ -8,6 +8,7 @@ export 'domain/models.dart';
 enum TgcgModule {
   overview,
   accreditation,
+  membershipNetwork,
   geography,
   fieldMonitoring,
   evidenceCapture,
@@ -42,7 +43,8 @@ class TgcgSessionController extends ChangeNotifier {
     GeographicScope scope = GeographicScope.nigeria,
   }) {
     _role = role;
-    _operatorName = operatorName.trim().isEmpty ? roleLabel(role) : operatorName.trim();
+    _operatorName =
+        operatorName.trim().isEmpty ? roleLabel(role) : operatorName.trim();
     _accessId = accessId.trim();
     _scope = scope;
     notifyListeners();
@@ -80,11 +82,13 @@ class TgcgSession extends InheritedNotifier<TgcgSessionController> {
 
   static TgcgSessionController of(BuildContext context, {bool listen = true}) {
     if (listen) {
-      final value = context.dependOnInheritedWidgetOfExactType<TgcgSession>();
+      final value =
+          context.dependOnInheritedWidgetOfExactType<TgcgSession>();
       assert(value != null, 'TgcgSession is missing above this context.');
       return value!.notifier!;
     }
-    final element = context.getElementForInheritedWidgetOfExactType<TgcgSession>();
+    final element =
+        context.getElementForInheritedWidgetOfExactType<TgcgSession>();
     final value = element?.widget as TgcgSession?;
     assert(value != null, 'TgcgSession is missing above this context.');
     return value!.notifier!;
@@ -155,6 +159,9 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
       TgcgPermissionPolicy.allows(role, TgcgCapability.accreditAgents) ||
       TgcgPermissionPolicy.allows(role, TgcgCapability.manageAgentAssignments)) {
     modules.add(TgcgModule.accreditation);
+  }
+  if (role == TgcgRole.nationalAdministrator) {
+    modules.add(TgcgModule.membershipNetwork);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewGeography)) {
     modules.add(TgcgModule.geography);
