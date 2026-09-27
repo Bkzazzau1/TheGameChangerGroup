@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'dashboard_page.dart';
+import 'domain/models.dart';
+import 'field/field_monitoring_page.dart';
+import 'field/situation_room_page.dart';
 import 'session.dart';
 
 class TgcgShell extends StatefulWidget {
@@ -91,16 +94,8 @@ class _TgcgShellState extends State<TgcgShell> {
             subtitle: 'National → zone → state → senatorial district → LGA → ward → polling-unit operations.',
             icon: Icons.map_outlined,
           ),
-        TgcgModule.fieldMonitoring => const _ModulePlaceholder(
-            title: 'Field Monitoring',
-            subtitle: 'Incidents, reports, evidence, escalation and operational response.',
-            icon: Icons.radar_rounded,
-          ),
-        TgcgModule.situationRoom => const _ModulePlaceholder(
-            title: 'Situation Room',
-            subtitle: 'Live command, incident verification, escalation, field status and response coordination.',
-            icon: Icons.dashboard_customize_outlined,
-          ),
+        TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
+        TgcgModule.situationRoom => const SituationRoomPage(),
         TgcgModule.resultCapture => const _ModulePlaceholder(
             title: 'Result Capture & Verification',
             subtitle: 'APP, image, SMS, USSD and manual result submission with integrity checks.',
@@ -131,7 +126,6 @@ class _TgcgShellState extends State<TgcgShell> {
 
 class _Destination {
   const _Destination(this.module, this.label, this.icon);
-
   final TgcgModule module;
   final String label;
   final IconData icon;
@@ -192,17 +186,11 @@ class _Navigation extends StatelessWidget {
                     Text(session.operatorName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: TgcgApp.ink,
-                          fontWeight: FontWeight.w900,
-                        )),
+                        style: const TextStyle(color: TgcgApp.ink, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 4),
                     Text(roleLabel(session.role!),
                         style: const TextStyle(
-                          color: TgcgApp.primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        )),
+                            color: TgcgApp.primary, fontSize: 11, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 3),
                     Text(session.scope.label,
                         style: const TextStyle(color: TgcgApp.muted, fontSize: 10.5)),
@@ -225,17 +213,12 @@ class _Navigation extends StatelessWidget {
                       selected: active,
                       selectedTileColor: const Color(0xFFE8F1EE),
                       selectedColor: TgcgApp.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       leading: Icon(item.icon, size: 21),
-                      title: Text(
-                        item.label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                        ),
-                      ),
+                      title: Text(item.label,
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: active ? FontWeight.w900 : FontWeight.w700)),
                       onTap: () => onSelect(item.module),
                     ),
                   );
@@ -274,10 +257,9 @@ class _Brand extends StatelessWidget {
               children: [
                 Text('TGCG-EMCOP',
                     style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: TgcgApp.ink,
-                      letterSpacing: .4,
-                    )),
+                        fontWeight: FontWeight.w900,
+                        color: TgcgApp.ink,
+                        letterSpacing: .4)),
                 SizedBox(height: 2),
                 Text('National Operations',
                     style: TextStyle(fontSize: 11, color: TgcgApp.muted)),
@@ -304,7 +286,6 @@ class _CompactBrand extends StatelessWidget {
 
 class _BrandMark extends StatelessWidget {
   const _BrandMark({this.size = 42});
-
   final double size;
 
   @override
@@ -321,7 +302,6 @@ class _BrandMark extends StatelessWidget {
 
 class _RoleChip extends StatelessWidget {
   const _RoleChip({required this.role});
-
   final TgcgRole role;
 
   @override
@@ -337,10 +317,7 @@ class _RoleChip extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: TgcgApp.primary,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
-          ),
+              color: TgcgApp.primary, fontSize: 10.5, fontWeight: FontWeight.w900),
         ),
       );
 }
@@ -362,10 +339,7 @@ class _ModulePlaceholder extends StatelessWidget {
         children: [
           Text(title,
               style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                color: TgcgApp.ink,
-              )),
+                  fontSize: 28, fontWeight: FontWeight.w900, color: TgcgApp.ink)),
           const SizedBox(height: 7),
           Text(subtitle, style: const TextStyle(color: TgcgApp.muted, height: 1.5)),
           const SizedBox(height: 20),
@@ -391,13 +365,12 @@ class _ModulePlaceholder extends StatelessWidget {
                       children: [
                         Text('Module migration in progress',
                             style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              color: TgcgApp.ink,
-                            )),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                                color: TgcgApp.ink)),
                         SizedBox(height: 5),
                         Text(
-                          'This route is already protected by the TGCG role/module policy. The next migration replaces this placeholder with the corresponding operational page from the reusable Benue foundation, adapted to national TGCG domain models.',
+                          'This route is already protected by the TGCG role/module policy. It will be replaced by the corresponding production workflow as the migration continues.',
                           style: TextStyle(color: TgcgApp.muted, height: 1.5),
                         ),
                       ],
