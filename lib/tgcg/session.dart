@@ -13,7 +13,9 @@ enum TgcgModule {
   situationRoom,
   resultCapture,
   collation,
+  mediaIntelligence,
   communications,
+  discussionRoom,
   reports,
   governance,
 }
@@ -170,8 +172,14 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewCollation)) {
     modules.add(TgcgModule.collation);
   }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewMediaIntelligence)) {
+    modules.add(TgcgModule.mediaIntelligence);
+  }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewCommunications)) {
     modules.add(TgcgModule.communications);
+  }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewDiscussionRoom)) {
+    modules.add(TgcgModule.discussionRoom);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.exportReports)) {
     modules.add(TgcgModule.reports);
