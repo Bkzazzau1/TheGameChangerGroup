@@ -16,6 +16,7 @@ enum TgcgModule {
   mediaIntelligence,
   communications,
   discussionRoom,
+  meetingRoom,
   reports,
   governance,
 }
@@ -180,6 +181,9 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewDiscussionRoom)) {
     modules.add(TgcgModule.discussionRoom);
+  }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewMeetingRoom)) {
+    modules.add(TgcgModule.meetingRoom);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.exportReports)) {
     modules.add(TgcgModule.reports);
