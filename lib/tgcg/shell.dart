@@ -7,8 +7,8 @@ import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
-import 'governance/governance_store.dart';
 import 'membership/membership_page.dart';
+import 'offline/offline_persistence.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
@@ -29,8 +29,7 @@ class _TgcgShellState extends State<TgcgShell> {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final role = session.role!;
-    final allowed = allowedModules(role);
+    final allowed = allowedModules(session.role!);
 
     if (!allowed.contains(selectedModule)) {
       selectedModule = TgcgModule.overview;
@@ -51,7 +50,7 @@ class _TgcgShellState extends State<TgcgShell> {
                   elevation: 0,
                   backgroundColor: TgcgColors.surface,
                   surfaceTintColor: Colors.transparent,
-                  titleSpacing: 6,
+                  titleSpacing: 8,
                   title: const _CompactBrand(),
                   actions: [
                     _CompactSync(),
@@ -68,15 +67,13 @@ class _TgcgShellState extends State<TgcgShell> {
               ? null
               : Drawer(
                   backgroundColor: TgcgColors.primaryDark,
-                  child: SafeArea(
-                    child: _Navigation(
-                      destinations: destinations,
-                      selectedModule: selectedModule,
-                      onSelect: (module) {
-                        _select(module);
-                        Navigator.pop(context);
-                      },
-                    ),
+                  child: _Navigation(
+                    destinations: destinations,
+                    selectedModule: selectedModule,
+                    onSelect: (module) {
+                      _select(module);
+                      Navigator.pop(context);
+                    },
                   ),
                 ),
           body: desktop
@@ -260,7 +257,11 @@ class _Navigation extends StatelessWidget {
 }
 
 class _NavTile extends StatelessWidget {
-  const _NavTile({required this.item, required this.active, required this.onTap});
+  const _NavTile({
+    required this.item,
+    required this.active,
+    required this.onTap,
+  });
 
   final _Destination item;
   final bool active;
@@ -349,7 +350,9 @@ class _OperatorCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        session.operatorName.isEmpty ? 'TGCG Operator' : session.operatorName,
+                        session.operatorName.isEmpty
+                            ? 'TGCG Operator'
+                            : session.operatorName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -386,14 +389,21 @@ class _OperatorCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, color: Color(0xFF80968E), size: 14),
+                const Icon(
+                  Icons.location_on_outlined,
+                  color: Color(0xFF80968E),
+                  size: 14,
+                ),
                 const SizedBox(width: 5),
                 Expanded(
                   child: Text(
                     session.scope.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5),
+                    style: const TextStyle(
+                      color: Color(0xFF8EA49D),
+                      fontSize: 9.5,
+                    ),
                   ),
                 ),
               ],
@@ -411,8 +421,8 @@ class _CommandBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final governance = GovernanceOperations.of(context);
-    final pending = governance.pendingOutbox.length;
+    final offline = OfflinePersistence.of(context);
+    final pending = offline.pendingOutbox.length;
 
     return Container(
       height: 68,
@@ -442,22 +452,16 @@ class _CommandBar extends StatelessWidget {
                   prefixIcon: Icon(Icons.search_rounded, size: 20),
                   isDense: true,
                 ),
-                onTap: () {},
               ),
             ),
           ),
           const Spacer(),
-          const TgcgStatusPill(
-            label: 'DEMO ENVIRONMENT',
-            color: TgcgColors.warning,
-            icon: Icons.science_outlined,
-            compact: true,
-          ),
-          const SizedBox(width: 8),
           TgcgStatusPill(
             label: pending == 0 ? 'SYNCED' : '$pending TO SYNC',
             color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
-            icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+            icon: pending == 0
+                ? Icons.cloud_done_outlined
+                : Icons.cloud_upload_outlined,
             compact: true,
           ),
           const SizedBox(width: 6),
@@ -479,7 +483,11 @@ class _CommandBar extends StatelessWidget {
                 color: TgcgColors.primarySoft,
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(Icons.person_outline_rounded, color: TgcgColors.primary, size: 19),
+              child: const Icon(
+                Icons.person_outline_rounded,
+                color: TgcgColors.primary,
+                size: 19,
+              ),
             ),
           ),
         ],
@@ -491,11 +499,13 @@ class _CommandBar extends StatelessWidget {
 class _CompactSync extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final pending = GovernanceOperations.of(context).pendingOutbox.length;
+    final pending = OfflinePersistence.of(context).pendingOutbox.length;
     return TgcgStatusPill(
       label: pending == 0 ? 'SYNCED' : '$pending QUEUED',
       color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
-      icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+      icon: pending == 0
+          ? Icons.cloud_done_outlined
+          : Icons.cloud_upload_outlined,
       compact: true,
     );
   }
@@ -505,14 +515,14 @@ class _Brand extends StatelessWidget {
   const _Brand();
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => const Row(
         children: [
-          const _BrandMark(),
-          const SizedBox(width: 11),
+          _BrandMark(),
+          SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
                   'TGCG-EMCOP',
                   style: TextStyle(
@@ -525,7 +535,10 @@ class _Brand extends StatelessWidget {
                 SizedBox(height: 2),
                 Text(
                   'National Operations',
-                  style: TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5),
+                  style: TextStyle(
+                    color: Color(0xFF8EA49D),
+                    fontSize: 9.5,
+                  ),
                 ),
               ],
             ),
@@ -545,7 +558,10 @@ class _CompactBrand extends StatelessWidget {
           SizedBox(width: 8),
           Text(
             'TGCG-EMCOP',
-            style: TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink),
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: TgcgColors.ink,
+            ),
           ),
         ],
       );
