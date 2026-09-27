@@ -26,9 +26,7 @@ class FieldAgentHomePage extends StatelessWidget {
     final governance = GovernanceOperations.of(context);
 
     final agent = _resolveAgent(membership, session);
-    if (agent == null) {
-      return _UnresolvedAssignment(session: session);
-    }
+    if (agent == null) return _UnresolvedAssignment(session: session);
 
     final member = membership.memberById(agent.memberId);
     final incidents = field
@@ -116,9 +114,7 @@ class FieldAgentHomePage extends StatelessWidget {
           checkedIn: checkedIn,
           messageCount: messageCount,
           pendingSync: ownPendingSync,
-          onCheckIn: checkedIn
-              ? null
-              : () => _checkIn(context, agent, field),
+          onCheckIn: checkedIn ? null : () => _checkIn(context, agent, field),
           onIncident: () => onOpenModule(TgcgModule.fieldMonitoring),
           onFieldUpdate: () => onOpenModule(TgcgModule.fieldMonitoring),
           onResult: () => onOpenModule(TgcgModule.resultCapture),
@@ -182,14 +178,11 @@ class FieldAgentHomePage extends StatelessWidget {
                 pending == 0
                     ? 'No pending prototype outbox item can currently be linked to this agent.'
                     : '$pending local mutation${pending == 1 ? '' : 's'} linked to your records still require server acknowledgement.',
-                style: const TextStyle(
-                  color: TgcgColors.muted,
-                  height: 1.45,
-                ),
+                style: const TextStyle(color: TgcgColors.muted, height: 1.45),
               ),
               const SizedBox(height: 12),
               const Text(
-                'Queued does not mean synced. The durable encrypted SQLite outbox and device sync worker are the next data-layer integration.',
+                'Queued does not mean synced. Durable encrypted SQLite and the device sync worker are the next data-layer integration.',
                 style: TextStyle(
                   color: TgcgColors.muted,
                   fontSize: 11,
@@ -292,7 +285,7 @@ class _DutyHeader extends StatelessWidget {
             ),
             const SizedBox(height: 7),
             const Text(
-              'Location/geofence confirmation is intentionally separate and will activate when the native GPS service is connected.',
+              'Location/geofence confirmation is separate and will activate when the native GPS service is connected.',
               style: TextStyle(
                 color: Color(0xFFB8CAC4),
                 fontSize: 10.5,
@@ -324,7 +317,7 @@ class _ReadinessCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TgcgSectionCard(
         title: 'Duty readiness',
-        subtitle: 'Operational readiness is shown separately from live location verification.',
+        subtitle: 'Operational readiness is separate from live location verification.',
         child: Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -399,7 +392,7 @@ class _PollingUnitCard extends StatelessWidget {
     final scope = agent.scope;
     return TgcgSectionCard(
       title: 'My Polling Unit',
-      subtitle: 'Your authenticated geographic assignment for field operations.',
+      subtitle: 'Authenticated geographic assignment for field operations.',
       trailing: TgcgStatusPill(
         label: scope.pollingUnitId ?? 'ASSIGNMENT',
         color: TgcgColors.primary,
@@ -530,6 +523,7 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
         width: width,
+        height: 132,
         child: Material(
           color: TgcgColors.surface,
           borderRadius: BorderRadius.circular(17),
@@ -537,7 +531,6 @@ class _ActionCard extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(17),
             child: Container(
-              constraints: const BoxConstraints(minHeight: 132),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(17),
@@ -633,7 +626,8 @@ class _ActivityCard extends StatelessWidget {
           ? const TgcgEmptyState(
               icon: Icons.timeline_rounded,
               title: 'No field activity yet',
-              message: 'Your check-ins, reports, incidents and result submissions will appear here.',
+              message:
+                  'Your check-ins, reports, incidents and result submissions will appear here.',
             )
           : Column(
               children: items.take(5).map((item) {
@@ -714,42 +708,41 @@ class _SyncBanner extends StatelessWidget {
   final int pending;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: (pending == 0 ? TgcgColors.success : TgcgColors.warning)
-              .withValues(alpha: .07),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: (pending == 0 ? TgcgColors.success : TgcgColors.warning)
-                .withValues(alpha: .16),
+  Widget build(BuildContext context) {
+    final color = pending == 0 ? TgcgColors.success : TgcgColors.warning;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: .16)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            pending == 0
+                ? Icons.offline_bolt_outlined
+                : Icons.cloud_upload_outlined,
+            color: color,
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
               pending == 0
-                  ? Icons.offline_bolt_outlined
-                  : Icons.cloud_upload_outlined,
-              color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                pending == 0
-                    ? 'Offline-ready architecture: no linked pending prototype mutation is currently visible.'
-                    : 'Offline-safe: $pending linked record${pending == 1 ? '' : 's'} still awaiting server acknowledgement.',
-                style: const TextStyle(
-                  color: TgcgColors.ink,
-                  fontSize: 10.5,
-                  height: 1.4,
-                  fontWeight: FontWeight.w800,
-                ),
+                  ? 'Offline-ready architecture: no linked pending prototype mutation is currently visible.'
+                  : 'Offline-safe: $pending linked record${pending == 1 ? '' : 's'} still awaiting server acknowledgement.',
+              style: const TextStyle(
+                color: TgcgColors.ink,
+                fontSize: 10.5,
+                height: 1.4,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _UnresolvedAssignment extends StatelessWidget {
