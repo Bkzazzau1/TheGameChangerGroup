@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'communications/communications_store.dart';
@@ -7,6 +9,7 @@ import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
 import 'login_page.dart';
 import 'membership/membership_store.dart';
+import 'offline/offline_persistence.dart';
 import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
 import 'session.dart';
@@ -28,17 +31,30 @@ class TgcgApp extends StatefulWidget {
 
 class _TgcgAppState extends State<TgcgApp> {
   final sessionController = TgcgSessionController();
-  final fieldOperationsController = FieldOperationsController.prototypeSeed();
-  final resultOperationsController = ResultOperationsController.prototypeSeed();
+  final offlinePersistenceController = OfflinePersistenceController();
   final membershipOperationsController = MembershipOperationsController.prototypeSeed(
     GeographyRegistry.prototypeSeed(),
   );
   final governanceOperationsController = GovernanceOperationsController.prototypeSeed();
 
+  late final FieldOperationsController fieldOperationsController =
+      FieldOperationsController.prototypeSeed(
+        persistence: offlinePersistenceController,
+      );
+  late final ResultOperationsController resultOperationsController =
+      ResultOperationsController.prototypeSeed(
+        persistence: offlinePersistenceController,
+      );
   late final CommunicationsController communicationsController =
       CommunicationsController.prototypeSeed(governanceOperationsController);
   late final ReportOperationsController reportOperationsController =
       ReportOperationsController.prototypeSeed(governanceOperationsController);
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(offlinePersistenceController.initialize());
+  }
 
   @override
   void dispose() {
@@ -49,29 +65,34 @@ class _TgcgAppState extends State<TgcgApp> {
     communicationsController.dispose();
     reportOperationsController.dispose();
     governanceOperationsController.dispose();
+    unawaited(offlinePersistenceController.close());
+    offlinePersistenceController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => TgcgSession(
         controller: sessionController,
-        child: GovernanceOperations(
-          controller: governanceOperationsController,
-          child: ReportOperations(
-            controller: reportOperationsController,
-            child: Communications(
-              controller: communicationsController,
-              child: MembershipOperations(
-                controller: membershipOperationsController,
-                child: FieldOperations(
-                  controller: fieldOperationsController,
-                  child: ResultOperations(
-                    controller: resultOperationsController,
-                    child: MaterialApp(
-                      debugShowCheckedModeBanner: false,
-                      title: 'TGCG-EMCOP',
-                      theme: _theme(),
-                      home: const _AuthenticationGate(),
+        child: OfflinePersistence(
+          controller: offlinePersistenceController,
+          child: GovernanceOperations(
+            controller: governanceOperationsController,
+            child: ReportOperations(
+              controller: reportOperationsController,
+              child: Communications(
+                controller: communicationsController,
+                child: MembershipOperations(
+                  controller: membershipOperationsController,
+                  child: FieldOperations(
+                    controller: fieldOperationsController,
+                    child: ResultOperations(
+                      controller: resultOperationsController,
+                      child: MaterialApp(
+                        debugShowCheckedModeBanner: false,
+                        title: 'TGCG-EMCOP',
+                        theme: _theme(),
+                        home: const _AuthenticationGate(),
+                      ),
                     ),
                   ),
                 ),
