@@ -27,7 +27,9 @@ void main() {
       final northWest = registry
           .childScopes(GeographicScope.nigeria)
           .firstWhere((scope) => scope.zoneId == 'NW');
-      final kaduna = registry.childScopes(northWest).single;
+      final kaduna = registry
+          .childScopes(northWest)
+          .firstWhere((scope) => scope.stateId == 'KD');
       final district = registry.childScopes(kaduna).single;
       final lga = registry.childScopes(district).single;
       final ward = registry.childScopes(lga).single;

@@ -6,7 +6,6 @@ import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
-import '../sync/sync_models.dart';
 import '../ui/tgcg_design.dart';
 
 class SystemMonitoringPage extends StatelessWidget {
