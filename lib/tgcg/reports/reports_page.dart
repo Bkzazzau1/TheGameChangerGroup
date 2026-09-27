@@ -31,6 +31,13 @@ class _ReportsPageState extends State<ReportsPage> {
     final reports = ReportOperations.of(context);
     final scope = session.scope;
 
+    bool canExport(ReportKind kind) => reports.canExportKind(
+          kind: kind,
+          role: session.role!,
+          userScope: scope,
+          targetScope: scope,
+        );
+
     final incidents = field.incidentsForScope(scope);
     final fieldReports = field.reportsForScope(scope);
     final agents = membership.agentsForScope(scope);
@@ -69,6 +76,7 @@ class _ReportsPageState extends State<ReportsPage> {
         detail:
             '${incidents.where((i) => i.status != IncidentStatus.resolved && i.status != IncidentStatus.closed).length} unresolved',
         formats: const [ExportFormat.pdf, ExportFormat.csv, ExportFormat.json],
+        enabled: canExport(ReportKind.incidentSummary),
       ),
       _ReportDescriptor(
         kind: ReportKind.fieldActivity,
@@ -79,6 +87,7 @@ class _ReportsPageState extends State<ReportsPage> {
         recordCount: fieldReports.length,
         detail: '${fieldReports.length} structured reports',
         formats: const [ExportFormat.pdf, ExportFormat.csv, ExportFormat.json],
+        enabled: canExport(ReportKind.fieldActivity),
       ),
       _ReportDescriptor(
         kind: ReportKind.accreditationReadiness,
@@ -90,6 +99,7 @@ class _ReportsPageState extends State<ReportsPage> {
         detail:
             '${approvedAgents.length} approved • ${readyAgents.length} ready',
         formats: const [ExportFormat.pdf, ExportFormat.csv, ExportFormat.json],
+        enabled: canExport(ReportKind.accreditationReadiness),
       ),
       _ReportDescriptor(
         kind: ReportKind.verifiedCollation,
@@ -101,6 +111,7 @@ class _ReportsPageState extends State<ReportsPage> {
         detail:
             '${collation.verifiedPollingUnitCount}/${collation.expectedPollingUnitCount} verified PUs',
         formats: const [ExportFormat.pdf, ExportFormat.csv, ExportFormat.json],
+        enabled: canExport(ReportKind.verifiedCollation),
       ),
       _ReportDescriptor(
         kind: ReportKind.evidencePackage,
@@ -111,6 +122,7 @@ class _ReportsPageState extends State<ReportsPage> {
         recordCount: evidenceCount,
         detail: '$evidenceCount evidence records',
         formats: const [ExportFormat.zip, ExportFormat.json],
+        enabled: canExport(ReportKind.evidencePackage),
       ),
       _ReportDescriptor(
         kind: ReportKind.auditTrail,
@@ -121,6 +133,7 @@ class _ReportsPageState extends State<ReportsPage> {
         recordCount: audit.length,
         detail: '${audit.length} audit events',
         formats: const [ExportFormat.csv, ExportFormat.json, ExportFormat.pdf],
+        enabled: canExport(ReportKind.auditTrail),
       ),
       _ReportDescriptor(
         kind: ReportKind.syncOutbox,
@@ -135,7 +148,7 @@ class _ReportsPageState extends State<ReportsPage> {
             ? '${governance.pendingOutbox.length} pending items'
             : 'Scope metadata required for narrower export',
         formats: const [ExportFormat.csv, ExportFormat.json],
-        enabled: scope.level == GeographyLevel.country,
+        enabled: canExport(ReportKind.syncOutbox),
       ),
     ];
 
@@ -310,7 +323,7 @@ class _ReportsPageState extends State<ReportsPage> {
       SnackBar(
         content: Text(
           job == null
-              ? 'Export request was not authorized for this role or scope.'
+              ? 'Export request was not authorized for this report type or scope.'
               : '${job.id} queued. No download is shown until a worker completes the artifact.',
         ),
       ),
@@ -327,7 +340,7 @@ class _ReportDescriptor {
     required this.recordCount,
     required this.detail,
     required this.formats,
-    this.enabled = true,
+    required this.enabled,
   });
 
   final ReportKind kind;
