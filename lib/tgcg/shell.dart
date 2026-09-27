@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'collation/collation_page.dart';
 import 'dashboard_page.dart';
 import 'domain/models.dart';
 import 'field/field_monitoring_page.dart';
@@ -98,11 +99,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
-        TgcgModule.collation => const _ModulePlaceholder(
-            title: 'Collation',
-            subtitle: 'Verified result aggregation and reconciliation from polling unit to national scope.',
-            icon: Icons.account_tree_outlined,
-          ),
+        TgcgModule.collation => const CollationPage(),
         TgcgModule.communications => const _ModulePlaceholder(
             title: 'Communications',
             subtitle: 'Operational messages, broadcasts and coordination channels.',
