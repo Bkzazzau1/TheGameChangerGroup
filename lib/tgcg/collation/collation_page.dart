@@ -238,7 +238,8 @@ class _CompletionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = (summary.completionPercent * 100).clamp(0, 100);
+    final progress = summary.completionPercent.clamp(0.0, 1.0).toDouble();
+    final percent = progress * 100;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -269,7 +270,7 @@ class _CompletionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             LinearProgressIndicator(
-              value: summary.completionPercent.clamp(0, 1),
+              value: progress,
               minHeight: 10,
               borderRadius: BorderRadius.circular(999),
               backgroundColor: const Color(0xFFE5ECE9),
@@ -386,54 +387,57 @@ class _ChildScopeCard extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 280,
-        child: InkWell(
-          onTap: onOpen,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAF9),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE1E8E5)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        summary.scope.label,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          color: TgcgApp.ink,
-                        ),
+  Widget build(BuildContext context) {
+    final progress = summary.completionPercent.clamp(0.0, 1.0).toDouble();
+    return SizedBox(
+      width: 280,
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAF9),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE1E8E5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      summary.scope.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: TgcgApp.ink,
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded, color: TgcgApp.muted),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '${summary.verifiedPollingUnitCount}/${summary.expectedPollingUnitCount} verified PUs',
-                  style: const TextStyle(fontSize: 11, color: TgcgApp.muted),
-                ),
-                const SizedBox(height: 7),
-                LinearProgressIndicator(
-                  value: summary.completionPercent.clamp(0, 1),
-                  minHeight: 6,
-                  borderRadius: BorderRadius.circular(999),
-                  backgroundColor: const Color(0xFFE5ECE9),
-                ),
-              ],
-            ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: TgcgApp.muted),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '${summary.verifiedPollingUnitCount}/${summary.expectedPollingUnitCount} verified PUs',
+                style: const TextStyle(fontSize: 11, color: TgcgApp.muted),
+              ),
+              const SizedBox(height: 7),
+              LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(999),
+                backgroundColor: const Color(0xFFE5ECE9),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ProvenancePanel extends StatelessWidget {
@@ -464,40 +468,113 @@ class _ProvenanceRow extends StatelessWidget {
   final ElectionResultSubmission submission;
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 9),
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAF9),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: const Color(0xFFE2E8E5)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.verified_user_outlined, color: TgcgApp.primary),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${submission.id} • ${submission.pollingUnitScope.label}',
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.ink),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${submission.source.name.toUpperCase()} • agent ${submission.submittedBy} • verifier ${submission.verifiedBy ?? 'prototype-seed'}',
-                    style: const TextStyle(fontSize: 10.5, color: TgcgApp.muted),
-                  ),
-                  if (submission.resultForm != null) ...[
+  Widget build(BuildContext context) => InkWell(
+        onTap: () => _showSubmission(context),
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 9),
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAF9),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: const Color(0xFFE2E8E5)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.verified_user_outlined, color: TgcgApp.primary),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${submission.id} • ${submission.pollingUnitScope.label}',
+                      style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.ink),
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      '${submission.resultForm!.fileName} • ${submission.resultForm!.contentHash ?? 'hash pending'}',
+                      '${submission.source.name.toUpperCase()} • agent ${submission.submittedBy} • verifier ${submission.verifiedBy ?? 'prototype-seed'}',
                       style: const TextStyle(fontSize: 10.5, color: TgcgApp.muted),
                     ),
+                    if (submission.resultForm != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${submission.resultForm!.fileName} • ${submission.resultForm!.contentHash ?? 'hash pending'}',
+                        style: const TextStyle(fontSize: 10.5, color: TgcgApp.muted),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
+              const Icon(Icons.open_in_new_rounded, size: 18, color: TgcgApp.muted),
+            ],
+          ),
+        ),
+      );
+
+  void _showSubmission(BuildContext context) {
+    final voteKeys = submission.partyVotes.keys.toList()..sort();
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${submission.id} • ${submission.pollingUnitScope.pollingUnitName ?? 'Polling unit'}'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _DetailRow('Scope', submission.pollingUnitScope.label),
+                _DetailRow('Source', submission.source.name.toUpperCase()),
+                _DetailRow('Submitted by', submission.submittedBy),
+                _DetailRow('Status', submission.status.name),
+                _DetailRow('Verified by', submission.verifiedBy ?? 'Prototype seed'),
+                _DetailRow('Accredited voters', '${submission.accreditedVoters}'),
+                _DetailRow('Valid votes', '${submission.totalVotesRecorded}'),
+                _DetailRow('Rejected votes', '${submission.rejectedVotes ?? 0}'),
+                const Divider(height: 24),
+                const Text('Party-code figures',
+                    style: TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.ink)),
+                const SizedBox(height: 8),
+                ...voteKeys.map((key) => _DetailRow(key, '${submission.partyVotes[key]}')),
+                if (submission.resultForm != null) ...[
+                  const Divider(height: 24),
+                  _DetailRow('Evidence file', submission.resultForm!.fileName),
+                  _DetailRow('Evidence hash', submission.resultForm!.contentHash ?? 'Pending'),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 135,
+              child: Text(label,
+                  style: const TextStyle(fontSize: 11, color: TgcgApp.muted)),
+            ),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: TgcgApp.ink)),
             ),
           ],
         ),
