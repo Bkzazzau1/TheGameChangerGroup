@@ -1,5 +1,6 @@
 import '../domain/models.dart';
 import 'nigeria_lga_catalog.dart';
+import 'nigeria_senatorial_catalog.dart';
 
 class CanonicalZone {
   const CanonicalZone({required this.id, required this.name});
@@ -40,14 +41,15 @@ class CanonicalState {
       );
 }
 
-class CanonicalLga {
-  const CanonicalLga({
+class CanonicalSenatorialDistrict {
+  const CanonicalSenatorialDistrict({
     required this.id,
     required this.name,
     required this.stateId,
     required this.stateName,
     required this.zoneId,
     required this.zoneName,
+    required this.lgaSlugs,
   });
 
   final String id;
@@ -56,6 +58,40 @@ class CanonicalLga {
   final String stateName;
   final String zoneId;
   final String zoneName;
+  final List<String> lgaSlugs;
+
+  GeographicScope get scope => GeographicScope(
+        level: GeographyLevel.senatorialDistrict,
+        country: 'Nigeria',
+        zoneId: zoneId,
+        zoneName: zoneName,
+        stateId: stateId,
+        stateName: stateName,
+        senatorialDistrictId: id,
+        senatorialDistrictName: name,
+      );
+}
+
+class CanonicalLga {
+  const CanonicalLga({
+    required this.id,
+    required this.name,
+    required this.stateId,
+    required this.stateName,
+    required this.zoneId,
+    required this.zoneName,
+    required this.senatorialDistrictId,
+    required this.senatorialDistrictName,
+  });
+
+  final String id;
+  final String name;
+  final String stateId;
+  final String stateName;
+  final String zoneId;
+  final String zoneName;
+  final String senatorialDistrictId;
+  final String senatorialDistrictName;
 
   GeographicScope get scope => GeographicScope(
         level: GeographyLevel.lga,
@@ -64,6 +100,8 @@ class CanonicalLga {
         zoneName: zoneName,
         stateId: stateId,
         stateName: stateName,
+        senatorialDistrictId: senatorialDistrictId,
+        senatorialDistrictName: senatorialDistrictName,
         lgaId: id,
         lgaName: name,
       );
@@ -151,8 +189,8 @@ class GeographyRegistry {
               zoneName: 'North West',
               stateId: 'KD',
               stateName: 'Kaduna',
-              senatorialDistrictId: 'KD-SD-01',
-              senatorialDistrictName: 'Kaduna District 01',
+              senatorialDistrictId: 'SD/053/KD',
+              senatorialDistrictName: 'Kaduna Central',
               lgaId: 'KD-KADUNA-NORTH',
               lgaName: 'Kaduna North',
               wardId: 'KD-KN-W01',
@@ -171,8 +209,8 @@ class GeographyRegistry {
               zoneName: 'North West',
               stateId: 'KD',
               stateName: 'Kaduna',
-              senatorialDistrictId: 'KD-SD-01',
-              senatorialDistrictName: 'Kaduna District 01',
+              senatorialDistrictId: 'SD/053/KD',
+              senatorialDistrictName: 'Kaduna Central',
               lgaId: 'KD-KADUNA-NORTH',
               lgaName: 'Kaduna North',
               wardId: 'KD-KN-W01',
@@ -191,8 +229,8 @@ class GeographyRegistry {
               zoneName: 'North Central',
               stateId: 'BN',
               stateName: 'Benue',
-              senatorialDistrictId: 'BN-SD-01',
-              senatorialDistrictName: 'Benue District 01',
+              senatorialDistrictId: 'SD/020/BN',
+              senatorialDistrictName: 'Benue North West',
               lgaId: 'BN-MAKURDI',
               lgaName: 'Makurdi',
               wardId: 'BN-MK-W01',
@@ -211,8 +249,8 @@ class GeographyRegistry {
               zoneName: 'North Central',
               stateId: 'BN',
               stateName: 'Benue',
-              senatorialDistrictId: 'BN-SD-01',
-              senatorialDistrictName: 'Benue District 01',
+              senatorialDistrictId: 'SD/020/BN',
+              senatorialDistrictName: 'Benue North West',
               lgaId: 'BN-MAKURDI',
               lgaName: 'Makurdi',
               wardId: 'BN-MK-W01',
@@ -231,8 +269,8 @@ class GeographyRegistry {
               zoneName: 'South West',
               stateId: 'LA',
               stateName: 'Lagos',
-              senatorialDistrictId: 'LA-SD-01',
-              senatorialDistrictName: 'Lagos District 01',
+              senatorialDistrictId: 'SD/072/LA',
+              senatorialDistrictName: 'Lagos West',
               lgaId: 'LA-IKEJA',
               lgaName: 'Ikeja',
               wardId: 'LA-IK-W03',
@@ -251,8 +289,8 @@ class GeographyRegistry {
               zoneName: 'South West',
               stateId: 'LA',
               stateName: 'Lagos',
-              senatorialDistrictId: 'LA-SD-01',
-              senatorialDistrictName: 'Lagos District 01',
+              senatorialDistrictId: 'SD/072/LA',
+              senatorialDistrictName: 'Lagos West',
               lgaId: 'LA-IKEJA',
               lgaName: 'Ikeja',
               wardId: 'LA-IK-W03',
@@ -282,6 +320,48 @@ class GeographyRegistry {
       .where((item) => item.zoneId == zoneId)
       .toList(growable: false);
 
+  List<CanonicalSenatorialDistrict> get senatorialDistricts => states
+      .expand((item) => districtsForState(item.id))
+      .toList(growable: false);
+
+  int get nationalSenatorialDistrictCount => senatorialDistricts.length;
+
+  List<CanonicalSenatorialDistrict> districtsForState(String stateId) {
+    final stateItem = state(stateId);
+    if (stateItem == null) return const [];
+    return nigeriaSenatorialDistricts
+        .where((seed) => seed.stateId == stateId)
+        .map(
+          (seed) => CanonicalSenatorialDistrict(
+            id: seed.code,
+            name: seed.name,
+            stateId: stateItem.id,
+            stateName: stateItem.name,
+            zoneId: stateItem.zoneId,
+            zoneName: stateItem.zoneName,
+            lgaSlugs: seed.lgaSlugs,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  CanonicalSenatorialDistrict? senatorialDistrict(String id) {
+    for (final item in senatorialDistricts) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  CanonicalSenatorialDistrict? districtForLgaSlug(
+    String stateId,
+    String slug,
+  ) {
+    for (final district in districtsForState(stateId)) {
+      if (district.lgaSlugs.contains(slug)) return district;
+    }
+    return null;
+  }
+
   List<CanonicalLga> get lgas => states
       .expand((item) => lgasForState(item.id))
       .toList(growable: false);
@@ -293,18 +373,40 @@ class GeographyRegistry {
     if (stateItem == null) return const [];
     final slugs = nigeriaLgaSlugsByStateId[stateId] ?? const <String>[];
     return slugs
-        .map(
-          (slug) => CanonicalLga(
-            id: '$stateId-${slug.toUpperCase().replaceAll("'", '')}',
-            name: nigeriaLgaDisplayName(slug),
-            stateId: stateItem.id,
-            stateName: stateItem.name,
-            zoneId: stateItem.zoneId,
-            zoneName: stateItem.zoneName,
-          ),
-        )
+        .map((slug) {
+          final district = districtForLgaSlug(stateId, slug);
+          if (district == null) return null;
+          return _lgaFromSlug(stateItem, district, slug);
+        })
+        .whereType<CanonicalLga>()
         .toList(growable: false);
   }
+
+  List<CanonicalLga> lgasForDistrict(String districtId) {
+    final district = senatorialDistrict(districtId);
+    if (district == null) return const [];
+    final stateItem = state(district.stateId);
+    if (stateItem == null) return const [];
+    return district.lgaSlugs
+        .map((slug) => _lgaFromSlug(stateItem, district, slug))
+        .toList(growable: false);
+  }
+
+  CanonicalLga _lgaFromSlug(
+    CanonicalState stateItem,
+    CanonicalSenatorialDistrict district,
+    String slug,
+  ) =>
+      CanonicalLga(
+        id: '${stateItem.id}-${slug.toUpperCase().replaceAll("'", '')}',
+        name: nigeriaLgaDisplayName(slug),
+        stateId: stateItem.id,
+        stateName: stateItem.name,
+        zoneId: stateItem.zoneId,
+        zoneName: stateItem.zoneName,
+        senatorialDistrictId: district.id,
+        senatorialDistrictName: district.name,
+      );
 
   CanonicalLga? lga(String id) {
     for (final item in lgas) {
@@ -335,10 +437,14 @@ class GeographyRegistry {
           .toList(growable: false);
     }
     if (parent.level == GeographyLevel.state) {
-      final stateLgas = lgasForState(parent.stateId ?? '');
-      if (stateLgas.isNotEmpty) {
-        return stateLgas.map((item) => item.scope).toList(growable: false);
-      }
+      return districtsForState(parent.stateId ?? '')
+          .map((item) => item.scope)
+          .toList(growable: false);
+    }
+    if (parent.level == GeographyLevel.senatorialDistrict) {
+      return lgasForDistrict(parent.senatorialDistrictId ?? '')
+          .map((item) => item.scope)
+          .toList(growable: false);
     }
 
     final values = <String, GeographicScope>{};
