@@ -195,6 +195,62 @@ class FieldOperationsController extends ChangeNotifier {
         (total, incident) => total + incident.evidence.length,
       );
 
+  FieldIncident createIncident({
+    required String title,
+    required String category,
+    required IncidentSeverity severity,
+    required GeographicScope scope,
+    required String reporterId,
+    String? summary,
+    double? latitude,
+    double? longitude,
+    List<EvidenceAttachment> evidence = const [],
+  }) {
+    final incident = FieldIncident(
+      id: 'INC-${(_incidents.length + 1).toString().padLeft(4, '0')}',
+      title: title.trim(),
+      category: category.trim(),
+      severity: severity,
+      status: IncidentStatus.reported,
+      scope: scope,
+      reportedAt: DateTime.now().toUtc(),
+      reporterId: reporterId,
+      summary: summary?.trim().isEmpty == true ? null : summary?.trim(),
+      latitude: latitude,
+      longitude: longitude,
+      evidence: List.unmodifiable(evidence),
+      origin: RecordOrigin.localEntry,
+    );
+    _incidents.insert(0, incident);
+    notifyListeners();
+    return incident;
+  }
+
+  FieldReport submitFieldReport({
+    required String category,
+    required String summary,
+    required GeographicScope scope,
+    required String reporterId,
+    String? incidentId,
+    List<EvidenceAttachment> evidence = const [],
+  }) {
+    final report = FieldReport(
+      id: 'RPT-${(_reports.length + 1).toString().padLeft(4, '0')}',
+      category: category.trim(),
+      summary: summary.trim(),
+      scope: scope,
+      reporterId: reporterId,
+      reportedAt: DateTime.now().toUtc(),
+      status: RecordStatus.submitted,
+      incidentId: incidentId,
+      evidence: List.unmodifiable(evidence),
+      origin: RecordOrigin.localEntry,
+    );
+    _reports.insert(0, report);
+    notifyListeners();
+    return report;
+  }
+
   void updateIncidentStatus(String incidentId, IncidentStatus status) {
     final index = _incidents.indexWhere((item) => item.id == incidentId);
     if (index < 0) return;
