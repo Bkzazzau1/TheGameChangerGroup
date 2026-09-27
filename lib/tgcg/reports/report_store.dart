@@ -109,7 +109,7 @@ class ReportOperationsController extends ChangeNotifier {
   List<ReportExportJob> get jobs => List.unmodifiable(_jobs);
 
   List<ReportExportJob> jobsForScope(GeographicScope scope) => _jobs
-      .where((job) => _overlaps(scope, job.scope))
+      .where((job) => GeographyRegistry.scopeContains(scope, job.scope))
       .toList(growable: false)
     ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
 
@@ -161,7 +161,11 @@ class ReportOperationsController extends ChangeNotifier {
   void markGenerating(String id, {required String actorId}) {
     final index = _jobs.indexWhere((job) => job.id == id);
     if (index < 0) return;
-    _jobs[index] = _copyJob(_jobs[index], status: ExportJobStatus.generating);
+    _jobs[index] = _copyJob(
+      _jobs[index],
+      status: ExportJobStatus.generating,
+      clearError: true,
+    );
     _governance.recordAudit(
       actorId: actorId,
       action: 'report_export_generating',
@@ -187,7 +191,7 @@ class ReportOperationsController extends ChangeNotifier {
       completedAt: DateTime.now().toUtc(),
       fileName: fileName,
       contentHash: contentHash,
-      error: null,
+      clearError: true,
     );
     _governance.recordAudit(
       actorId: actorId,
@@ -230,6 +234,7 @@ class ReportOperationsController extends ChangeNotifier {
     String? fileName,
     String? contentHash,
     String? error,
+    bool clearError = false,
   }) =>
       ReportExportJob(
         id: current.id,
@@ -243,12 +248,8 @@ class ReportOperationsController extends ChangeNotifier {
         completedAt: completedAt ?? current.completedAt,
         fileName: fileName ?? current.fileName,
         contentHash: contentHash ?? current.contentHash,
-        error: error,
+        error: clearError ? null : error ?? current.error,
       );
-
-  static bool _overlaps(GeographicScope a, GeographicScope b) =>
-      GeographyRegistry.scopeContains(a, b) ||
-      GeographyRegistry.scopeContains(b, a);
 }
 
 class ReportOperations extends InheritedNotifier<ReportOperationsController> {
