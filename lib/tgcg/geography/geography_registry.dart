@@ -1,5 +1,44 @@
 import '../domain/models.dart';
 
+class CanonicalZone {
+  const CanonicalZone({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  GeographicScope get scope => GeographicScope(
+        level: GeographyLevel.geopoliticalZone,
+        country: 'Nigeria',
+        zoneId: id,
+        zoneName: name,
+      );
+}
+
+class CanonicalState {
+  const CanonicalState({
+    required this.id,
+    required this.name,
+    required this.zoneId,
+    required this.zoneName,
+    this.isFederalCapitalTerritory = false,
+  });
+
+  final String id;
+  final String name;
+  final String zoneId;
+  final String zoneName;
+  final bool isFederalCapitalTerritory;
+
+  GeographicScope get scope => GeographicScope(
+        level: GeographyLevel.state,
+        country: 'Nigeria',
+        zoneId: zoneId,
+        zoneName: zoneName,
+        stateId: id,
+        stateName: name,
+      );
+}
+
 class CanonicalPollingUnit {
   const CanonicalPollingUnit({
     required this.code,
@@ -13,11 +52,64 @@ class CanonicalPollingUnit {
 }
 
 class GeographyRegistry {
-  const GeographyRegistry({required this.pollingUnits});
+  const GeographyRegistry({
+    required this.zones,
+    required this.states,
+    required this.pollingUnits,
+  });
 
+  final List<CanonicalZone> zones;
+  final List<CanonicalState> states;
   final List<CanonicalPollingUnit> pollingUnits;
 
   factory GeographyRegistry.prototypeSeed() => const GeographyRegistry(
+        zones: [
+          CanonicalZone(id: 'NC', name: 'North Central'),
+          CanonicalZone(id: 'NE', name: 'North East'),
+          CanonicalZone(id: 'NW', name: 'North West'),
+          CanonicalZone(id: 'SE', name: 'South East'),
+          CanonicalZone(id: 'SS', name: 'South South'),
+          CanonicalZone(id: 'SW', name: 'South West'),
+        ],
+        states: [
+          CanonicalState(id: 'BE', name: 'Benue', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'FCT', name: 'Federal Capital Territory', zoneId: 'NC', zoneName: 'North Central', isFederalCapitalTerritory: true),
+          CanonicalState(id: 'KO', name: 'Kogi', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'KW', name: 'Kwara', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'NA', name: 'Nasarawa', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'NI', name: 'Niger', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'PL', name: 'Plateau', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'AD', name: 'Adamawa', zoneId: 'NE', zoneName: 'North East'),
+          CanonicalState(id: 'BA', name: 'Bauchi', zoneId: 'NE', zoneName: 'North East'),
+          CanonicalState(id: 'BO', name: 'Borno', zoneId: 'NE', zoneName: 'North East'),
+          CanonicalState(id: 'GO', name: 'Gombe', zoneId: 'NE', zoneName: 'North East'),
+          CanonicalState(id: 'TA', name: 'Taraba', zoneId: 'NE', zoneName: 'North East'),
+          CanonicalState(id: 'YO', name: 'Yobe', zoneId: 'NE', zoneName: 'North East'),
+          CanonicalState(id: 'JI', name: 'Jigawa', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'KD', name: 'Kaduna', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'KN', name: 'Kano', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'KT', name: 'Katsina', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'KE', name: 'Kebbi', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'SO', name: 'Sokoto', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'ZA', name: 'Zamfara', zoneId: 'NW', zoneName: 'North West'),
+          CanonicalState(id: 'AB', name: 'Abia', zoneId: 'SE', zoneName: 'South East'),
+          CanonicalState(id: 'AN', name: 'Anambra', zoneId: 'SE', zoneName: 'South East'),
+          CanonicalState(id: 'EB', name: 'Ebonyi', zoneId: 'SE', zoneName: 'South East'),
+          CanonicalState(id: 'EN', name: 'Enugu', zoneId: 'SE', zoneName: 'South East'),
+          CanonicalState(id: 'IM', name: 'Imo', zoneId: 'SE', zoneName: 'South East'),
+          CanonicalState(id: 'AK', name: 'Akwa Ibom', zoneId: 'SS', zoneName: 'South South'),
+          CanonicalState(id: 'BY', name: 'Bayelsa', zoneId: 'SS', zoneName: 'South South'),
+          CanonicalState(id: 'CR', name: 'Cross River', zoneId: 'SS', zoneName: 'South South'),
+          CanonicalState(id: 'DE', name: 'Delta', zoneId: 'SS', zoneName: 'South South'),
+          CanonicalState(id: 'ED', name: 'Edo', zoneId: 'SS', zoneName: 'South South'),
+          CanonicalState(id: 'RI', name: 'Rivers', zoneId: 'SS', zoneName: 'South South'),
+          CanonicalState(id: 'EK', name: 'Ekiti', zoneId: 'SW', zoneName: 'South West'),
+          CanonicalState(id: 'LA', name: 'Lagos', zoneId: 'SW', zoneName: 'South West'),
+          CanonicalState(id: 'OG', name: 'Ogun', zoneId: 'SW', zoneName: 'South West'),
+          CanonicalState(id: 'ON', name: 'Ondo', zoneId: 'SW', zoneName: 'South West'),
+          CanonicalState(id: 'OS', name: 'Osun', zoneId: 'SW', zoneName: 'South West'),
+          CanonicalState(id: 'OY', name: 'Oyo', zoneId: 'SW', zoneName: 'South West'),
+        ],
         pollingUnits: [
           CanonicalPollingUnit(
             code: 'KD-KN-W01-PU001',
@@ -67,7 +159,7 @@ class GeographyRegistry {
               country: 'Nigeria',
               zoneId: 'NC',
               zoneName: 'North Central',
-              stateId: 'BN',
+              stateId: 'BE',
               stateName: 'Benue',
               senatorialDistrictId: 'BN-SD-01',
               senatorialDistrictName: 'Benue District 01',
@@ -87,7 +179,7 @@ class GeographyRegistry {
               country: 'Nigeria',
               zoneId: 'NC',
               zoneName: 'North Central',
-              stateId: 'BN',
+              stateId: 'BE',
               stateName: 'Benue',
               senatorialDistrictId: 'BN-SD-01',
               senatorialDistrictName: 'Benue District 01',
@@ -142,6 +234,24 @@ class GeographyRegistry {
         ],
       );
 
+  CanonicalZone? zone(String id) {
+    for (final item in zones) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  CanonicalState? state(String id) {
+    for (final item in states) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  List<CanonicalState> statesForZone(String zoneId) => states
+      .where((item) => item.zoneId == zoneId)
+      .toList(growable: false);
+
   CanonicalPollingUnit? pollingUnit(String id) {
     for (final unit in pollingUnits) {
       if (unit.code == id || unit.scope.pollingUnitId == id) return unit;
@@ -153,12 +263,22 @@ class GeographyRegistry {
       pollingUnits.where((unit) => scopeContains(scope, unit.scope)).toList(growable: false);
 
   List<GeographicScope> childScopes(GeographicScope parent) {
+    if (parent.level == GeographyLevel.country) {
+      return zones.map((item) => item.scope).toList(growable: false);
+    }
+    if (parent.level == GeographyLevel.geopoliticalZone) {
+      return statesForZone(parent.zoneId ?? '')
+          .map((item) => item.scope)
+          .toList(growable: false);
+    }
+
     final values = <String, GeographicScope>{};
     for (final unit in pollingUnitsWithin(parent)) {
       final child = directChild(parent.level, unit.scope);
       if (child != null) values[_key(child)] = child;
     }
-    final result = values.values.toList()..sort((a, b) => a.label.compareTo(b.label));
+    final result = values.values.toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
     return result;
   }
 
