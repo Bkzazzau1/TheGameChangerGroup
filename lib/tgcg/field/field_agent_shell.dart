@@ -6,9 +6,9 @@ import '../membership/membership_store.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'digital_agent_id_page.dart';
 import 'field_agent_communications_page.dart';
 import 'field_agent_dashboard_page.dart';
-import 'field_agent_home_page.dart';
 import 'field_agent_meeting_page.dart';
 import 'field_monitoring_page.dart';
 
@@ -153,6 +153,16 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
           ],
         ),
         actions: [
+          if (allowHome)
+            IconButton(
+              tooltip: 'Digital Agent ID',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DigitalAgentIdPage(),
+                ),
+              ),
+              icon: const Icon(Icons.badge_outlined),
+            ),
           if (allowHome &&
               selectedModule != TgcgModule.evidenceCapture &&
               selectedModule != TgcgModule.meetingRoom)
