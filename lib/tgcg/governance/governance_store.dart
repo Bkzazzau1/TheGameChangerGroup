@@ -25,14 +25,38 @@ class SystemSettingRecord {
   final String? description;
 }
 
+class RoleAssignmentRecord {
+  const RoleAssignmentRecord({
+    required this.id,
+    required this.subjectId,
+    required this.subjectName,
+    required this.role,
+    required this.scope,
+    required this.assignedBy,
+    required this.assignedAt,
+    required this.active,
+  });
+
+  final String id;
+  final String subjectId;
+  final String subjectName;
+  final TgcgRole role;
+  final GeographicScope scope;
+  final String assignedBy;
+  final DateTime assignedAt;
+  final bool active;
+}
+
 class GovernanceOperationsController extends ChangeNotifier {
   GovernanceOperationsController._({
     required List<AuditEvent> auditEvents,
     required List<SyncOutboxItem> outbox,
     required List<SystemSettingRecord> settings,
+    required List<RoleAssignmentRecord> roleAssignments,
   })  : _auditEvents = auditEvents,
         _outbox = outbox,
-        _settings = settings;
+        _settings = settings,
+        _roleAssignments = roleAssignments;
 
   factory GovernanceOperationsController.prototypeSeed() {
     final now = DateTime.utc(2026, 9, 27, 8, 10);
@@ -45,7 +69,7 @@ class GovernanceOperationsController extends ChangeNotifier {
           entityType: 'system',
           entityId: 'TGCG-EMCOP',
           timestamp: now.subtract(const Duration(minutes: 45)),
-          detail: 'Prototype operational stores initialized.',
+          detail: 'Operational stores initialized.',
           scope: GeographicScope.nigeria,
         ),
         AuditEvent(
@@ -55,7 +79,7 @@ class GovernanceOperationsController extends ChangeNotifier {
           entityType: 'election_result',
           entityId: 'RES-0001',
           timestamp: now.subtract(const Duration(minutes: 32)),
-          detail: 'Prototype result accepted into verified-only collation.',
+          detail: 'Result accepted into verified-only collation.',
           scope: GeographicScope.nigeria,
         ),
       ],
@@ -105,7 +129,7 @@ class GovernanceOperationsController extends ChangeNotifier {
           value: true,
           updatedAt: now.subtract(const Duration(days: 1)),
           updatedBy: 'SYSTEM',
-          description: 'Production backend must enforce MFA for privileged users.',
+          description: 'Privileged administrator access requires MFA.',
         ),
         SystemSettingRecord(
           id: 'SET-EVIDENCE-HASH',
@@ -114,7 +138,7 @@ class GovernanceOperationsController extends ChangeNotifier {
           value: true,
           updatedAt: now.subtract(const Duration(days: 1)),
           updatedBy: 'SYSTEM',
-          description: 'Evidence records require a cryptographic content hash before server acceptance.',
+          description: 'Evidence records require a cryptographic content hash before acceptance.',
         ),
         SystemSettingRecord(
           id: 'SET-OFFLINE-QUEUE',
@@ -126,24 +150,156 @@ class GovernanceOperationsController extends ChangeNotifier {
           description: 'Operational writes remain usable locally while awaiting connectivity.',
         ),
       ],
+      roleAssignments: [
+        RoleAssignmentRecord(
+          id: 'ROLE-0001',
+          subjectId: 'MEM-0005',
+          subjectName: 'Hauwa Bello',
+          role: TgcgRole.stateCoordinator,
+          scope: GeographicScope(
+            level: GeographyLevel.state,
+            country: 'Nigeria',
+            zoneId: 'NE',
+            zoneName: 'North East',
+            stateId: 'AD',
+            stateName: 'Adamawa',
+          ),
+          assignedBy: 'NATIONAL-ADMIN',
+          assignedAt: now.subtract(const Duration(days: 8)),
+          active: true,
+        ),
+        RoleAssignmentRecord(
+          id: 'ROLE-0002',
+          subjectId: 'MEM-0006',
+          subjectName: 'Ibrahim Musa',
+          role: TgcgRole.stateCoordinator,
+          scope: GeographicScope(
+            level: GeographyLevel.state,
+            country: 'Nigeria',
+            zoneId: 'NW',
+            zoneName: 'North West',
+            stateId: 'KN',
+            stateName: 'Kano',
+          ),
+          assignedBy: 'NATIONAL-ADMIN',
+          assignedAt: now.subtract(const Duration(days: 8)),
+          active: true,
+        ),
+        RoleAssignmentRecord(
+          id: 'ROLE-0003',
+          subjectId: 'MEM-0010',
+          subjectName: 'Grace Yakubu',
+          role: TgcgRole.stateCoordinator,
+          scope: GeographicScope(
+            level: GeographyLevel.state,
+            country: 'Nigeria',
+            zoneId: 'NC',
+            zoneName: 'North Central',
+            stateId: 'FCT',
+            stateName: 'Federal Capital Territory',
+          ),
+          assignedBy: 'NATIONAL-ADMIN',
+          assignedAt: now.subtract(const Duration(days: 4)),
+          active: true,
+        ),
+      ],
     );
   }
 
   final List<AuditEvent> _auditEvents;
   final List<SyncOutboxItem> _outbox;
   final List<SystemSettingRecord> _settings;
+  final List<RoleAssignmentRecord> _roleAssignments;
 
   List<AuditEvent> get auditEvents => List.unmodifiable(_auditEvents);
   List<SyncOutboxItem> get outbox => List.unmodifiable(_outbox);
   List<SystemSettingRecord> get settings => List.unmodifiable(_settings);
+  List<RoleAssignmentRecord> get roleAssignments =>
+      List.unmodifiable(_roleAssignments);
 
   List<AuditEvent> auditForScope(GeographicScope scope) => _auditEvents
       .where((event) => event.scope == null || _overlaps(scope, event.scope!))
       .toList(growable: false)
     ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
+  List<RoleAssignmentRecord> roleAssignmentsForScope(GeographicScope scope) =>
+      _roleAssignments
+          .where((item) => _overlaps(scope, item.scope))
+          .toList(growable: false)
+        ..sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
+
   List<SyncOutboxItem> get pendingOutbox =>
       _outbox.where((item) => item.isPending).toList(growable: false);
+
+  RoleAssignmentRecord assignRole({
+    required String subjectId,
+    required String subjectName,
+    required TgcgRole role,
+    required GeographicScope scope,
+    required String assignedBy,
+  }) {
+    for (var i = 0; i < _roleAssignments.length; i++) {
+      final current = _roleAssignments[i];
+      if (current.subjectId == subjectId && current.active) {
+        _roleAssignments[i] = RoleAssignmentRecord(
+          id: current.id,
+          subjectId: current.subjectId,
+          subjectName: current.subjectName,
+          role: current.role,
+          scope: current.scope,
+          assignedBy: current.assignedBy,
+          assignedAt: current.assignedAt,
+          active: false,
+        );
+      }
+    }
+
+    final record = RoleAssignmentRecord(
+      id: 'ROLE-${(_roleAssignments.length + 1).toString().padLeft(4, '0')}',
+      subjectId: subjectId,
+      subjectName: subjectName,
+      role: role,
+      scope: scope,
+      assignedBy: assignedBy,
+      assignedAt: DateTime.now().toUtc(),
+      active: true,
+    );
+    _roleAssignments.insert(0, record);
+    recordAudit(
+      actorId: assignedBy,
+      action: 'role_assigned',
+      entityType: 'access_role',
+      entityId: record.id,
+      detail: '${role.name} assigned to $subjectName for ${scope.label}.',
+      scope: scope,
+    );
+    return record;
+  }
+
+  void revokeRole(String assignmentId, {required String actorId}) {
+    final index = _roleAssignments.indexWhere((item) => item.id == assignmentId);
+    if (index < 0) return;
+    final current = _roleAssignments[index];
+    if (!current.active) return;
+    _roleAssignments[index] = RoleAssignmentRecord(
+      id: current.id,
+      subjectId: current.subjectId,
+      subjectName: current.subjectName,
+      role: current.role,
+      scope: current.scope,
+      assignedBy: current.assignedBy,
+      assignedAt: current.assignedAt,
+      active: false,
+    );
+    recordAudit(
+      actorId: actorId,
+      action: 'role_revoked',
+      entityType: 'access_role',
+      entityId: current.id,
+      detail: '${current.role.name} revoked from ${current.subjectName}.',
+      scope: current.scope,
+    );
+  }
 
   void recordAudit({
     required String actorId,
