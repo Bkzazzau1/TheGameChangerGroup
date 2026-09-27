@@ -183,7 +183,7 @@ class CollationEngine {
     final expectedIds = expected.map((unit) => unit.id).toSet();
 
     final inScope = submissions
-        .where((submission) => _within(scope, submission.pollingUnitScope))
+        .where((submission) => _submissionWithin(scope, submission))
         .toList(growable: false);
     final verified = inScope
         .where((submission) => submission.status == RecordStatus.verified)
@@ -263,6 +263,18 @@ class CollationEngine {
       if (unit.id == id) return unit;
     }
     return null;
+  }
+
+  bool _submissionWithin(
+    GeographicScope parent,
+    ElectionResultSubmission submission,
+  ) {
+    final pollingUnitId = submission.pollingUnitScope.pollingUnitId;
+    if (pollingUnitId != null) {
+      final canonical = expectedPollingUnit(pollingUnitId);
+      if (canonical != null) return _within(parent, canonical.scope);
+    }
+    return _within(parent, submission.pollingUnitScope);
   }
 
   GeographicScope? _directChild(
