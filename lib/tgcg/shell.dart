@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'collation/collation_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
-import 'domain/models.dart';
 import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';

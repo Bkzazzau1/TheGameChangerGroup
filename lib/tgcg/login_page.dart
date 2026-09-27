@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
-import 'domain/models.dart';
 import 'session.dart';
 
 class TgcgLoginPage extends StatefulWidget {

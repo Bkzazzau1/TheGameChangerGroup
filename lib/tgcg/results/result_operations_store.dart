@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../domain/models.dart';
 import '../domain/permissions.dart';
@@ -265,7 +265,9 @@ class ResultOperationsController extends ChangeNotifier {
       userScope,
       TgcgCapability.verifyElectionResult,
       targetScope: current.pollingUnitScope,
-    )) return false;
+    )) {
+      return false;
+    }
 
     _submissions[index] = _with(
       current,
@@ -293,7 +295,9 @@ class ResultOperationsController extends ChangeNotifier {
       userScope,
       TgcgCapability.disputeElectionResult,
       targetScope: current.pollingUnitScope,
-    )) return false;
+    )) {
+      return false;
+    }
 
     _submissions[index] = _with(
       current,
@@ -354,7 +358,9 @@ class ResultOperationsController extends ChangeNotifier {
     if (parent.stateId != null && parent.stateId != child.stateId) return false;
     if (parent.level == GeographyLevel.state) return true;
     if (parent.senatorialDistrictId != null &&
-        parent.senatorialDistrictId != child.senatorialDistrictId) return false;
+        parent.senatorialDistrictId != child.senatorialDistrictId) {
+      return false;
+    }
     if (parent.level == GeographyLevel.senatorialDistrict) return true;
     if (parent.lgaId != null && parent.lgaId != child.lgaId) return false;
     if (parent.level == GeographyLevel.lga) return true;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../domain/permissions.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
@@ -318,7 +317,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
     );
     title.dispose();
     summary.dispose();
-    if (created != null && mounted) {
+    if (created != null && context.mounted) {
       setState(() => selectedIncidentId = created.id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -457,7 +456,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
       ),
     );
     summary.dispose();
-    if (created != null && mounted) {
+    if (created != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${created.id} saved to the local field store.')),
       );

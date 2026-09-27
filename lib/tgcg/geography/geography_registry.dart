@@ -228,7 +228,9 @@ class GeographyRegistry {
     if (parent.stateId != null && parent.stateId != child.stateId) return false;
     if (parent.level == GeographyLevel.state) return true;
     if (parent.senatorialDistrictId != null &&
-        parent.senatorialDistrictId != child.senatorialDistrictId) return false;
+        parent.senatorialDistrictId != child.senatorialDistrictId) {
+      return false;
+    }
     if (parent.level == GeographyLevel.senatorialDistrict) return true;
     if (parent.lgaId != null && parent.lgaId != child.lgaId) return false;
     if (parent.level == GeographyLevel.lga) return true;

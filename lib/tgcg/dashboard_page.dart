@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'collation/collation_engine.dart';
-import 'domain/models.dart';
 import 'field/field_operations_store.dart';
 import 'membership/membership_store.dart';
 import 'results/result_operations_store.dart';

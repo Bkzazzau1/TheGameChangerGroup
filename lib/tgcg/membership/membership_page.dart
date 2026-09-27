@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
 import '../session.dart';
@@ -257,7 +256,7 @@ class _MembershipPageState extends State<MembershipPage> {
     name.dispose();
     phone.dispose();
     email.dispose();
-    if (created == true && mounted) {
+    if (created == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Member registered in the local prototype store.'),
@@ -421,7 +420,7 @@ class _MembershipPageState extends State<MembershipPage> {
     phone.dispose();
     device.dispose();
     sim.dispose();
-    if (created == true && mounted) {
+    if (created == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Accreditation created as pending review.'),
@@ -515,7 +514,7 @@ class _MembershipPageState extends State<MembershipPage> {
     );
     device.dispose();
     sim.dispose();
-    if (saved == true && mounted) {
+    if (saved == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Agent readiness updated.')),
       );

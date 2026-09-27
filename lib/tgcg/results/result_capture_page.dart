@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../domain/permissions.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';

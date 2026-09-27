@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../domain/permissions.dart';
 import '../field/field_operations_store.dart';
 import '../membership/membership_store.dart';
@@ -107,12 +106,12 @@ class _GovernancePageState extends State<GovernancePage> {
           (total, item) =>
               total +
               item.evidence
-                  .where((evidence) => evidence.contentHash.trim().isNotEmpty)
+                  .where((evidence) => (evidence.contentHash ?? '').trim().isNotEmpty)
                   .length,
         ) +
         submissions.where((item) {
           final form = item.resultForm;
-          return form != null && form.contentHash.trim().isNotEmpty;
+          return form != null && (form.contentHash ?? '').trim().isNotEmpty;
         }).length;
 
     return ListView(
