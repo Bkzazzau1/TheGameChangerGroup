@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'app.dart';
 import 'collation/collation_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
@@ -9,10 +8,12 @@ import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
+import 'governance/governance_store.dart';
 import 'membership/membership_page.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
+import 'ui/tgcg_design.dart';
 
 class TgcgShell extends StatefulWidget {
   const TgcgShell({super.key});
@@ -42,22 +43,32 @@ class _TgcgShellState extends State<TgcgShell> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 1040;
+        final desktop = constraints.maxWidth >= 1100;
         return Scaffold(
-          appBar: wide
+          backgroundColor: TgcgColors.canvas,
+          appBar: desktop
               ? null
               : AppBar(
-                  backgroundColor: Colors.white,
-                  surfaceTintColor: Colors.white,
+                  elevation: 0,
+                  backgroundColor: TgcgColors.surface,
+                  surfaceTintColor: Colors.transparent,
+                  titleSpacing: 6,
                   title: const _CompactBrand(),
                   actions: [
-                    _RoleChip(role: role),
-                    const SizedBox(width: 8),
+                    _CompactSync(),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () {},
+                      icon: const Icon(Icons.notifications_none_rounded),
+                    ),
+                    const SizedBox(width: 6),
                   ],
                 ),
-          drawer: wide
+          drawer: desktop
               ? null
               : Drawer(
+                  backgroundColor: TgcgColors.primaryDark,
                   child: SafeArea(
                     child: _Navigation(
                       destinations: destinations,
@@ -69,18 +80,25 @@ class _TgcgShellState extends State<TgcgShell> {
                     ),
                   ),
                 ),
-          body: wide
+          body: desktop
               ? Row(
                   children: [
                     SizedBox(
-                      width: 292,
+                      width: 272,
                       child: _Navigation(
                         destinations: destinations,
                         selectedModule: selectedModule,
                         onSelect: _select,
                       ),
                     ),
-                    Expanded(child: _pageFor(selectedModule)),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _CommandBar(selectedModule: selectedModule),
+                          Expanded(child: _pageFor(selectedModule)),
+                        ],
+                      ),
+                    ),
                   ],
                 )
               : _pageFor(selectedModule),
@@ -103,35 +121,77 @@ class _TgcgShellState extends State<TgcgShell> {
       };
 }
 
+enum _NavGroup { command, fieldOperations, coordination, control }
+
 class _Destination {
-  const _Destination(this.module, this.label, this.icon);
+  const _Destination(this.module, this.label, this.icon, this.group);
+
   final TgcgModule module;
   final String label;
   final IconData icon;
+  final _NavGroup group;
 }
 
 const _allDestinations = <_Destination>[
-  _Destination(TgcgModule.overview, 'Command Overview', Icons.dashboard_rounded),
-  _Destination(TgcgModule.accreditation, 'Accreditation', Icons.badge_outlined),
-  _Destination(TgcgModule.geography, 'Geographic Operations', Icons.map_outlined),
-  _Destination(TgcgModule.fieldMonitoring, 'Field Monitoring', Icons.radar_rounded),
+  _Destination(
+    TgcgModule.overview,
+    'Command Overview',
+    Icons.space_dashboard_outlined,
+    _NavGroup.command,
+  ),
   _Destination(
     TgcgModule.situationRoom,
     'Situation Room',
-    Icons.dashboard_customize_outlined,
+    Icons.radar_rounded,
+    _NavGroup.command,
   ),
-  _Destination(TgcgModule.resultCapture, 'Result Capture', Icons.ballot_outlined),
-  _Destination(TgcgModule.collation, 'Collation', Icons.account_tree_outlined),
+  _Destination(
+    TgcgModule.geography,
+    'Geographic Operations',
+    Icons.public_rounded,
+    _NavGroup.command,
+  ),
+  _Destination(
+    TgcgModule.accreditation,
+    'Accreditation',
+    Icons.badge_outlined,
+    _NavGroup.fieldOperations,
+  ),
+  _Destination(
+    TgcgModule.fieldMonitoring,
+    'Field Monitoring',
+    Icons.sensors_outlined,
+    _NavGroup.fieldOperations,
+  ),
+  _Destination(
+    TgcgModule.resultCapture,
+    'Result Capture',
+    Icons.ballot_outlined,
+    _NavGroup.fieldOperations,
+  ),
+  _Destination(
+    TgcgModule.collation,
+    'Collation',
+    Icons.account_tree_outlined,
+    _NavGroup.fieldOperations,
+  ),
   _Destination(
     TgcgModule.communications,
     'Communications',
-    Icons.chat_bubble_outline_rounded,
+    Icons.forum_outlined,
+    _NavGroup.coordination,
   ),
-  _Destination(TgcgModule.reports, 'Reports', Icons.description_outlined),
+  _Destination(
+    TgcgModule.reports,
+    'Reports & Exports',
+    Icons.description_outlined,
+    _NavGroup.control,
+  ),
   _Destination(
     TgcgModule.governance,
     'Data & Governance',
-    Icons.admin_panel_settings_outlined,
+    Icons.shield_outlined,
+    _NavGroup.control,
   ),
 ];
 
@@ -150,103 +210,48 @@ class _Navigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE1E7E4))),
-      ),
+      color: TgcgColors.primaryDark,
       child: SafeArea(
         child: Column(
           children: [
             const Padding(
-              padding: EdgeInsets.fromLTRB(18, 20, 18, 16),
+              padding: EdgeInsets.fromLTRB(18, 18, 18, 12),
               child: _Brand(),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF4F8F6),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE1E9E5)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      session.operatorName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: TgcgApp.ink,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      roleLabel(session.role!),
-                      style: const TextStyle(
-                        color: TgcgApp.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      session.scope.label,
-                      style: const TextStyle(
-                        color: TgcgApp.muted,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
-                itemCount: destinations.length,
-                itemBuilder: (context, index) {
-                  final item = destinations[index];
-                  final active = item.module == selectedModule;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: ListTile(
-                      dense: true,
-                      selected: active,
-                      selectedTileColor: const Color(0xFFE8F1EE),
-                      selectedColor: TgcgApp.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      leading: Icon(item.icon, size: 21),
-                      title: Text(
-                        item.label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight:
-                              active ? FontWeight.w900 : FontWeight.w700,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                children: [
+                  for (final group in _NavGroup.values)
+                    if (destinations.any((item) => item.group == group)) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 15, 10, 7),
+                        child: Text(
+                          _groupLabel(group),
+                          style: const TextStyle(
+                            color: Color(0xFF8EA49D),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1,
+                          ),
                         ),
                       ),
-                      onTap: () => onSelect(item.module),
-                    ),
-                  );
-                },
+                      ...destinations
+                          .where((item) => item.group == group)
+                          .map(
+                            (item) => _NavTile(
+                              item: item,
+                              active: item.module == selectedModule,
+                              onTap: () => onSelect(item.module),
+                            ),
+                          ),
+                    ],
+                ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(14),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: session.signOut,
-                  icon: const Icon(Icons.logout_rounded),
-                  label: const Text('Sign out'),
-                ),
-              ),
+              padding: const EdgeInsets.all(12),
+              child: _OperatorCard(session: session),
             ),
           ],
         ),
@@ -255,30 +260,273 @@ class _Navigation extends StatelessWidget {
   }
 }
 
+class _NavTile extends StatelessWidget {
+  const _NavTile({required this.item, required this.active, required this.onTap});
+
+  final _Destination item;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 3),
+        child: Material(
+          color: active ? const Color(0xFF173A32) : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(11),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(11),
+                border: active
+                    ? const Border(
+                        left: BorderSide(color: TgcgColors.accent, width: 3),
+                      )
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    item.icon,
+                    size: 19,
+                    color: active ? Colors.white : const Color(0xFFA9BBB5),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: active ? Colors.white : const Color(0xFFB8C7C2),
+                        fontSize: 12,
+                        fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+class _OperatorCard extends StatelessWidget {
+  const _OperatorCard({required this.session});
+
+  final TgcgSessionController session;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .055),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: .08)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: TgcgColors.accent.withValues(alpha: .16),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.person_outline_rounded,
+                    color: TgcgColors.accent,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.operatorName.isEmpty ? 'TGCG Operator' : session.operatorName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        roleLabel(session.role!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFA5B8B1),
+                          fontSize: 9.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Sign out',
+                  onPressed: session.signOut,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(
+                    Icons.logout_rounded,
+                    color: Color(0xFFA5B8B1),
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, color: Color(0xFF80968E), size: 14),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    session.scope.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _CommandBar extends StatelessWidget {
+  const _CommandBar({required this.selectedModule});
+
+  final TgcgModule selectedModule;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = TgcgSession.of(context);
+    final governance = GovernanceOperations.of(context);
+    final pending = governance.pendingOutbox.length;
+
+    return Container(
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      decoration: const BoxDecoration(
+        color: TgcgColors.surface,
+        border: Border(bottom: BorderSide(color: TgcgColors.border)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            _moduleLabel(selectedModule),
+            style: const TextStyle(
+              color: TgcgColors.ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: TextField(
+                readOnly: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search agents, polling units, incidents or results',
+                  prefixIcon: Icon(Icons.search_rounded, size: 20),
+                  isDense: true,
+                ),
+                onTap: () {},
+              ),
+            ),
+          ),
+          const Spacer(),
+          const TgcgStatusPill(
+            label: 'DEMO ENVIRONMENT',
+            color: TgcgColors.warning,
+            icon: Icons.science_outlined,
+            compact: true,
+          ),
+          const SizedBox(width: 8),
+          TgcgStatusPill(
+            label: pending == 0 ? 'SYNCED' : '$pending TO SYNC',
+            color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
+            icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+            compact: true,
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () {},
+            icon: const Badge(
+              smallSize: 7,
+              child: Icon(Icons.notifications_none_rounded),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: '${roleLabel(session.role!)} • ${session.scope.label}',
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: TgcgColors.primarySoft,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(Icons.person_outline_rounded, color: TgcgColors.primary, size: 19),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactSync extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final pending = GovernanceOperations.of(context).pendingOutbox.length;
+    return TgcgStatusPill(
+      label: pending == 0 ? 'SYNCED' : '$pending QUEUED',
+      color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
+      icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+      compact: true,
+    );
+  }
+}
+
 class _Brand extends StatelessWidget {
   const _Brand();
 
   @override
-  Widget build(BuildContext context) => const Row(
+  Widget build(BuildContext context) => Row(
         children: [
-          _BrandMark(),
-          SizedBox(width: 11),
+          const _BrandMark(),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: const [
                 Text(
                   'TGCG-EMCOP',
                   style: TextStyle(
+                    color: Colors.white,
                     fontWeight: FontWeight.w900,
-                    color: TgcgApp.ink,
-                    letterSpacing: .4,
+                    letterSpacing: .7,
+                    fontSize: 14,
                   ),
                 ),
                 SizedBox(height: 2),
                 Text(
                   'National Operations',
-                  style: TextStyle(fontSize: 11, color: TgcgApp.muted),
+                  style: TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5),
                 ),
               ],
             ),
@@ -292,61 +540,56 @@ class _CompactBrand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _BrandMark(size: 34),
-          SizedBox(width: 9),
+          _BrandMark(size: 33, light: true),
+          SizedBox(width: 8),
           Text(
             'TGCG-EMCOP',
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              color: TgcgApp.ink,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink),
           ),
         ],
       );
 }
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.size = 42});
+  const _BrandMark({this.size = 39, this.light = false});
+
   final double size;
+  final bool light;
 
   @override
   Widget build(BuildContext context) => Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: TgcgApp.primary,
-          borderRadius: BorderRadius.circular(size * .3),
+          color: light ? TgcgColors.primary : TgcgColors.accent,
+          borderRadius: BorderRadius.circular(size * .29),
         ),
         child: Icon(
           Icons.hub_rounded,
-          color: Colors.white,
-          size: size * .52,
+          color: light ? Colors.white : TgcgColors.primaryDark,
+          size: size * .5,
         ),
       );
 }
 
-class _RoleChip extends StatelessWidget {
-  const _RoleChip({required this.role});
-  final TgcgRole role;
+String _groupLabel(_NavGroup group) => switch (group) {
+      _NavGroup.command => 'COMMAND',
+      _NavGroup.fieldOperations => 'FIELD OPERATIONS',
+      _NavGroup.coordination => 'COORDINATION',
+      _NavGroup.control => 'CONTROL',
+    };
 
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(maxWidth: 175),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE8F1EE),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          roleLabel(role),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: TgcgApp.primary,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      );
-}
+String _moduleLabel(TgcgModule module) => switch (module) {
+      TgcgModule.overview => 'Command Overview',
+      TgcgModule.accreditation => 'Accreditation',
+      TgcgModule.geography => 'Geographic Operations',
+      TgcgModule.fieldMonitoring => 'Field Monitoring',
+      TgcgModule.situationRoom => 'Situation Room',
+      TgcgModule.resultCapture => 'Result Capture',
+      TgcgModule.collation => 'Collation',
+      TgcgModule.communications => 'Communications',
+      TgcgModule.reports => 'Reports & Exports',
+      TgcgModule.governance => 'Data & Governance',
+    };
