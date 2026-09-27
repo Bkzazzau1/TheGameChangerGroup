@@ -2,13 +2,20 @@ import 'package:flutter/widgets.dart';
 
 import '../domain/models.dart';
 import '../domain/permissions.dart';
+import '../offline/offline_payloads.dart';
+import '../offline/offline_persistence.dart';
 import 'result_integrity.dart';
 
 class ResultOperationsController extends ChangeNotifier {
-  ResultOperationsController._({required List<ElectionResultSubmission> submissions})
-      : _submissions = submissions;
+  ResultOperationsController._({
+    required List<ElectionResultSubmission> submissions,
+    OfflinePersistenceController? persistence,
+  })  : _submissions = submissions,
+        _persistence = persistence;
 
-  factory ResultOperationsController.prototypeSeed() {
+  factory ResultOperationsController.prototypeSeed({
+    OfflinePersistenceController? persistence,
+  }) {
     final now = DateTime.utc(2026, 9, 27, 6, 45);
 
     GeographicScope pollingUnit({
@@ -127,6 +134,7 @@ class ResultOperationsController extends ChangeNotifier {
     }
 
     return ResultOperationsController._(
+      persistence: persistence,
       submissions: [
         validated(
           id: 'RES-0001',
@@ -188,6 +196,7 @@ class ResultOperationsController extends ChangeNotifier {
   }
 
   final List<ElectionResultSubmission> _submissions;
+  final OfflinePersistenceController? _persistence;
 
   List<ElectionResultSubmission> get submissions => List.unmodifiable(_submissions);
 
@@ -202,7 +211,7 @@ class ResultOperationsController extends ChangeNotifier {
   int get verifiedCount =>
       _submissions.where((item) => item.status == RecordStatus.verified).length;
 
-  ElectionResultSubmission submit({
+  Future<ElectionResultSubmission> submit({
     required GeographicScope pollingUnitScope,
     required String submittedBy,
     required SubmissionSource source,
@@ -214,7 +223,7 @@ class ResultOperationsController extends ChangeNotifier {
     EvidenceAttachment? resultForm,
     Map<String, int>? ocrPartyVotes,
     double? ocrConfidence,
-  }) {
+  }) async {
     final duplicate = _submissions.any((existing) =>
         existing.pollingUnitScope.pollingUnitId == pollingUnitScope.pollingUnitId &&
         existing.status != RecordStatus.rejected &&
@@ -246,17 +255,25 @@ class ResultOperationsController extends ChangeNotifier {
         ? RecordStatus.underReview
         : RecordStatus.submitted;
     final saved = _with(base, validation: validation, status: status);
+    await _persistence?.persistMutation(
+      entityType: 'election_result',
+      entityId: saved.id,
+      mutationType: SyncMutationType.create,
+      payload: resultSubmissionToJson(saved),
+      scopeKey: scopeStorageKey(saved.pollingUnitScope),
+      ownerId: submittedBy,
+    );
     _submissions.insert(0, saved);
     notifyListeners();
     return saved;
   }
 
-  bool verify({
+  Future<bool> verify({
     required String submissionId,
     required String verifierId,
     required TgcgRole role,
     required GeographicScope userScope,
-  }) {
+  }) async {
     final index = _submissions.indexWhere((item) => item.id == submissionId);
     if (index < 0) return false;
     final current = _submissions[index];
@@ -269,24 +286,33 @@ class ResultOperationsController extends ChangeNotifier {
       return false;
     }
 
-    _submissions[index] = _with(
+    final updated = _with(
       current,
       status: RecordStatus.verified,
       verifiedBy: verifierId,
       verifiedAt: DateTime.now().toUtc(),
       disputeReason: null,
     );
+    await _persistence?.persistMutation(
+      entityType: 'election_result',
+      entityId: updated.id,
+      mutationType: SyncMutationType.update,
+      payload: resultSubmissionToJson(updated),
+      scopeKey: scopeStorageKey(updated.pollingUnitScope),
+      ownerId: verifierId,
+    );
+    _submissions[index] = updated;
     notifyListeners();
     return true;
   }
 
-  bool dispute({
+  Future<bool> dispute({
     required String submissionId,
     required String reviewerId,
     required String reason,
     required TgcgRole role,
     required GeographicScope userScope,
-  }) {
+  }) async {
     final index = _submissions.indexWhere((item) => item.id == submissionId);
     if (index < 0) return false;
     final current = _submissions[index];
@@ -299,13 +325,22 @@ class ResultOperationsController extends ChangeNotifier {
       return false;
     }
 
-    _submissions[index] = _with(
+    final updated = _with(
       current,
       status: RecordStatus.disputed,
       disputeReason: reason.trim().isEmpty ? 'Flagged for review.' : reason.trim(),
       verifiedBy: reviewerId,
       verifiedAt: DateTime.now().toUtc(),
     );
+    await _persistence?.persistMutation(
+      entityType: 'election_result',
+      entityId: updated.id,
+      mutationType: SyncMutationType.update,
+      payload: resultSubmissionToJson(updated),
+      scopeKey: scopeStorageKey(updated.pollingUnitScope),
+      ownerId: reviewerId,
+    );
+    _submissions[index] = updated;
     notifyListeners();
     return true;
   }
