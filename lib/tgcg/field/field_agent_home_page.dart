@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../communications/communications_store.dart';
-import '../governance/governance_store.dart';
 import '../membership/membership_store.dart';
+import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -23,7 +23,7 @@ class FieldAgentHomePage extends StatelessWidget {
     final field = FieldOperations.of(context);
     final results = ResultOperations.of(context);
     final communications = Communications.of(context);
-    final governance = GovernanceOperations.of(context);
+    final offline = OfflinePersistence.of(context);
 
     final agent = _resolveAgent(membership, session);
     if (agent == null) return _UnresolvedAssignment(session: session);
@@ -65,9 +65,9 @@ class FieldAgentHomePage extends StatelessWidget {
       final form = submission.resultForm;
       if (form != null) ownedEntityIds.add(form.id);
     }
-    final ownPendingSync = governance.pendingOutbox
+    final ownPending = offline.pendingOutbox
         .where((item) => ownedEntityIds.contains(item.entityId))
-        .length;
+        .toList(growable: false);
 
     final approved = agent.status == AccreditationStatus.approved;
     final deviceBound = (agent.deviceId ?? '').trim().isNotEmpty;
@@ -87,6 +87,7 @@ class FieldAgentHomePage extends StatelessWidget {
           operatorName: member?.fullName ?? session.operatorName,
           identityReady: identityReady,
           checkedIn: checkedIn,
+          offline: offline,
         ),
         const SizedBox(height: 14),
         _ReadinessCard(
@@ -113,13 +114,16 @@ class FieldAgentHomePage extends StatelessWidget {
         _ActionGrid(
           checkedIn: checkedIn,
           messageCount: messageCount,
-          pendingSync: ownPendingSync,
-          onCheckIn: checkedIn ? null : () => _checkIn(context, agent, field),
+          pendingSync: ownPending.length,
+          persistenceReady: offline.isReady,
+          onCheckIn: checkedIn
+              ? null
+              : () => _checkIn(context, agent, field),
           onIncident: () => onOpenModule(TgcgModule.fieldMonitoring),
           onFieldUpdate: () => onOpenModule(TgcgModule.fieldMonitoring),
           onResult: () => onOpenModule(TgcgModule.resultCapture),
           onMessages: () => onOpenModule(TgcgModule.communications),
-          onSync: () => _showSyncState(context, ownPendingSync),
+          onSync: () => _showSyncState(context, offline, ownPending),
         ),
         const SizedBox(height: 16),
         _ActivityCard(
@@ -128,33 +132,45 @@ class FieldAgentHomePage extends StatelessWidget {
           submissions: submissions,
         ),
         const SizedBox(height: 14),
-        _SyncBanner(pending: ownPendingSync),
+        _SyncBanner(offline: offline, pending: ownPending.length),
       ],
     );
   }
 
-  void _checkIn(
+  Future<void> _checkIn(
     BuildContext context,
     AccreditedAgent agent,
     FieldOperationsController field,
-  ) {
-    final report = field.submitFieldReport(
-      category: 'Agent check-in',
-      summary:
-          'Agent checked in from the assigned application session. GPS capture is not yet connected to the native location service.',
-      scope: agent.scope,
-      reporterId: agent.agentId,
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${report.id} saved locally. GPS/geofence verification remains pending integration.',
+  ) async {
+    try {
+      final report = await field.submitFieldReport(
+        category: 'Agent check-in',
+        summary:
+            'Agent checked in from the assigned application session. GPS capture is not yet connected to the native location service.',
+        scope: agent.scope,
+        reporterId: agent.agentId,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${report.id} encrypted locally and queued for sync. GPS/geofence verification remains pending integration.',
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Check-in was not saved: $error')),
+      );
+    }
   }
 
-  void _showSyncState(BuildContext context, int pending) {
+  void _showSyncState(
+    BuildContext context,
+    OfflinePersistenceController offline,
+    List<SyncOutboxItem> pending,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -165,24 +181,73 @@ class FieldAgentHomePage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'My Sync Status',
-                style: TextStyle(
-                  color: TgcgColors.ink,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'My Sync Status',
+                      style: TextStyle(
+                        color: TgcgColors.ink,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  TgcgStatusPill(
+                    label: offline.isDurable ? 'DURABLE' : 'VOLATILE',
+                    color: offline.isDurable
+                        ? TgcgColors.success
+                        : TgcgColors.warning,
+                    compact: true,
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
-                pending == 0
-                    ? 'No pending prototype outbox item can currently be linked to this agent.'
-                    : '$pending local mutation${pending == 1 ? '' : 's'} linked to your records still require server acknowledgement.',
+                pending.isEmpty
+                    ? 'No mutation linked to your current field records is waiting for server acknowledgement.'
+                    : '${pending.length} local mutation${pending.length == 1 ? '' : 's'} still require server acknowledgement.',
                 style: const TextStyle(color: TgcgColors.muted, height: 1.45),
               ),
-              const SizedBox(height: 12),
+              if (pending.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...pending.take(6).map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _syncIcon(item.state),
+                          color: _syncColor(item.state),
+                          size: 17,
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            '${item.entityType} • ${item.entityId}',
+                            style: const TextStyle(
+                              color: TgcgColors.ink,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _label(item.state.name),
+                          style: TextStyle(
+                            color: _syncColor(item.state),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
               const Text(
-                'Queued does not mean synced. Durable encrypted SQLite and the device sync worker are the next data-layer integration.',
+                'Queued does not mean synced. A record becomes synced only after an explicit server acknowledgement is stored locally.',
                 style: TextStyle(
                   color: TgcgColors.muted,
                   fontSize: 11,
@@ -203,12 +268,14 @@ class _DutyHeader extends StatelessWidget {
     required this.operatorName,
     required this.identityReady,
     required this.checkedIn,
+    required this.offline,
   });
 
   final AccreditedAgent agent;
   final String operatorName;
   final bool identityReady;
   final bool checkedIn;
+  final OfflinePersistenceController offline;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -269,7 +336,7 @@ class _DutyHeader extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Text(
               checkedIn
                   ? 'You are checked in for field duty.'
@@ -283,13 +350,57 @@ class _DutyHeader extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 7),
-            const Text(
-              'Location/geofence confirmation is separate and will activate when the native GPS service is connected.',
-              style: TextStyle(
-                color: Color(0xFFB8CAC4),
-                fontSize: 10.5,
-                height: 1.4,
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _DarkPill(
+                  label: offline.isReady
+                      ? offline.isDurable
+                          ? 'ENCRYPTED LOCAL STORE'
+                          : 'VOLATILE WEB STORE'
+                      : 'LOCAL STORE STARTING',
+                  icon: offline.isReady
+                      ? Icons.storage_rounded
+                      : Icons.sync_rounded,
+                ),
+                const _DarkPill(
+                  label: 'GPS / GEOFENCE PENDING',
+                  icon: Icons.my_location_rounded,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _DarkPill extends StatelessWidget {
+  const _DarkPill({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: .10)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFFC4D3CE), size: 14),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFFC4D3CE),
+                fontSize: 8.8,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ],
@@ -355,28 +466,13 @@ class _ReadinessChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: .18)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            pending
-                ? Icons.schedule_rounded
-                : ready
-                    ? Icons.check_circle_rounded
-                    : Icons.cancel_outlined,
-            color: color,
-            size: 15,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            pending ? '$label pending' : label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
+      child: Text(
+        pending ? '$label pending' : label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -417,6 +513,7 @@ class _ActionGrid extends StatelessWidget {
     required this.checkedIn,
     required this.messageCount,
     required this.pendingSync,
+    required this.persistenceReady,
     required this.onCheckIn,
     required this.onIncident,
     required this.onFieldUpdate,
@@ -428,7 +525,8 @@ class _ActionGrid extends StatelessWidget {
   final bool checkedIn;
   final int messageCount;
   final int pendingSync;
-  final VoidCallback? onCheckIn;
+  final bool persistenceReady;
+  final Future<void> Function()? onCheckIn;
   final VoidCallback onIncident;
   final VoidCallback onFieldUpdate;
   final VoidCallback onResult;
@@ -438,7 +536,9 @@ class _ActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
-          final width = (constraints.maxWidth - 10) / 2;
+          final width = constraints.maxWidth < 350
+              ? constraints.maxWidth
+              : (constraints.maxWidth - 10) / 2;
           return Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -446,10 +546,18 @@ class _ActionGrid extends StatelessWidget {
               _ActionCard(
                 width: width,
                 label: checkedIn ? 'CHECKED IN' : 'CHECK IN',
-                detail: checkedIn ? 'Duty check-in saved' : 'Start field duty',
+                detail: checkedIn
+                    ? 'Duty check-in saved'
+                    : persistenceReady
+                        ? 'Encrypt and start field duty'
+                        : 'Local store is starting',
                 icon: Icons.how_to_reg_rounded,
                 color: TgcgColors.success,
-                onTap: onCheckIn,
+                onTap: checkedIn || onCheckIn == null
+                    ? null
+                    : () async {
+                        await onCheckIn!();
+                      },
               ),
               _ActionCard(
                 width: width,
@@ -523,7 +631,7 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
         width: width,
-        height: 132,
+        height: 136,
         child: Material(
           color: TgcgColors.surface,
           borderRadius: BorderRadius.circular(17),
@@ -611,7 +719,7 @@ class _ActivityCard extends StatelessWidget {
       ...submissions.map(
         (item) => _ActivityItem(
           title: item.id,
-          detail: 'Result submission • ${_label(item.status.name)}',
+          detail: 'Result • ${_label(item.status.name)}',
           at: item.submittedAt,
           icon: Icons.ballot_outlined,
           color: TgcgColors.primary,
@@ -621,66 +729,15 @@ class _ActivityCard extends StatelessWidget {
 
     return TgcgSectionCard(
       title: 'My recent activity',
-      subtitle: 'Only records submitted by this signed-in field agent are shown.',
+      subtitle: 'Only records associated with this field agent are shown.',
       child: items.isEmpty
           ? const TgcgEmptyState(
-              icon: Icons.timeline_rounded,
+              icon: Icons.history_rounded,
               title: 'No field activity yet',
-              message:
-                  'Your check-ins, reports, incidents and result submissions will appear here.',
+              message: 'Check-in, reports, incidents and results will appear here.',
             )
           : Column(
-              children: items.take(5).map((item) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: item.color.withValues(alpha: .08),
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        child: Icon(item.icon, color: item.color, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: TgcgColors.ink,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 11,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              item.detail,
-                              style: const TextStyle(
-                                color: TgcgColors.muted,
-                                fontSize: 9.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        _time(item.at),
-                        style: const TextStyle(
-                          color: TgcgColors.muted,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+              children: items.take(8).map((item) => _ActivityRow(item: item)).toList(),
             ),
     );
   }
@@ -702,37 +759,99 @@ class _ActivityItem {
   final Color color;
 }
 
-class _SyncBanner extends StatelessWidget {
-  const _SyncBanner({required this.pending});
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.item});
 
+  final _ActivityItem item;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(item.icon, color: item.color, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: TgcgColors.ink,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    item.detail,
+                    style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _time(item.at),
+              style: const TextStyle(color: TgcgColors.muted, fontSize: 9),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SyncBanner extends StatelessWidget {
+  const _SyncBanner({required this.offline, required this.pending});
+
+  final OfflinePersistenceController offline;
   final int pending;
 
   @override
   Widget build(BuildContext context) {
-    final color = pending == 0 ? TgcgColors.success : TgcgColors.warning;
+    final failed = offline.state == OfflinePersistenceState.failed;
+    final color = failed
+        ? TgcgColors.danger
+        : pending > 0
+            ? TgcgColors.warning
+            : TgcgColors.success;
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: color.withValues(alpha: .07),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: .16)),
+        border: Border.all(color: color.withValues(alpha: .18)),
       ),
       child: Row(
         children: [
           Icon(
-            pending == 0
-                ? Icons.offline_bolt_outlined
-                : Icons.cloud_upload_outlined,
+            failed
+                ? Icons.error_outline_rounded
+                : pending > 0
+                    ? Icons.cloud_upload_outlined
+                    : Icons.cloud_done_outlined,
             color: color,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Expanded(
             child: Text(
-              pending == 0
-                  ? 'Offline-ready architecture: no linked pending prototype mutation is currently visible.'
-                  : 'Offline-safe: $pending linked record${pending == 1 ? '' : 's'} still awaiting server acknowledgement.',
-              style: const TextStyle(
-                color: TgcgColors.ink,
+              failed
+                  ? 'Local encrypted storage is unavailable. Do not assume a field action has been retained.'
+                  : pending > 0
+                      ? '$pending of your local record mutations await server acknowledgement. They remain available locally.'
+                      : offline.isDurable
+                          ? 'No linked field mutation is waiting for acknowledgement. Native local storage is durable.'
+                          : 'No linked mutation is pending. This web session uses a volatile fallback store.',
+              style: TextStyle(
+                color: color,
                 fontSize: 10.5,
                 height: 1.4,
                 fontWeight: FontWeight.w800,
@@ -745,65 +864,6 @@ class _SyncBanner extends StatelessWidget {
   }
 }
 
-class _UnresolvedAssignment extends StatelessWidget {
-  const _UnresolvedAssignment({required this.session});
-
-  final TgcgSessionController session;
-
-  @override
-  Widget build(BuildContext context) => Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: TgcgSectionCard(
-              child: Column(
-                children: [
-                  const TgcgLogo(size: 72),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Polling-unit assignment not resolved',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: TgcgColors.ink,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'The current Access ID (${session.accessId.isEmpty ? 'empty' : session.accessId}) is not linked to an accredited polling-unit agent record.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: TgcgColors.muted,
-                      height: 1.45,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Field operations remain locked because a polling-unit agent must not inherit national scope when assignment data is missing.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: TgcgColors.danger,
-                      fontSize: 11,
-                      height: 1.45,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: session.signOut,
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Return to sign in'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
 class _Detail extends StatelessWidget {
   const _Detail(this.label, this.value);
 
@@ -812,18 +872,14 @@ class _Detail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 108,
+              width: 110,
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: TgcgColors.muted,
-                  fontSize: 10.5,
-                ),
+                style: const TextStyle(color: TgcgColors.muted, fontSize: 10),
               ),
             ),
             Expanded(
@@ -833,7 +889,7 @@ class _Detail extends StatelessWidget {
                 style: const TextStyle(
                   color: TgcgColors.ink,
                   fontSize: 10.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -842,28 +898,79 @@ class _Detail extends StatelessWidget {
       );
 }
 
+class _UnresolvedAssignment extends StatelessWidget {
+  const _UnresolvedAssignment({required this.session});
+
+  final TgcgSessionController session;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: TgcgSectionCard(
+              title: 'Field assignment not resolved',
+              subtitle:
+                  'The signed-in Access ID is not linked to an accredited polling-unit agent in the current registry.',
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.location_off_outlined,
+                    size: 54,
+                    color: TgcgColors.warning,
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Field operations remain locked rather than falling back to national scope.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: TgcgColors.muted, height: 1.45),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: session.signOut,
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Sign in again'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 AccreditedAgent? _resolveAgent(
   MembershipOperationsController membership,
   TgcgSessionController session,
 ) {
-  final accessId = session.accessId.trim().toLowerCase();
+  final normalized = session.accessId.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
   for (final agent in membership.agents) {
-    final idMatch = accessId.isNotEmpty && agent.agentId.toLowerCase() == accessId;
-    final phoneMatch = accessId.isNotEmpty &&
-        (agent.registeredPhoneNumber ?? '').trim().toLowerCase() == accessId;
-    if (idMatch || phoneMatch) return agent;
-  }
-  final pollingUnitId = session.scope.pollingUnitId;
-  if (pollingUnitId != null) {
-    for (final agent in membership.agents) {
-      if (agent.scope.pollingUnitId == pollingUnitId &&
-          agent.role == TgcgRole.pollingUnitAgent) {
-        return agent;
-      }
+    if (agent.role != TgcgRole.pollingUnitAgent) continue;
+    if (agent.agentId.toLowerCase() == normalized ||
+        (agent.registeredPhoneNumber ?? '').trim().toLowerCase() == normalized) {
+      return agent;
     }
   }
   return null;
 }
+
+Color _syncColor(SyncState state) => switch (state) {
+      SyncState.queued => TgcgColors.warning,
+      SyncState.syncing => TgcgColors.info,
+      SyncState.synced => TgcgColors.success,
+      SyncState.failed => TgcgColors.danger,
+      SyncState.conflict => TgcgColors.ai,
+    };
+
+IconData _syncIcon(SyncState state) => switch (state) {
+      SyncState.queued => Icons.schedule_rounded,
+      SyncState.syncing => Icons.sync_rounded,
+      SyncState.synced => Icons.cloud_done_outlined,
+      SyncState.failed => Icons.cloud_off_outlined,
+      SyncState.conflict => Icons.merge_type_rounded,
+    };
 
 String _time(DateTime value) {
   final local = value.toLocal();
@@ -877,7 +984,8 @@ String _label(String value) {
     RegExp(r'([a-z])([A-Z])'),
     (match) => '${match.group(1)} ${match.group(2)}',
   );
-  return spaced.isEmpty
-      ? spaced
-      : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
+  final clean = spaced.replaceAll('_', ' ');
+  return clean.isEmpty
+      ? clean
+      : '${clean[0].toUpperCase()}${clean.substring(1)}';
 }
