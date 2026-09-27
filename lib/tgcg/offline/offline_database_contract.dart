@@ -75,5 +75,7 @@ abstract interface class OfflineDatabaseBackend {
 
   Future<SyncReceipt?> receiptFor(String outboxId);
 
+  Future<void> clearAll();
+
   Future<void> close();
 }
