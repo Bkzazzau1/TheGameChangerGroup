@@ -272,6 +272,14 @@ class OfflinePersistenceController extends ChangeNotifier {
     return _database!.receiptFor(outboxId);
   }
 
+  Future<void> clearPresentationData() async {
+    await _ensureReady();
+    await _database!.clearAll();
+    _storedOutbox = const [];
+    _lastError = null;
+    notifyListeners();
+  }
+
   Future<void> close() async {
     final initialization = _initializationFuture;
     if (initialization != null) {
