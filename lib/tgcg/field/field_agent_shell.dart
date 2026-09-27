@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../communications/communications_page.dart';
 import '../discussion/discussion_room_page.dart';
+import '../evidence/evidence_capture_page.dart';
 import '../meeting/meeting_room_page.dart';
 import '../membership/membership_store.dart';
 import '../results/result_capture_page.dart';
@@ -52,6 +53,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
     final allowed = <TgcgModule>{
       TgcgModule.overview,
       TgcgModule.fieldMonitoring,
+      TgcgModule.evidenceCapture,
       TgcgModule.resultCapture,
       TgcgModule.communications,
       TgcgModule.discussionRoom,
@@ -61,13 +63,14 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       selectedModule = TgcgModule.overview;
     }
 
-    final inMeeting = selectedModule == TgcgModule.meetingRoom;
+    final focused = selectedModule == TgcgModule.meetingRoom ||
+        selectedModule == TgcgModule.evidenceCapture;
 
     return Scaffold(
       backgroundColor: TgcgColors.canvas,
       appBar: _appBar(session, allowHome: true),
       body: _pageFor(selectedModule),
-      bottomNavigationBar: inMeeting
+      bottomNavigationBar: focused
           ? null
           : NavigationBar(
               selectedIndex: _indexFor(selectedModule),
@@ -124,7 +127,9 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                   Text(
                     selectedModule == TgcgModule.meetingRoom
                         ? 'TGCG MEETING'
-                        : 'TGCG FIELD',
+                        : selectedModule == TgcgModule.evidenceCapture
+                            ? 'TGCG EVIDENCE'
+                            : 'TGCG FIELD',
                     style: const TextStyle(
                       color: TgcgColors.ink,
                       fontSize: 13,
@@ -146,16 +151,27 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
           ],
         ),
         actions: [
+          if (allowHome &&
+              selectedModule != TgcgModule.evidenceCapture &&
+              selectedModule != TgcgModule.meetingRoom)
+            IconButton(
+              tooltip: 'Capture evidence',
+              onPressed: () =>
+                  setState(() => selectedModule = TgcgModule.evidenceCapture),
+              icon: const Icon(Icons.photo_camera_outlined),
+            ),
           if (allowHome && selectedModule != TgcgModule.meetingRoom)
             IconButton(
               tooltip: 'Meeting room',
-              onPressed: () => setState(() => selectedModule = TgcgModule.meetingRoom),
+              onPressed: () =>
+                  setState(() => selectedModule = TgcgModule.meetingRoom),
               icon: const Icon(Icons.video_call_outlined),
             ),
           if (allowHome && selectedModule != TgcgModule.overview)
             IconButton(
               tooltip: 'Field home',
-              onPressed: () => setState(() => selectedModule = TgcgModule.overview),
+              onPressed: () =>
+                  setState(() => selectedModule = TgcgModule.overview),
               icon: const Icon(Icons.home_outlined),
             ),
           IconButton(
@@ -172,6 +188,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
             onOpenModule: (next) => setState(() {
               selectedModule = switch (next) {
                 TgcgModule.fieldMonitoring => TgcgModule.fieldMonitoring,
+                TgcgModule.evidenceCapture => TgcgModule.evidenceCapture,
                 TgcgModule.resultCapture => TgcgModule.resultCapture,
                 TgcgModule.communications => TgcgModule.communications,
                 TgcgModule.discussionRoom => TgcgModule.discussionRoom,
@@ -181,6 +198,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
             }),
           ),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
+        TgcgModule.evidenceCapture => const EvidenceCapturePage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.communications => const CommunicationsPage(),
         TgcgModule.discussionRoom => const DiscussionRoomPage(),
