@@ -75,7 +75,7 @@ class _GeographyPageState extends State<GeographyPage> {
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: TgcgApp.ink)),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
-                  value: coverage.clamp(0, 1),
+                  value: coverage.clamp(0, 1).toDouble(),
                   minHeight: 9,
                   borderRadius: BorderRadius.circular(999),
                   backgroundColor: const Color(0xFFE4EAE7),
