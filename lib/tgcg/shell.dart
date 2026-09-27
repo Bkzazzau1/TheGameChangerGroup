@@ -10,6 +10,7 @@ import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
 import 'membership/membership_page.dart';
+import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
 
@@ -97,12 +98,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const CollationPage(),
         TgcgModule.communications => const CommunicationsPage(),
-        TgcgModule.reports => const _ModulePlaceholder(
-            title: 'Reports & Exports',
-            subtitle:
-                'Operational summaries, incident reports, collation reports and evidence packages.',
-            icon: Icons.description_outlined,
-          ),
+        TgcgModule.reports => const ReportsPage(),
         TgcgModule.governance => const GovernancePage(),
       };
 }
@@ -352,81 +348,5 @@ class _RoleChip extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
-      );
-}
-
-class _ModulePlaceholder extends StatelessWidget {
-  const _ModulePlaceholder({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(28),
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              color: TgcgApp.ink,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            subtitle,
-            style: const TextStyle(color: TgcgApp.muted, height: 1.5),
-          ),
-          const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: TgcgApp.primary.withValues(alpha: .08),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Icon(icon, color: TgcgApp.primary, size: 27),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Module migration in progress',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: TgcgApp.ink,
-                          ),
-                        ),
-                        SizedBox(height: 5),
-                        Text(
-                          'This route is already protected by the TGCG role/module policy. It will be replaced by the corresponding production workflow as the migration continues.',
-                          style: TextStyle(
-                            color: TgcgApp.muted,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       );
 }
