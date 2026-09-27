@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'membership/membership_store.dart';
 import 'session.dart';
 import 'ui/tgcg_design.dart';
 
@@ -17,6 +18,8 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
   final passwordController = TextEditingController();
 
   TgcgRole selectedRole = TgcgRole.situationRoomDirector;
+  String? selectedZoneId;
+  String? selectedStateId;
   bool obscurePassword = true;
   bool rememberDevice = true;
 
@@ -29,10 +32,22 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
   }
 
   void _signIn() {
+    final membership = MembershipOperations.of(context, listen: false);
+    var scope = GeographicScope.nigeria;
+
+    if (selectedRole == TgcgRole.zonalCoordinator) {
+      final zoneId = selectedZoneId ?? membership.geography.zones.first.id;
+      scope = membership.geography.zone(zoneId)?.scope ?? scope;
+    } else if (selectedRole == TgcgRole.stateCoordinator) {
+      final stateId = selectedStateId ?? membership.geography.states.first.id;
+      scope = membership.geography.state(stateId)?.scope ?? scope;
+    }
+
     TgcgSession.of(context, listen: false).signIn(
       role: selectedRole,
       operatorName: nameController.text,
       accessId: accessIdController.text,
+      scope: scope,
     );
   }
 
@@ -66,9 +81,6 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
   Widget _brandPanel({bool compact = false}) =>
       compact ? _textBrandPanel(compact: true) : _posterBrandPanel();
 
-  // The poster carries its own logo, headline and stats, so nothing is
-  // layered over it. Contain keeps the logo and stats visible at any window
-  // shape; the background matches the poster edge so letterboxing blends in.
   Widget _posterBrandPanel() => Container(
         margin: const EdgeInsets.all(18),
         clipBehavior: Clip.antiAlias,
@@ -81,8 +93,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
           semanticLabel:
-              'TGCG-EMCOP National Election Operations: 36 states and FCT, '
-              '774 LGAs, 176,846 polling units',
+              'TGCG-EMCOP National Election Operations: 36 states and FCT, 774 LGAs, 176,846 polling units',
         ),
       );
 
@@ -190,6 +201,11 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                 ),
                 const SizedBox(height: 12),
                 _roleGrid(),
+                if (selectedRole == TgcgRole.zonalCoordinator ||
+                    selectedRole == TgcgRole.stateCoordinator) ...[
+                  const SizedBox(height: 14),
+                  _roleScopeSelector(),
+                ],
                 const SizedBox(height: 22),
                 LayoutBuilder(
                   builder: (context, constraints) {
@@ -292,6 +308,53 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         ),
       );
 
+  Widget _roleScopeSelector() {
+    final geography =
+        MembershipOperations.of(context, listen: false).geography;
+
+    if (selectedRole == TgcgRole.zonalCoordinator) {
+      final value = selectedZoneId ?? geography.zones.first.id;
+      selectedZoneId ??= value;
+      return DropdownButtonFormField<String>(
+        initialValue: value,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Assigned geopolitical zone',
+          prefixIcon: Icon(Icons.public_outlined),
+        ),
+        items: geography.zones
+            .map(
+              (zone) => DropdownMenuItem(
+                value: zone.id,
+                child: Text(zone.name),
+              ),
+            )
+            .toList(),
+        onChanged: (next) => setState(() => selectedZoneId = next),
+      );
+    }
+
+    final value = selectedStateId ?? geography.states.first.id;
+    selectedStateId ??= value;
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Assigned state / FCT',
+        prefixIcon: Icon(Icons.map_outlined),
+      ),
+      items: geography.states
+          .map(
+            (state) => DropdownMenuItem(
+              value: state.id,
+              child: Text('${state.name} • ${state.zoneName}'),
+            ),
+          )
+          .toList(),
+      onChanged: (next) => setState(() => selectedStateId = next),
+    );
+  }
+
   Widget _roleGrid() => LayoutBuilder(
         builder: (context, constraints) {
           final columns = constraints.maxWidth > 680
@@ -309,7 +372,11 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
               final active = role == selectedRole;
               return InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => setState(() => selectedRole = role),
+                onTap: () => setState(() {
+                  selectedRole = role;
+                  if (role != TgcgRole.zonalCoordinator) selectedZoneId = null;
+                  if (role != TgcgRole.stateCoordinator) selectedStateId = null;
+                }),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   width: width,
