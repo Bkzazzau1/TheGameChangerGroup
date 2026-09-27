@@ -11,6 +11,7 @@ import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
+import 'governance/role_assignment_page.dart';
 import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
 import 'membership/national_membership_page.dart';
@@ -137,6 +138,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
         TgcgModule.accreditation => const PvcEnrollmentPage(),
         TgcgModule.membershipNetwork => const NationalMembershipPage(),
+        TgcgModule.roleAssignment => const RoleAssignmentPage(),
         TgcgModule.geography => const GeographyPage(),
         TgcgModule.liveOperations => const LiveOperationsPage(),
         TgcgModule.aiVerification => const AiVerificationPage(),
@@ -183,6 +185,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.communications, 'Communications', Icons.forum_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.discussionRoom, 'Discussion Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.roleAssignment, 'Role Assignment', Icons.manage_accounts_outlined, _NavGroup.control),
   _Destination(TgcgModule.systemMonitoring, 'System Monitoring', Icons.monitor_heart_outlined, _NavGroup.control),
   _Destination(TgcgModule.reports, 'Reports & Exports', Icons.description_outlined, _NavGroup.control),
   _Destination(TgcgModule.governance, 'Data & Governance', Icons.shield_outlined, _NavGroup.control),
@@ -527,6 +530,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.overview => 'Command Overview',
       TgcgModule.accreditation => 'Member Enrolment',
       TgcgModule.membershipNetwork => 'Registered Members',
+      TgcgModule.roleAssignment => 'Role Assignment',
       TgcgModule.geography => 'Geographic Operations',
       TgcgModule.liveOperations => 'Live Operations',
       TgcgModule.aiVerification => 'AI Verification Centre',
