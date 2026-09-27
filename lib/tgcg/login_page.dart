@@ -63,7 +63,30 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         ),
       );
 
-  Widget _brandPanel({bool compact = false}) => Container(
+  Widget _brandPanel({bool compact = false}) =>
+      compact ? _textBrandPanel(compact: true) : _posterBrandPanel();
+
+  // The poster carries its own logo, headline and stats, so nothing is
+  // layered over it. Contain keeps the logo and stats visible at any window
+  // shape; the background matches the poster edge so letterboxing blends in.
+  Widget _posterBrandPanel() => Container(
+        margin: const EdgeInsets.all(18),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: const Color(0xFF012E23),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Image.asset(
+          'assets/brand/login_poster.webp',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          semanticLabel:
+              'TGCG-EMCOP National Election Operations: 36 states and FCT, '
+              '774 LGAs, 176,846 polling units',
+        ),
+      );
+
+  Widget _textBrandPanel({bool compact = false}) => Container(
         margin: EdgeInsets.all(compact ? 0 : 18),
         padding: EdgeInsets.all(compact ? 24 : 42),
         decoration: BoxDecoration(
