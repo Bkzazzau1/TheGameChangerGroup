@@ -57,53 +57,70 @@ class TgcgPageHeader extends StatelessWidget {
   final String? eyebrow;
   final Widget? trailing;
 
-  @override
-  Widget build(BuildContext context) => Row(
+  Widget _copy({required bool compact}) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (eyebrow != null) ...[
-                  Text(
-                    eyebrow!.toUpperCase(),
-                    style: const TextStyle(
-                      color: TgcgColors.primaryMid,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.15,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                ],
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 30,
-                    height: 1.05,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -.7,
-                    color: TgcgColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: TgcgColors.muted,
-                    height: 1.45,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+          if (eyebrow != null) ...[
+            Text(
+              eyebrow!.toUpperCase(),
+              style: const TextStyle(
+                color: TgcgColors.primaryMid,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.15,
+              ),
+            ),
+            const SizedBox(height: 7),
+          ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: compact ? 26 : 30,
+              height: 1.05,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -.7,
+              color: TgcgColors.ink,
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 16),
-            trailing!,
-          ],
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: TgcgColors.muted,
+              height: 1.45,
+              fontSize: 13,
+            ),
+          ),
         ],
+      );
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _copy(compact: true),
+                if (trailing != null) ...[
+                  const SizedBox(height: 14),
+                  Align(alignment: Alignment.centerLeft, child: trailing!),
+                ],
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _copy(compact: false)),
+              if (trailing != null) ...[
+                const SizedBox(width: 16),
+                Flexible(flex: 0, child: trailing!),
+              ],
+            ],
+          );
+        },
       );
 }
 
@@ -125,6 +142,32 @@ class TgcgSectionCard extends StatelessWidget {
   final EdgeInsets padding;
   final Color backgroundColor;
 
+  Widget _heading() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null)
+            Text(
+              title!,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: TgcgColors.ink,
+              ),
+            ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: const TextStyle(
+                fontSize: 11,
+                color: TgcgColors.muted,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      );
+
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
@@ -145,38 +188,26 @@ class TgcgSectionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (title != null || trailing != null) ...[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (title != null)
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title!,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: TgcgColors.ink,
-                              ),
-                            ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                subtitle!,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: TgcgColors.muted,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    if (trailing != null) trailing!,
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 540 && trailing != null) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (title != null) _heading(),
+                          const SizedBox(height: 10),
+                          trailing!,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (title != null) Expanded(child: _heading()),
+                        if (trailing != null) trailing!,
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
               ],
@@ -318,13 +349,16 @@ class TgcgStatusPill extends StatelessWidget {
               Icon(icon, color: color, size: compact ? 13 : 15),
               const SizedBox(width: 6),
             ],
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: compact ? 9.5 : 10.5,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .25,
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: compact ? 9.5 : 10.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .25,
+                ),
               ),
             ),
           ],
