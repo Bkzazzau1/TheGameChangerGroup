@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -36,6 +37,7 @@ class OfflinePersistenceController extends ChangeNotifier {
   OfflinePersistenceState _state = OfflinePersistenceState.idle;
   String? _lastError;
   List<StoredOutboxMutation> _storedOutbox = const [];
+  Future<void>? _initializationFuture;
 
   OfflinePersistenceState get state => _state;
   bool get isReady => _state == OfflinePersistenceState.ready;
@@ -52,20 +54,36 @@ class OfflinePersistenceController extends ChangeNotifier {
           item.state == SyncState.conflict)
       .toList(growable: false);
 
-  Future<void> initialize() async {
-    if (_state == OfflinePersistenceState.initializing || isReady) return;
+  Future<void> initialize() {
+    if (isReady) return Future.value();
+    final running = _initializationFuture;
+    if (running != null) return running;
+
+    final future = _initializeInternal();
+    _initializationFuture = future;
+    return future.whenComplete(() {
+      if (identical(_initializationFuture, future)) {
+        _initializationFuture = null;
+      }
+    });
+  }
+
+  Future<void> _initializeInternal() async {
     _state = OfflinePersistenceState.initializing;
     _lastError = null;
     notifyListeners();
 
+    OfflineDatabaseBackend? database;
     try {
-      final database = await openOfflineDatabase();
+      database = await openOfflineDatabase();
       await database.initialize();
       await _crypto.initialize();
       _database = database;
       await _refreshOutbox();
       _state = OfflinePersistenceState.ready;
     } catch (error) {
+      await database?.close();
+      _database = null;
       _lastError = error.toString();
       _state = OfflinePersistenceState.failed;
     }
@@ -224,6 +242,7 @@ class OfflinePersistenceController extends ChangeNotifier {
     required int serverVersion,
     String? serverReference,
   }) async {
+    await _ensureReady();
     final current = _findOutbox(outboxId);
     if (current == null) return;
     final acknowledgedAt = DateTime.now().toUtc();
@@ -254,6 +273,10 @@ class OfflinePersistenceController extends ChangeNotifier {
   }
 
   Future<void> close() async {
+    final initialization = _initializationFuture;
+    if (initialization != null) {
+      await initialization;
+    }
     await _database?.close();
     _database = null;
     _storedOutbox = const [];
@@ -261,7 +284,7 @@ class OfflinePersistenceController extends ChangeNotifier {
   }
 
   Future<void> _ensureReady() async {
-    if (!isReady) await initialize();
+    await initialize();
     if (!isReady || _database == null) {
       throw StateError(
         _lastError == null
