@@ -4,13 +4,15 @@ import 'collation/collation_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
 import 'discussion/discussion_room_page.dart';
+import 'evidence/evidence_capture_page.dart';
 import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
 import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
-import 'membership/membership_page.dart';
+import 'membership/pvc_enrollment_page.dart';
+import 'monitoring/system_monitoring_page.dart';
 import 'offline/offline_persistence.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
@@ -108,9 +110,10 @@ class _TgcgShellState extends State<TgcgShell> {
 
   Widget _pageFor(TgcgModule module) => switch (module) {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
-        TgcgModule.accreditation => const MembershipPage(),
+        TgcgModule.accreditation => const PvcEnrollmentPage(),
         TgcgModule.geography => const GeographyPage(),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
+        TgcgModule.evidenceCapture => const EvidenceCapturePage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const CollationPage(),
@@ -118,6 +121,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.communications => const CommunicationsPage(),
         TgcgModule.discussionRoom => const DiscussionRoomPage(),
         TgcgModule.meetingRoom => const MeetingRoomPage(),
+        TgcgModule.systemMonitoring => const SystemMonitoringPage(),
         TgcgModule.reports => const ReportsPage(),
         TgcgModule.governance => const GovernancePage(),
       };
@@ -161,14 +165,20 @@ const _allDestinations = <_Destination>[
   ),
   _Destination(
     TgcgModule.accreditation,
-    'Accreditation',
-    Icons.badge_outlined,
+    'Member Enrolment',
+    Icons.how_to_reg_outlined,
     _NavGroup.fieldOperations,
   ),
   _Destination(
     TgcgModule.fieldMonitoring,
     'Field Monitoring',
     Icons.sensors_outlined,
+    _NavGroup.fieldOperations,
+  ),
+  _Destination(
+    TgcgModule.evidenceCapture,
+    'Evidence Capture',
+    Icons.perm_media_outlined,
     _NavGroup.fieldOperations,
   ),
   _Destination(
@@ -200,6 +210,12 @@ const _allDestinations = <_Destination>[
     'Meeting Room',
     Icons.video_camera_front_outlined,
     _NavGroup.coordination,
+  ),
+  _Destination(
+    TgcgModule.systemMonitoring,
+    'System Monitoring',
+    Icons.monitor_heart_outlined,
+    _NavGroup.control,
   ),
   _Destination(
     TgcgModule.reports,
@@ -609,9 +625,10 @@ String _groupLabel(_NavGroup group) => switch (group) {
 
 String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.overview => 'Command Overview',
-      TgcgModule.accreditation => 'Accreditation',
+      TgcgModule.accreditation => 'Member Enrolment',
       TgcgModule.geography => 'Geographic Operations',
       TgcgModule.fieldMonitoring => 'Field Monitoring',
+      TgcgModule.evidenceCapture => 'Evidence Capture',
       TgcgModule.situationRoom => 'Situation Room',
       TgcgModule.resultCapture => 'Result Capture',
       TgcgModule.collation => 'Collation',
@@ -619,6 +636,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.communications => 'Communications',
       TgcgModule.discussionRoom => 'Discussion Forum',
       TgcgModule.meetingRoom => 'Meeting Room',
+      TgcgModule.systemMonitoring => 'System Monitoring',
       TgcgModule.reports => 'Reports & Exports',
       TgcgModule.governance => 'Data & Governance',
     };
