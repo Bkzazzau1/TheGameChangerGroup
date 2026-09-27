@@ -314,6 +314,9 @@ class MembershipOperationsController extends ChangeNotifier {
           .where((agent) => GeographyRegistry.scopeContains(scope, agent.scope))
           .toList(growable: false);
 
+  int agentCountForScope(GeographicScope scope) =>
+      agentsForScope(scope).length;
+
   int assignedPollingUnitsWithin(GeographicScope scope) => agentsForScope(scope)
       .where((agent) =>
           agent.status == AccreditationStatus.approved &&
