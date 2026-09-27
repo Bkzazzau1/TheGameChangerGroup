@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'collation/collation_page.dart';
+import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
 import 'domain/models.dart';
 import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
+import 'governance/governance_page.dart';
 import 'membership/membership_page.dart';
 import 'results/result_capture_page.dart';
 import 'session.dart';
@@ -94,21 +96,14 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.situationRoom => const SituationRoomPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const CollationPage(),
-        TgcgModule.communications => const _ModulePlaceholder(
-            title: 'Communications',
-            subtitle: 'Operational messages, broadcasts and coordination channels.',
-            icon: Icons.chat_bubble_outline_rounded,
-          ),
+        TgcgModule.communications => const CommunicationsPage(),
         TgcgModule.reports => const _ModulePlaceholder(
             title: 'Reports & Exports',
-            subtitle: 'Operational summaries, incident reports, collation reports and evidence packages.',
+            subtitle:
+                'Operational summaries, incident reports, collation reports and evidence packages.',
             icon: Icons.description_outlined,
           ),
-        TgcgModule.governance => const _ModulePlaceholder(
-            title: 'Data, Audit & Governance',
-            subtitle: 'Audit events, sync state, user access, system settings and data provenance.',
-            icon: Icons.admin_panel_settings_outlined,
-          ),
+        TgcgModule.governance => const GovernancePage(),
       };
 }
 
@@ -124,12 +119,24 @@ const _allDestinations = <_Destination>[
   _Destination(TgcgModule.accreditation, 'Accreditation', Icons.badge_outlined),
   _Destination(TgcgModule.geography, 'Geographic Operations', Icons.map_outlined),
   _Destination(TgcgModule.fieldMonitoring, 'Field Monitoring', Icons.radar_rounded),
-  _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.dashboard_customize_outlined),
+  _Destination(
+    TgcgModule.situationRoom,
+    'Situation Room',
+    Icons.dashboard_customize_outlined,
+  ),
   _Destination(TgcgModule.resultCapture, 'Result Capture', Icons.ballot_outlined),
   _Destination(TgcgModule.collation, 'Collation', Icons.account_tree_outlined),
-  _Destination(TgcgModule.communications, 'Communications', Icons.chat_bubble_outline_rounded),
+  _Destination(
+    TgcgModule.communications,
+    'Communications',
+    Icons.chat_bubble_outline_rounded,
+  ),
   _Destination(TgcgModule.reports, 'Reports', Icons.description_outlined),
-  _Destination(TgcgModule.governance, 'Data & Governance', Icons.admin_panel_settings_outlined),
+  _Destination(
+    TgcgModule.governance,
+    'Data & Governance',
+    Icons.admin_panel_settings_outlined,
+  ),
 ];
 
 class _Navigation extends StatelessWidget {
@@ -171,17 +178,32 @@ class _Navigation extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(session.operatorName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: TgcgApp.ink, fontWeight: FontWeight.w900)),
+                    Text(
+                      session.operatorName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: TgcgApp.ink,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(roleLabel(session.role!),
-                        style: const TextStyle(
-                            color: TgcgApp.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+                    Text(
+                      roleLabel(session.role!),
+                      style: const TextStyle(
+                        color: TgcgApp.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(session.scope.label,
-                        style: const TextStyle(color: TgcgApp.muted, fontSize: 10.5)),
+                    Text(
+                      session.scope.label,
+                      style: const TextStyle(
+                        color: TgcgApp.muted,
+                        fontSize: 10.5,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -201,12 +223,18 @@ class _Navigation extends StatelessWidget {
                       selected: active,
                       selectedTileColor: const Color(0xFFE8F1EE),
                       selectedColor: TgcgApp.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       leading: Icon(item.icon, size: 21),
-                      title: Text(item.label,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: active ? FontWeight.w900 : FontWeight.w700)),
+                      title: Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight:
+                              active ? FontWeight.w900 : FontWeight.w700,
+                        ),
+                      ),
                       onTap: () => onSelect(item.module),
                     ),
                   );
@@ -243,14 +271,19 @@ class _Brand extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('TGCG-EMCOP',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: TgcgApp.ink,
-                        letterSpacing: .4)),
+                Text(
+                  'TGCG-EMCOP',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: TgcgApp.ink,
+                    letterSpacing: .4,
+                  ),
+                ),
                 SizedBox(height: 2),
-                Text('National Operations',
-                    style: TextStyle(fontSize: 11, color: TgcgApp.muted)),
+                Text(
+                  'National Operations',
+                  style: TextStyle(fontSize: 11, color: TgcgApp.muted),
+                ),
               ],
             ),
           ),
@@ -266,8 +299,13 @@ class _CompactBrand extends StatelessWidget {
         children: [
           _BrandMark(size: 34),
           SizedBox(width: 9),
-          Text('TGCG-EMCOP',
-              style: TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.ink)),
+          Text(
+            'TGCG-EMCOP',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: TgcgApp.ink,
+            ),
+          ),
         ],
       );
 }
@@ -284,7 +322,11 @@ class _BrandMark extends StatelessWidget {
           color: TgcgApp.primary,
           borderRadius: BorderRadius.circular(size * .3),
         ),
-        child: Icon(Icons.hub_rounded, color: Colors.white, size: size * .52),
+        child: Icon(
+          Icons.hub_rounded,
+          color: Colors.white,
+          size: size * .52,
+        ),
       );
 }
 
@@ -305,7 +347,10 @@ class _RoleChip extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-              color: TgcgApp.primary, fontSize: 10.5, fontWeight: FontWeight.w900),
+            color: TgcgApp.primary,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       );
 }
@@ -325,11 +370,19 @@ class _ModulePlaceholder extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.all(28),
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 28, fontWeight: FontWeight.w900, color: TgcgApp.ink)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              color: TgcgApp.ink,
+            ),
+          ),
           const SizedBox(height: 7),
-          Text(subtitle, style: const TextStyle(color: TgcgApp.muted, height: 1.5)),
+          Text(
+            subtitle,
+            style: const TextStyle(color: TgcgApp.muted, height: 1.5),
+          ),
           const SizedBox(height: 20),
           Card(
             child: Padding(
@@ -351,15 +404,21 @@ class _ModulePlaceholder extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Module migration in progress',
-                            style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                                color: TgcgApp.ink)),
+                        Text(
+                          'Module migration in progress',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: TgcgApp.ink,
+                          ),
+                        ),
                         SizedBox(height: 5),
                         Text(
                           'This route is already protected by the TGCG role/module policy. It will be replaced by the corresponding production workflow as the migration continues.',
-                          style: TextStyle(color: TgcgApp.muted, height: 1.5),
+                          style: TextStyle(
+                            color: TgcgApp.muted,
+                            height: 1.5,
+                          ),
                         ),
                       ],
                     ),
