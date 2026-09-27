@@ -195,18 +195,9 @@ class ResultOperationsController extends ChangeNotifier {
       _submissions.where((item) => _within(scope, item.pollingUnitScope)).toList(growable: false);
 
   List<ElectionResultSubmission> reviewQueueForScope(GeographicScope scope) =>
-      submissionsForScope(scope)
-          .where((item) =>
-              item.status == RecordStatus.underReview ||
-              item.status == RecordStatus.disputed ||
-              item.validation?.requiresHumanReview == true)
-          .toList(growable: false);
+      submissionsForScope(scope).where(_needsReview).toList(growable: false);
 
-  int get pendingReviewCount => _submissions
-      .where((item) =>
-          item.status == RecordStatus.underReview ||
-          item.validation?.requiresHumanReview == true)
-      .length;
+  int get pendingReviewCount => _submissions.where(_needsReview).length;
 
   int get verifiedCount =>
       _submissions.where((item) => item.status == RecordStatus.verified).length;
@@ -313,6 +304,17 @@ class ResultOperationsController extends ChangeNotifier {
     );
     notifyListeners();
     return true;
+  }
+
+  static bool _needsReview(ElectionResultSubmission item) {
+    if (item.status == RecordStatus.verified ||
+        item.status == RecordStatus.rejected ||
+        item.status == RecordStatus.archived) {
+      return false;
+    }
+    return item.status == RecordStatus.underReview ||
+        item.status == RecordStatus.disputed ||
+        item.validation?.requiresHumanReview == true;
   }
 
   static ElectionResultSubmission _with(
