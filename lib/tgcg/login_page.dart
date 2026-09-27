@@ -53,7 +53,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
               return ListView(
                 padding: const EdgeInsets.all(18),
                 children: [
-                  SizedBox(height: 310, child: _brandPanel(compact: true)),
+                  SizedBox(height: 300, child: _brandPanel(compact: true)),
                   const SizedBox(height: 18),
                   _formPanel(compact: true),
                 ],
@@ -85,15 +85,19 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('TGCG-EMCOP',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: .8,
-                          )),
+                      Text(
+                        'TGCG-EMCOP',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .8,
+                        ),
+                      ),
                       SizedBox(height: 2),
-                      Text('Election Monitoring & Collation Programme',
-                          style: TextStyle(color: Colors.white60, fontSize: 11)),
+                      Text(
+                        'Election Monitoring & Collation Programme',
+                        style: TextStyle(color: Colors.white60, fontSize: 11),
+                      ),
                     ],
                   ),
                 ),
@@ -104,14 +108,14 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
               'National Election Operations',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 28,
+                fontSize: 29,
                 height: 1.05,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 10),
             const Text(
-              'Accreditation, field monitoring, incidents, evidence, result capture, collation and situation-room coordination in one operational workspace.',
+              'Accreditation, field monitoring, incident management, evidence, result capture, collation and nationwide coordination.',
               style: TextStyle(color: Colors.white70, height: 1.5),
             ),
             const SizedBox(height: 22),
@@ -148,55 +152,59 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     letterSpacing: -.5,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 7),
                 const Text(
-                  'Prototype role selection is temporary. Production access will be resolved from authenticated user credentials and assigned geographic scope.',
-                  style: TextStyle(color: TgcgApp.muted, height: 1.5),
+                  'Sign in to your assigned operational workspace.',
+                  style: TextStyle(color: TgcgApp.muted, fontSize: 13),
                 ),
                 const SizedBox(height: 24),
-                const Text('Select role',
-                    style: TextStyle(fontWeight: FontWeight.w900, color: TgcgApp.ink)),
+                const Text(
+                  'Operational role',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: TgcgApp.ink,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 _roleGrid(),
                 const SizedBox(height: 22),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: nameController,
-                        decoration: _decoration(
-                          'Operator name',
-                          'Enter name',
-                          Icons.person_outline_rounded,
-                        ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stack = constraints.maxWidth < 540;
+                    final name = TextField(
+                      controller: nameController,
+                      decoration: _decoration(
+                        'Operator name',
+                        'Enter name',
+                        Icons.person_outline_rounded,
                       ),
-                    ),
-                    if (!compact) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: accessIdController,
-                          decoration: _decoration(
-                            'Access ID / phone',
-                            'Enter access ID',
-                            Icons.badge_outlined,
-                          ),
-                        ),
+                    );
+                    final access = TextField(
+                      controller: accessIdController,
+                      decoration: _decoration(
+                        'Access ID / phone',
+                        'Enter access ID',
+                        Icons.badge_outlined,
                       ),
-                    ],
-                  ],
+                    );
+                    if (stack) {
+                      return Column(
+                        children: [
+                          name,
+                          const SizedBox(height: 12),
+                          access,
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: name),
+                        const SizedBox(width: 12),
+                        Expanded(child: access),
+                      ],
+                    );
+                  },
                 ),
-                if (compact) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: accessIdController,
-                    decoration: _decoration(
-                      'Access ID / phone',
-                      'Enter access ID',
-                      Icons.badge_outlined,
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: passwordController,
@@ -208,10 +216,13 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     Icons.lock_outline_rounded,
                   ).copyWith(
                     suffixIcon: IconButton(
-                      onPressed: () => setState(() => obscurePassword = !obscurePassword),
-                      icon: Icon(obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined),
+                      onPressed: () =>
+                          setState(() => obscurePassword = !obscurePassword),
+                      icon: Icon(
+                        obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
                     ),
                   ),
                 ),
@@ -220,12 +231,18 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   children: [
                     Checkbox(
                       value: rememberDevice,
-                      onChanged: (value) => setState(() => rememberDevice = value ?? false),
+                      onChanged: (value) =>
+                          setState(() => rememberDevice = value ?? false),
                     ),
-                    const Text('Remember this device',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const Text(
+                      'Remember this device',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     const Spacer(),
-                    TextButton(onPressed: () {}, child: const Text('Access support')),
+                    TextButton(
+                      onPressed: () {},
+                      child: const Text('Access support'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -244,27 +261,6 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                       ),
                       textStyle: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF4F7F6),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE0E7E4)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.shield_outlined, size: 18, color: TgcgApp.primary),
-                      SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          'Authorized operational personnel only. Production authentication must be enforced server-side.',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
@@ -294,13 +290,15 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   width: width,
-                  constraints: const BoxConstraints(minHeight: 96),
+                  constraints: const BoxConstraints(minHeight: 94),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: active ? const Color(0xFFE7F1EE) : Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: active ? TgcgApp.primary : const Color(0xFFDDE5E2),
+                      color: active
+                          ? TgcgApp.primary
+                          : const Color(0xFFDDE5E2),
                       width: active ? 1.5 : 1,
                     ),
                   ),
@@ -309,12 +307,18 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     children: [
                       Row(
                         children: [
-                          Icon(roleIcon(role),
-                              color: active ? TgcgApp.primary : TgcgApp.muted, size: 21),
+                          Icon(
+                            roleIcon(role),
+                            color: active ? TgcgApp.primary : TgcgApp.muted,
+                            size: 21,
+                          ),
                           const Spacer(),
                           if (active)
-                            const Icon(Icons.check_circle_rounded,
-                                color: TgcgApp.primary, size: 18),
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: TgcgApp.primary,
+                              size: 18,
+                            ),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -374,10 +378,18 @@ class _Stat extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(value,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white60, fontSize: 11),
+            ),
           ],
         ),
       );
