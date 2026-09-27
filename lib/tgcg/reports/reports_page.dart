@@ -417,10 +417,12 @@ class _ReportCard extends StatelessWidget {
                         ),
                       )
                       .toList(),
-                  child: OutlinedButton.icon(
-                    onPressed: descriptor.enabled ? () {} : null,
-                    icon: const Icon(Icons.file_download_outlined),
-                    label: Text(descriptor.enabled ? 'Export' : 'Unavailable'),
+                  child: IgnorePointer(
+                    child: OutlinedButton.icon(
+                      onPressed: descriptor.enabled ? () {} : null,
+                      icon: const Icon(Icons.file_download_outlined),
+                      label: Text(descriptor.enabled ? 'Export' : 'Unavailable'),
+                    ),
                   ),
                 ),
               ),
