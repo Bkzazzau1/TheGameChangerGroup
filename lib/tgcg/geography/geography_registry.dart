@@ -53,8 +53,8 @@ class CanonicalPollingUnit {
 
 class GeographyRegistry {
   const GeographyRegistry({
-    required this.zones,
-    required this.states,
+    this.zones = const [],
+    this.states = const [],
     required this.pollingUnits,
   });
 
@@ -72,7 +72,7 @@ class GeographyRegistry {
           CanonicalZone(id: 'SW', name: 'South West'),
         ],
         states: [
-          CanonicalState(id: 'BE', name: 'Benue', zoneId: 'NC', zoneName: 'North Central'),
+          CanonicalState(id: 'BN', name: 'Benue', zoneId: 'NC', zoneName: 'North Central'),
           CanonicalState(id: 'FCT', name: 'Federal Capital Territory', zoneId: 'NC', zoneName: 'North Central', isFederalCapitalTerritory: true),
           CanonicalState(id: 'KO', name: 'Kogi', zoneId: 'NC', zoneName: 'North Central'),
           CanonicalState(id: 'KW', name: 'Kwara', zoneId: 'NC', zoneName: 'North Central'),
@@ -159,7 +159,7 @@ class GeographyRegistry {
               country: 'Nigeria',
               zoneId: 'NC',
               zoneName: 'North Central',
-              stateId: 'BE',
+              stateId: 'BN',
               stateName: 'Benue',
               senatorialDistrictId: 'BN-SD-01',
               senatorialDistrictName: 'Benue District 01',
@@ -179,7 +179,7 @@ class GeographyRegistry {
               country: 'Nigeria',
               zoneId: 'NC',
               zoneName: 'North Central',
-              stateId: 'BE',
+              stateId: 'BN',
               stateName: 'Benue',
               senatorialDistrictId: 'BN-SD-01',
               senatorialDistrictName: 'Benue District 01',
@@ -260,13 +260,15 @@ class GeographyRegistry {
   }
 
   List<CanonicalPollingUnit> pollingUnitsWithin(GeographicScope scope) =>
-      pollingUnits.where((unit) => scopeContains(scope, unit.scope)).toList(growable: false);
+      pollingUnits
+          .where((unit) => scopeContains(scope, unit.scope))
+          .toList(growable: false);
 
   List<GeographicScope> childScopes(GeographicScope parent) {
-    if (parent.level == GeographyLevel.country) {
+    if (parent.level == GeographyLevel.country && zones.isNotEmpty) {
       return zones.map((item) => item.scope).toList(growable: false);
     }
-    if (parent.level == GeographyLevel.geopoliticalZone) {
+    if (parent.level == GeographyLevel.geopoliticalZone && states.isNotEmpty) {
       return statesForZone(parent.zoneId ?? '')
           .map((item) => item.scope)
           .toList(growable: false);
@@ -363,7 +365,8 @@ class GeographyRegistry {
         GeographyLevel.country => scope.country,
         GeographyLevel.geopoliticalZone => scope.zoneId ?? scope.label,
         GeographyLevel.state => scope.stateId ?? scope.label,
-        GeographyLevel.senatorialDistrict => scope.senatorialDistrictId ?? scope.label,
+        GeographyLevel.senatorialDistrict =>
+          scope.senatorialDistrictId ?? scope.label,
         GeographyLevel.lga => scope.lgaId ?? scope.label,
         GeographyLevel.ward => scope.wardId ?? scope.label,
         GeographyLevel.pollingUnit => scope.pollingUnitId ?? scope.label,
