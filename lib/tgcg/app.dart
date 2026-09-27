@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'communications/communications_store.dart';
+import 'field/field_agent_shell.dart';
 import 'field/field_operations_store.dart';
 import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
@@ -190,11 +191,12 @@ class _AuthenticationGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 240),
-      child: session.isAuthenticated
-          ? const TgcgShell(key: ValueKey('tgcg-shell'))
-          : const TgcgLoginPage(key: ValueKey('tgcg-login')),
-    );
+    if (!session.isAuthenticated) {
+      return const TgcgLoginPage(key: ValueKey('tgcg-login'));
+    }
+    if (session.role == TgcgRole.pollingUnitAgent) {
+      return const FieldAgentShell(key: ValueKey('field-agent-shell'));
+    }
+    return const TgcgShell(key: ValueKey('tgcg-shell'));
   }
 }
