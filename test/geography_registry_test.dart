@@ -15,32 +15,53 @@ void main() {
       expect(unit.scope.lgaName, 'Kaduna North');
     });
 
-    test('country children are geopolitical zones', () {
+    test('country children are all geopolitical zones', () {
       final children = registry.childScopes(GeographicScope.nigeria);
 
-      expect(children, isNotEmpty);
-      expect(children.every((scope) => scope.level == GeographyLevel.geopoliticalZone), isTrue);
-      expect(children.map((scope) => scope.zoneId).toSet(), containsAll({'NW', 'NC', 'SW'}));
+      expect(children.length, 6);
+      expect(
+        children.every(
+          (scope) => scope.level == GeographyLevel.geopoliticalZone,
+        ),
+        isTrue,
+      );
+      expect(
+        children.map((scope) => scope.zoneId).toSet(),
+        containsAll({'NC', 'NE', 'NW', 'SE', 'SS', 'SW'}),
+      );
     });
 
-    test('drill-down preserves canonical hierarchy', () {
+    test('nationwide LGA catalogue contains 774 local governments', () {
+      expect(registry.nationalLgaCount, 774);
+    });
+
+    test('state drill-down exposes real LGAs and preserves sample PU hierarchy', () {
       final northWest = registry
           .childScopes(GeographicScope.nigeria)
           .firstWhere((scope) => scope.zoneId == 'NW');
       final kaduna = registry
           .childScopes(northWest)
           .firstWhere((scope) => scope.stateId == 'KD');
-      final district = registry.childScopes(kaduna).single;
-      final lga = registry.childScopes(district).single;
-      final ward = registry.childScopes(lga).single;
+      final kadunaLgas = registry.childScopes(kaduna);
+      final kadunaNorth = kadunaLgas
+          .firstWhere((scope) => scope.lgaId == 'KD-KADUNA-NORTH');
+      final wards = registry.childScopes(kadunaNorth);
+      final ward = wards.single;
       final pollingUnits = registry.childScopes(ward);
 
       expect(kaduna.level, GeographyLevel.state);
-      expect(district.level, GeographyLevel.senatorialDistrict);
-      expect(lga.level, GeographyLevel.lga);
+      expect(kadunaLgas.length, 23);
+      expect(
+        kadunaLgas.every((scope) => scope.level == GeographyLevel.lga),
+        isTrue,
+      );
+      expect(kadunaNorth.lgaName, 'Kaduna North');
       expect(ward.level, GeographyLevel.ward);
       expect(pollingUnits.length, 2);
-      expect(pollingUnits.every((scope) => scope.level == GeographyLevel.pollingUnit), isTrue);
+      expect(
+        pollingUnits.every((scope) => scope.level == GeographyLevel.pollingUnit),
+        isTrue,
+      );
     });
 
     test('scope containment rejects another state', () {
