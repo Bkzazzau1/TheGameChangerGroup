@@ -10,6 +10,7 @@ enum TgcgModule {
   accreditation,
   geography,
   fieldMonitoring,
+  evidenceCapture,
   situationRoom,
   resultCapture,
   collation,
@@ -17,6 +18,7 @@ enum TgcgModule {
   communications,
   discussionRoom,
   meetingRoom,
+  systemMonitoring,
   reports,
   governance,
 }
@@ -162,6 +164,9 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
       TgcgPermissionPolicy.allows(role, TgcgCapability.submitFieldReport)) {
     modules.add(TgcgModule.fieldMonitoring);
   }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewEvidence)) {
+    modules.add(TgcgModule.evidenceCapture);
+  }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom)) {
     modules.add(TgcgModule.situationRoom);
   }
@@ -184,6 +189,11 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewMeetingRoom)) {
     modules.add(TgcgModule.meetingRoom);
+  }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewAudit) ||
+      TgcgPermissionPolicy.allows(role, TgcgCapability.manageSystemSettings) ||
+      TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom)) {
+    modules.add(TgcgModule.systemMonitoring);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.exportReports)) {
     modules.add(TgcgModule.reports);
