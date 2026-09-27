@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../domain/models.dart';
 import '../geography/geography_registry.dart';
@@ -249,7 +249,7 @@ class MembershipOperations extends InheritedNotifier<MembershipOperationsControl
   }) : super(notifier: controller);
 
   static MembershipOperationsController of(
-    dynamic context, {
+    BuildContext context, {
     bool listen = true,
   }) {
     if (listen) {
