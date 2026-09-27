@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'domain/models.dart';
 import 'field/field_operations_store.dart';
+import 'results/result_operations_store.dart';
 import 'session.dart';
 
 class TgcgDashboardPage extends StatelessWidget {
@@ -13,11 +14,14 @@ class TgcgDashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final store = FieldOperations.of(context);
+    final fieldStore = FieldOperations.of(context);
+    final resultStore = ResultOperations.of(context);
     final role = session.role!;
     final modules = allowedModules(role);
-    final scopedIncidents = store.incidentsForScope(session.scope);
-    final scopedReports = store.reportsForScope(session.scope);
+    final scopedIncidents = fieldStore.incidentsForScope(session.scope);
+    final scopedReports = fieldStore.reportsForScope(session.scope);
+    final scopedResults = resultStore.submissionsForScope(session.scope);
+    final reviewResults = resultStore.reviewQueueForScope(session.scope);
     final openIncidents = scopedIncidents
         .where((item) => item.status != IncidentStatus.resolved && item.status != IncidentStatus.closed)
         .toList(growable: false);
@@ -25,7 +29,6 @@ class TgcgDashboardPage extends StatelessWidget {
         .where((item) =>
             item.severity == IncidentSeverity.high || item.severity == IncidentSeverity.critical)
         .length;
-    final evidenceCount = scopedIncidents.fold<int>(0, (total, item) => total + item.evidence.length);
 
     return ListView(
       padding: const EdgeInsets.all(28),
@@ -84,17 +87,17 @@ class TgcgDashboardPage extends StatelessWidget {
               ),
               _MetricCard(
                 width: width,
-                label: 'Field reports',
-                value: '${scopedReports.length}',
-                detail: 'Structured reports in current scope',
-                icon: Icons.feed_outlined,
+                label: 'Result submissions',
+                value: '${scopedResults.length}',
+                detail: 'Unofficial field records in current scope',
+                icon: Icons.ballot_outlined,
               ),
               _MetricCard(
                 width: width,
-                label: 'Evidence retained',
-                value: '$evidenceCount',
-                detail: 'Linked prototype evidence records',
-                icon: Icons.attach_file_rounded,
+                label: 'Result review',
+                value: '${reviewResults.length}',
+                detail: 'Records requiring human verification',
+                icon: Icons.fact_check_outlined,
                 accent: const Color(0xFF6550B5),
               ),
             ],
@@ -104,6 +107,7 @@ class TgcgDashboardPage extends StatelessWidget {
         LayoutBuilder(builder: (context, constraints) {
           final queue = _OperationalQueue(
             incidents: openIncidents,
+            resultReviewCount: reviewResults.length,
             onOpenModule: onOpenModule,
             modules: modules,
           );
@@ -122,6 +126,17 @@ class TgcgDashboardPage extends StatelessWidget {
         }),
         const SizedBox(height: 16),
         _QuickActions(onOpenModule: onOpenModule, modules: modules),
+        if (scopedReports.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _Panel(
+            title: 'Field reporting activity',
+            subtitle: 'Structured reports received in your current scope',
+            child: Text(
+              '${scopedReports.length} field report${scopedReports.length == 1 ? '' : 's'} currently available in the shared operational store.',
+              style: const TextStyle(color: TgcgApp.muted, height: 1.5),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -130,11 +145,13 @@ class TgcgDashboardPage extends StatelessWidget {
 class _OperationalQueue extends StatelessWidget {
   const _OperationalQueue({
     required this.incidents,
+    required this.resultReviewCount,
     required this.onOpenModule,
     required this.modules,
   });
 
   final List<FieldIncident> incidents;
+  final int resultReviewCount;
   final ValueChanged<TgcgModule> onOpenModule;
   final Set<TgcgModule> modules;
 
@@ -144,16 +161,16 @@ class _OperationalQueue extends StatelessWidget {
       ..sort((a, b) => _severityRank(b.severity).compareTo(_severityRank(a.severity)));
     return _Panel(
       title: 'Operational queue',
-      subtitle: 'Current unresolved field items in your authorized scope',
+      subtitle: 'Current field and result-review items in your authorized scope',
       child: Column(
         children: [
           if (sorted.isEmpty)
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+              padding: EdgeInsets.symmetric(vertical: 12),
               child: Text('No unresolved field incidents in this scope.'),
             )
           else
-            ...sorted.take(4).map((incident) => _QueueItem(
+            ...sorted.take(3).map((incident) => _QueueItem(
                   icon: Icons.crisis_alert_outlined,
                   title: incident.title,
                   subtitle:
@@ -167,8 +184,12 @@ class _OperationalQueue extends StatelessWidget {
           if (modules.contains(TgcgModule.resultCapture))
             _QueueItem(
               icon: Icons.document_scanner_outlined,
-              title: 'Result verification workflow ready',
-              subtitle: 'Integrity engine available; operational UI migration is next.',
+              title: resultReviewCount == 0
+                  ? 'No flagged result submissions'
+                  : '$resultReviewCount result submission${resultReviewCount == 1 ? '' : 's'} require human review',
+              subtitle: resultReviewCount == 0
+                  ? 'Automated integrity flags are clear in the current scope.'
+                  : 'Review arithmetic, duplicate and OCR/manual-entry flags.',
               action: () => onOpenModule(TgcgModule.resultCapture),
             ),
         ],
@@ -217,7 +238,7 @@ class _QuickActions extends StatelessWidget {
     final actions = <({TgcgModule module, String label, IconData icon})>[
       (module: TgcgModule.fieldMonitoring, label: 'Open field monitoring', icon: Icons.radar_outlined),
       (module: TgcgModule.situationRoom, label: 'Situation room', icon: Icons.dashboard_customize_outlined),
-      (module: TgcgModule.resultCapture, label: 'Submit result', icon: Icons.ballot_outlined),
+      (module: TgcgModule.resultCapture, label: 'Result workspace', icon: Icons.ballot_outlined),
       (module: TgcgModule.collation, label: 'Open collation', icon: Icons.account_tree_outlined),
       (module: TgcgModule.accreditation, label: 'Manage agents', icon: Icons.badge_outlined),
       (module: TgcgModule.governance, label: 'Audit & sync', icon: Icons.shield_outlined),
@@ -430,6 +451,9 @@ int _severityRank(IncidentSeverity severity) => switch (severity) {
     };
 
 String _label(String value) {
-  final spaced = value.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) => '${match.group(1)} ${match.group(2)}');
+  final spaced = value.replaceAllMapped(
+    RegExp(r'([a-z])([A-Z])'),
+    (match) => '${match.group(1)} ${match.group(2)}',
+  );
   return spaced.isEmpty ? spaced : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
 }
