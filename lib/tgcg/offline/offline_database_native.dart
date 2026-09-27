@@ -314,6 +314,21 @@ class _SqliteOfflineDatabase implements OfflineDatabaseBackend {
   }
 
   @override
+  Future<void> clearAll() async {
+    final database = _db;
+    database.execute('BEGIN IMMEDIATE;');
+    try {
+      database.execute('DELETE FROM sync_receipts;');
+      database.execute('DELETE FROM sync_outbox;');
+      database.execute('DELETE FROM offline_entities;');
+      database.execute('COMMIT;');
+    } catch (_) {
+      database.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> close() async {
     _database?.close();
     _database = null;
