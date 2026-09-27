@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../domain/permissions.dart';
+import '../geography/geography_registry.dart';
 import '../membership/membership_store.dart';
+import '../offline/offline_persistence.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'result_operations_store.dart';
@@ -21,7 +23,9 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     final store = ResultOperations.of(context);
-    var submissions = store.submissionsForScope(session.scope);
+    final offline = OfflinePersistence.of(context);
+    final allScoped = store.submissionsForScope(session.scope);
+    var submissions = List<ElectionResultSubmission>.from(allScoped);
 
     if (statusFilter != null) {
       submissions = submissions
@@ -35,7 +39,6 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
     }
 
     final review = store.reviewQueueForScope(session.scope);
-    final allScoped = store.submissionsForScope(session.scope);
     final canSubmit = TgcgPermissionPolicy.allows(
       session.role!,
       TgcgCapability.submitElectionResult,
@@ -48,11 +51,18 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
           eyebrow: 'RESULT INTEGRITY',
           title: 'Result Capture & Verification',
           subtitle:
-              '${session.scope.label}: evidence-led capture, OCR comparison, automated checks and human verification for unofficial field results.',
-          trailing: const TgcgStatusPill(
-            label: 'UNOFFICIAL FIELD DATA',
-            color: TgcgColors.warning,
-            icon: Icons.info_outline_rounded,
+              '${session.scope.label}: evidence-led capture, validation and human review for unofficial field results.',
+          trailing: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              const TgcgStatusPill(
+                label: 'UNOFFICIAL FIELD DATA',
+                color: TgcgColors.warning,
+                icon: Icons.info_outline_rounded,
+              ),
+              _PersistencePill(offline: offline),
+            ],
           ),
         ),
         const SizedBox(height: 18),
@@ -63,7 +73,9 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
               .where((item) => item.status == RecordStatus.verified)
               .length,
           evidence: allScoped.where((item) => item.resultForm != null).length,
-          app: allScoped.where((item) => item.source == SubmissionSource.app).length,
+          queued: offline.pendingOutbox
+              .where((item) => item.entityType == 'election_result')
+              .length,
         ),
         if (canSubmit) ...[
           const SizedBox(height: 16),
@@ -109,20 +121,53 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
   }
 }
 
+class _PersistencePill extends StatelessWidget {
+  const _PersistencePill({required this.offline});
+
+  final OfflinePersistenceController offline;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color, icon) = switch (offline.state) {
+      OfflinePersistenceState.ready when offline.isDurable => (
+          'ENCRYPTED LOCAL STORE',
+          TgcgColors.success,
+          Icons.storage_rounded,
+        ),
+      OfflinePersistenceState.ready => (
+          'VOLATILE WEB STORE',
+          TgcgColors.warning,
+          Icons.memory_rounded,
+        ),
+      OfflinePersistenceState.failed => (
+          'LOCAL STORE ERROR',
+          TgcgColors.danger,
+          Icons.error_outline_rounded,
+        ),
+      _ => (
+          'LOCAL STORE STARTING',
+          TgcgColors.info,
+          Icons.sync_rounded,
+        ),
+    };
+    return TgcgStatusPill(label: label, color: color, icon: icon);
+  }
+}
+
 class _Metrics extends StatelessWidget {
   const _Metrics({
     required this.submissions,
     required this.review,
     required this.verified,
     required this.evidence,
-    required this.app,
+    required this.queued,
   });
 
   final int submissions;
   final int review;
   final int verified;
   final int evidence;
-  final int app;
+  final int queued;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -144,7 +189,7 @@ class _Metrics extends StatelessWidget {
                 width: width,
                 label: 'Submissions',
                 value: '$submissions',
-                detail: 'All field records in current scope',
+                detail: 'All field records in scope',
                 icon: Icons.ballot_outlined,
                 tone: TgcgMetricTone.info,
               ),
@@ -152,15 +197,15 @@ class _Metrics extends StatelessWidget {
                 width: width,
                 label: 'Human review',
                 value: '$review',
-                detail: 'OCR, duplicate or validation flags',
-                icon: Icons.psychology_alt_outlined,
+                detail: 'Validation or reconciliation attention',
+                icon: Icons.fact_check_outlined,
                 tone: TgcgMetricTone.ai,
               ),
               TgcgMetricCard(
                 width: width,
                 label: 'Verified',
                 value: '$verified',
-                detail: 'Reviewer-confirmed field records',
+                detail: 'Reviewer-confirmed records',
                 icon: Icons.verified_outlined,
                 tone: TgcgMetricTone.success,
               ),
@@ -168,17 +213,19 @@ class _Metrics extends StatelessWidget {
                 width: width,
                 label: 'Form evidence',
                 value: '$evidence',
-                detail: 'Submissions with result-form evidence',
+                detail: 'Records with result-form metadata',
                 icon: Icons.document_scanner_outlined,
                 tone: TgcgMetricTone.neutral,
               ),
               TgcgMetricCard(
                 width: width,
-                label: 'App sourced',
-                value: '$app',
-                detail: 'APP source tag retained for audit',
-                icon: Icons.phone_android_rounded,
-                tone: TgcgMetricTone.neutral,
+                label: 'Queued locally',
+                value: '$queued',
+                detail: 'Awaiting server acknowledgement',
+                icon: Icons.cloud_upload_outlined,
+                tone: queued == 0
+                    ? TgcgMetricTone.success
+                    : TgcgMetricTone.warning,
               ),
             ],
           );
@@ -206,44 +253,40 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
   SubmissionSource source = SubmissionSource.app;
   _OcrDemo ocrDemo = _OcrDemo.match;
   bool attachForm = true;
+  bool saving = false;
   String? selectedPollingUnitId;
+
+  List<TextEditingController> get _controllers => [
+        p1,
+        p2,
+        p3,
+        p4,
+        total,
+        accredited,
+        rejected,
+        registered,
+      ];
 
   @override
   void initState() {
     super.initState();
-    for (final controller in [
-      p1,
-      p2,
-      p3,
-      p4,
-      total,
-      accredited,
-      rejected,
-      registered,
-    ]) {
+    for (final controller in _controllers) {
       controller.addListener(_refresh);
     }
   }
 
   @override
   void dispose() {
-    for (final controller in [
-      p1,
-      p2,
-      p3,
-      p4,
-      total,
-      accredited,
-      rejected,
-      registered,
-    ]) {
+    for (final controller in _controllers) {
       controller.removeListener(_refresh);
       controller.dispose();
     }
     super.dispose();
   }
 
-  void _refresh() => setState(() {});
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   int _int(TextEditingController controller) =>
       int.tryParse(controller.text.trim()) ?? 0;
@@ -280,6 +323,9 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
     if (units.isNotEmpty &&
         !units.any((unit) => unit.code == selectedPollingUnitId)) {
       selectedPollingUnitId = units.first.code;
+      if (units.first.registeredVoters != null) {
+        registered.text = '${units.first.registeredVoters}';
+      }
     }
 
     final selectedUnit = selectedPollingUnitId == null
@@ -309,15 +355,26 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
     return TgcgSectionCard(
       title: 'New result workflow',
       subtitle:
-          'Manual figures remain authoritative field input. OCR assists comparison and never silently overwrites submitted values.',
+          'Original evidence, manual figures and OCR-derived values remain separate. Saving waits for the encrypted local journal before reporting success.',
       trailing: TgcgStatusPill(
-        label: requiresReview ? 'REVIEW EXPECTED' : 'CHECKS READY',
-        color: requiresReview ? TgcgColors.ai : TgcgColors.success,
-        icon: requiresReview
-            ? Icons.fact_check_outlined
-            : Icons.check_circle_outline_rounded,
+        label: saving
+            ? 'SAVING LOCALLY'
+            : requiresReview
+                ? 'REVIEW EXPECTED'
+                : 'CHECKS READY',
+        color: saving
+            ? TgcgColors.info
+            : requiresReview
+                ? TgcgColors.ai
+                : TgcgColors.success,
+        icon: saving
+            ? Icons.sync_rounded
+            : requiresReview
+                ? Icons.fact_check_outlined
+                : Icons.check_circle_outline_rounded,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _WorkflowRail(
             hasEvidence: attachForm,
@@ -325,21 +382,26 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
             checksPassed: arithmeticValid && turnoutValid && !duplicate,
             reviewExpected: requiresReview,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
               final evidence = _EvidencePanel(
                 attachForm: attachForm,
                 source: source,
                 selectedUnit: selectedUnit,
-                onAttachChanged: (value) => setState(() => attachForm = value),
-                onSourceChanged: (value) => setState(() => source = value),
+                onAttachChanged: saving
+                    ? null
+                    : (value) => setState(() => attachForm = value),
+                onSourceChanged: saving
+                    ? null
+                    : (value) => setState(() => source = value),
               );
-              final extraction = _ExtractionPanel(
+              final entry = _EntryPanel(
                 units: units,
                 selectedPollingUnitId: selectedPollingUnitId,
-                onUnitChanged: (value) =>
-                    setState(() => selectedPollingUnitId = value),
+                onUnitChanged: saving
+                    ? null
+                    : (value) => _selectUnit(value, membership.geography),
                 p1: p1,
                 p2: p2,
                 p3: p3,
@@ -351,14 +413,16 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
                 ocrDemo: ocrDemo,
                 ocrVotes: ocrVotes,
                 ocrConfidence: _ocrConfidence,
-                onOcrChanged: (value) => setState(() => ocrDemo = value),
+                onOcrChanged: saving
+                    ? null
+                    : (value) => setState(() => ocrDemo = value),
               );
               if (constraints.maxWidth < 980) {
                 return Column(
                   children: [
                     evidence,
                     const SizedBox(height: 14),
-                    extraction,
+                    entry,
                   ],
                 );
               }
@@ -367,7 +431,7 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
                 children: [
                   Expanded(flex: 5, child: evidence),
                   const SizedBox(width: 14),
-                  Expanded(flex: 7, child: extraction),
+                  Expanded(flex: 7, child: entry),
                 ],
               );
             },
@@ -382,7 +446,8 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
             ocrMatches: ocrMatches,
             hasCanonicalUnit: selectedUnit != null,
             requiresReview: requiresReview,
-            onSubmit: selectedUnit == null
+            saving: saving,
+            onSubmit: selectedUnit == null || saving
                 ? null
                 : () => _submit(
                       context,
@@ -395,53 +460,74 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
     );
   }
 
-  void _submit(
+  void _selectUnit(String? value, GeographyRegistry geography) {
+    setState(() {
+      selectedPollingUnitId = value;
+      if (value != null) {
+        final unit = geography.pollingUnit(value);
+        final voters = unit?.registeredVoters;
+        if (voters != null) registered.text = '$voters';
+      }
+    });
+  }
+
+  Future<void> _submit(
     BuildContext context, {
     required TgcgSessionController session,
     required GeographicScope scope,
-  }) {
-    final evidence = attachForm
-        ? EvidenceAttachment(
-            id: 'FORM-LOCAL-${DateTime.now().millisecondsSinceEpoch}',
-            type: EvidenceType.resultForm,
-            fileName: 'result-form.jpg',
-            createdAt: DateTime.now().toUtc(),
-            uploaderId: session.accessId.isEmpty
-                ? session.operatorName
-                : session.accessId,
-            contentHash: 'sha256:pending-device-hash',
-            mimeType: 'image/jpeg',
-            caption:
-                'Prototype result-form evidence. Production upload will preserve the original file and device-generated content hash.',
-            origin: RecordOrigin.localEntry,
-          )
-        : null;
+  }) async {
+    setState(() => saving = true);
+    try {
+      final evidence = attachForm
+          ? EvidenceAttachment(
+              id: 'FORM-LOCAL-${DateTime.now().microsecondsSinceEpoch}',
+              type: EvidenceType.resultForm,
+              fileName: 'result-form.jpg',
+              createdAt: DateTime.now().toUtc(),
+              uploaderId: session.accessId.isEmpty
+                  ? session.operatorName
+                  : session.accessId,
+              contentHash: 'sha256:pending-device-hash',
+              mimeType: 'image/jpeg',
+              caption:
+                  'Metadata placeholder until native image capture and device hashing are connected.',
+              origin: RecordOrigin.localEntry,
+            )
+          : null;
 
-    final saved = ResultOperations.of(context, listen: false).submit(
-      pollingUnitScope: scope,
-      submittedBy:
-          session.accessId.isEmpty ? session.operatorName : session.accessId,
-      source: source,
-      partyVotes: _votes,
-      totalVotesRecorded: _int(total),
-      accreditedVoters: _int(accredited),
-      rejectedVotes: _int(rejected),
-      registeredVoters: _int(registered),
-      resultForm: evidence,
-      ocrPartyVotes: _ocrVotes,
-      ocrConfidence: _ocrConfidence,
-    );
-
-    final needsReview = saved.validation?.requiresHumanReview == true;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          needsReview
-              ? '${saved.id} saved and routed to human review.'
-              : '${saved.id} saved with automated integrity checks passed.',
+      final saved = await ResultOperations.of(context, listen: false).submit(
+        pollingUnitScope: scope,
+        submittedBy:
+            session.accessId.isEmpty ? session.operatorName : session.accessId,
+        source: source,
+        partyVotes: _votes,
+        totalVotesRecorded: _int(total),
+        accreditedVoters: _int(accredited),
+        rejectedVotes: _int(rejected),
+        registeredVoters: _int(registered),
+        resultForm: evidence,
+        ocrPartyVotes: _ocrVotes,
+        ocrConfidence: _ocrConfidence,
+      );
+      if (!context.mounted) return;
+      final needsReview = saved.validation?.requiresHumanReview == true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            needsReview
+                ? '${saved.id} encrypted locally, queued for sync and routed to human review.'
+                : '${saved.id} encrypted locally and queued for server acknowledgement.',
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Result was not saved: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
 }
 
@@ -463,38 +549,12 @@ class _WorkflowRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = <({String label, IconData icon, bool done, Color color})>[
-      (
-        label: 'Evidence',
-        icon: Icons.image_outlined,
-        done: hasEvidence,
-        color: TgcgColors.primary,
-      ),
-      (
-        label: 'OCR Extraction',
-        icon: Icons.document_scanner_outlined,
-        done: ocrAvailable,
-        color: TgcgColors.ai,
-      ),
-      (
-        label: 'Validation',
-        icon: Icons.rule_folder_outlined,
-        done: checksPassed,
-        color: TgcgColors.info,
-      ),
-      (
-        label: 'Human Review',
-        icon: Icons.fact_check_outlined,
-        done: !reviewExpected,
-        color: TgcgColors.warning,
-      ),
-      (
-        label: 'Submit',
-        icon: Icons.send_outlined,
-        done: false,
-        color: TgcgColors.success,
-      ),
+      (label: 'Evidence', icon: Icons.image_outlined, done: hasEvidence, color: TgcgColors.primary),
+      (label: 'OCR Extraction', icon: Icons.document_scanner_outlined, done: ocrAvailable, color: TgcgColors.ai),
+      (label: 'Validation', icon: Icons.rule_folder_outlined, done: checksPassed, color: TgcgColors.info),
+      (label: 'Human Review', icon: Icons.fact_check_outlined, done: !reviewExpected, color: TgcgColors.warning),
+      (label: 'Local Journal', icon: Icons.storage_rounded, done: false, color: TgcgColors.success),
     ];
-
     return LayoutBuilder(
       builder: (context, constraints) => Wrap(
         spacing: 8,
@@ -521,16 +581,8 @@ class _WorkflowRail extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: step.color.withValues(alpha: .10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(step.icon, size: 17, color: step.color),
-                ),
-                const SizedBox(width: 9),
+                Icon(step.icon, size: 17, color: step.color),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     step.label,
@@ -539,7 +591,6 @@ class _WorkflowRail extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w900,
-                      color: TgcgColors.ink,
                     ),
                   ),
                 ),
@@ -570,9 +621,9 @@ class _EvidencePanel extends StatelessWidget {
 
   final bool attachForm;
   final SubmissionSource source;
-  final dynamic selectedUnit;
-  final ValueChanged<bool> onAttachChanged;
-  final ValueChanged<SubmissionSource> onSourceChanged;
+  final CanonicalPollingUnit? selectedUnit;
+  final ValueChanged<bool>? onAttachChanged;
+  final ValueChanged<SubmissionSource>? onSourceChanged;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -587,15 +638,11 @@ class _EvidencePanel extends StatelessWidget {
           children: [
             const Text(
               '1. Original evidence',
-              style: TextStyle(
-                color: TgcgColors.ink,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
             const Text(
-              'The original result form remains separate from OCR and manual figures.',
+              'The original form remains distinct from OCR and manually entered figures.',
               style: TextStyle(
                 color: TgcgColors.muted,
                 fontSize: 10.5,
@@ -604,7 +651,7 @@ class _EvidencePanel extends StatelessWidget {
             ),
             const SizedBox(height: 13),
             Container(
-              height: 260,
+              height: 210,
               width: double.infinity,
               decoration: BoxDecoration(
                 color: const Color(0xFFEEF2F0),
@@ -612,98 +659,43 @@ class _EvidencePanel extends StatelessWidget {
                 border: Border.all(color: TgcgColors.border),
               ),
               child: attachForm
-                  ? Stack(
-                      children: [
-                        const Center(child: _ResultFormPreview()),
-                        const Positioned(
-                          top: 12,
-                          left: 12,
-                          child: TgcgStatusPill(
-                            label: 'ORIGINAL',
-                            color: TgcgColors.primary,
-                            icon: Icons.image_outlined,
-                            compact: true,
-                          ),
-                        ),
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .94),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(
-                                  Icons.fingerprint_rounded,
-                                  size: 15,
-                                  color: TgcgColors.primary,
-                                ),
-                                SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'SHA-256 generated on device before sync',
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
+                  ? const Center(child: _FormPlaceholder())
                   : const TgcgEmptyState(
                       icon: Icons.image_not_supported_outlined,
                       title: 'No image evidence selected',
                       message:
-                          'SMS/USSD can submit alphanumeric results without media; app evidence can be attached where available.',
+                          'Alphanumeric fallback submissions can be recorded without media.',
                     ),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                FilterChip(
-                  selected: attachForm,
-                  avatar: const Icon(Icons.attach_file_rounded, size: 17),
-                  label: const Text('Result-form evidence'),
-                  onSelected: onAttachChanged,
-                ),
-                SizedBox(
-                  width: 180,
-                  child: DropdownButtonFormField<SubmissionSource>(
-                    initialValue: source,
-                    decoration: const InputDecoration(labelText: 'Source'),
-                    items: SubmissionSource.values
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value.name.toUpperCase()),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) onSourceChanged(value);
+            FilterChip(
+              selected: attachForm,
+              avatar: const Icon(Icons.attach_file_rounded, size: 17),
+              label: const Text('Result-form evidence'),
+              onSelected: onAttachChanged,
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<SubmissionSource>(
+              initialValue: source,
+              decoration: const InputDecoration(labelText: 'Submission source'),
+              items: SubmissionSource.values
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value.name.toUpperCase()),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onSourceChanged == null
+                  ? null
+                  : (value) {
+                      if (value != null) onSourceChanged!(value);
                     },
-                  ),
-                ),
-              ],
             ),
             if (selectedUnit != null) ...[
               const SizedBox(height: 10),
               Text(
-                selectedUnit.scope.label,
+                selectedUnit!.scope.label,
                 style: const TextStyle(
                   color: TgcgColors.muted,
                   fontSize: 10.5,
@@ -716,99 +708,31 @@ class _EvidencePanel extends StatelessWidget {
       );
 }
 
-class _ResultFormPreview extends StatelessWidget {
-  const _ResultFormPreview();
+class _FormPlaceholder extends StatelessWidget {
+  const _FormPlaceholder();
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 190,
-        height: 220,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(7),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x16000000),
-              blurRadius: 20,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Center(
-              child: Text(
-                'RESULT FORM',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .7,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(height: 5, color: const Color(0xFFE9EEEC)),
-            const SizedBox(height: 8),
-            ...List.generate(
-              5,
-              (index) => Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 26,
-                      height: 9,
-                      color: const Color(0xFFE2E8E5),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        height: 9,
-                        color: const Color(0xFFF0F3F2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 32,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFCAD5D0)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 28,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFD7DFDC)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 48,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFD7DFDC)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.document_scanner_outlined, size: 42, color: TgcgColors.primary),
+          SizedBox(height: 10),
+          Text(
+            'RESULT FORM METADATA',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Native camera/file capture is the next device integration.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: TgcgColors.muted, fontSize: 10),
+          ),
+        ],
       );
 }
 
-class _ExtractionPanel extends StatelessWidget {
-  const _ExtractionPanel({
+class _EntryPanel extends StatelessWidget {
+  const _EntryPanel({
     required this.units,
     required this.selectedPollingUnitId,
     required this.onUnitChanged,
@@ -826,9 +750,9 @@ class _ExtractionPanel extends StatelessWidget {
     required this.onOcrChanged,
   });
 
-  final List<dynamic> units;
+  final List<CanonicalPollingUnit> units;
   final String? selectedPollingUnitId;
-  final ValueChanged<String?> onUnitChanged;
+  final ValueChanged<String?>? onUnitChanged;
   final TextEditingController p1;
   final TextEditingController p2;
   final TextEditingController p3;
@@ -840,7 +764,7 @@ class _ExtractionPanel extends StatelessWidget {
   final _OcrDemo ocrDemo;
   final Map<String, int>? ocrVotes;
   final double? ocrConfidence;
-  final ValueChanged<_OcrDemo> onOcrChanged;
+  final ValueChanged<_OcrDemo>? onOcrChanged;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -854,16 +778,12 @@ class _ExtractionPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '2. Extraction & manual entry',
-              style: TextStyle(
-                color: TgcgColors.ink,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
+              '2. Manual entry & OCR comparison',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
             const Text(
-              'Compare AI extraction with the operator-entered figures. Differences are flagged for review.',
+              'OCR is advisory. Manual figures are never silently replaced.',
               style: TextStyle(
                 color: TgcgColors.muted,
                 fontSize: 10.5,
@@ -871,100 +791,53 @@ class _ExtractionPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 13),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final unitField = DropdownButtonFormField<String>(
-                  initialValue: selectedPollingUnitId,
-                  decoration: const InputDecoration(labelText: 'Canonical polling unit'),
-                  isExpanded: true,
-                  items: units
-                      .map<DropdownMenuItem<String>>(
-                        (unit) => DropdownMenuItem(
-                          value: unit.code as String,
-                          child: Text(
-                            '${unit.code} • ${unit.scope.label}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: units.isEmpty ? null : onUnitChanged,
-                );
-                final ocrField = DropdownButtonFormField<_OcrDemo>(
-                  initialValue: ocrDemo,
-                  decoration: const InputDecoration(labelText: 'OCR prototype state'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: _OcrDemo.notAvailable,
-                      child: Text('Not available'),
+            DropdownButtonFormField<String>(
+              initialValue: selectedPollingUnitId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Canonical polling unit'),
+              items: units
+                  .map(
+                    (unit) => DropdownMenuItem(
+                      value: unit.code,
+                      child: Text(
+                        '${unit.code} • ${unit.scope.label}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    DropdownMenuItem(
-                      value: _OcrDemo.match,
-                      child: Text('Extraction matches manual'),
-                    ),
-                    DropdownMenuItem(
-                      value: _OcrDemo.difference,
-                      child: Text('Difference detected'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) onOcrChanged(value);
-                  },
-                );
-                if (constraints.maxWidth < 650) {
-                  return Column(
-                    children: [
-                      unitField,
-                      const SizedBox(height: 10),
-                      ocrField,
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(flex: 3, child: unitField),
-                    const SizedBox(width: 10),
-                    Expanded(flex: 2, child: ocrField),
-                  ],
-                );
-              },
+                  )
+                  .toList(),
+              onChanged: units.isEmpty ? null : onUnitChanged,
             ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: TgcgColors.border),
-              ),
-              child: Column(
-                children: [
-                  const _ComparisonHeader(),
-                  const Divider(height: 18),
-                  _ComparisonRow(
-                    label: 'P1',
-                    controller: p1,
-                    ocrValue: ocrVotes?['P1'],
-                  ),
-                  _ComparisonRow(
-                    label: 'P2',
-                    controller: p2,
-                    ocrValue: ocrVotes?['P2'],
-                  ),
-                  _ComparisonRow(
-                    label: 'P3',
-                    controller: p3,
-                    ocrValue: ocrVotes?['P3'],
-                  ),
-                  _ComparisonRow(
-                    label: 'P4',
-                    controller: p4,
-                    ocrValue: ocrVotes?['P4'],
-                  ),
-                ],
-              ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<_OcrDemo>(
+              initialValue: ocrDemo,
+              decoration: const InputDecoration(labelText: 'OCR prototype state'),
+              items: const [
+                DropdownMenuItem(
+                  value: _OcrDemo.notAvailable,
+                  child: Text('Not available'),
+                ),
+                DropdownMenuItem(
+                  value: _OcrDemo.match,
+                  child: Text('Extraction matches manual'),
+                ),
+                DropdownMenuItem(
+                  value: _OcrDemo.difference,
+                  child: Text('Difference detected'),
+                ),
+              ],
+              onChanged: onOcrChanged == null
+                  ? null
+                  : (value) {
+                      if (value != null) onOcrChanged!(value);
+                    },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 13),
+            _VoteRow(label: 'P1', controller: p1, ocrValue: ocrVotes?['P1']),
+            _VoteRow(label: 'P2', controller: p2, ocrValue: ocrVotes?['P2']),
+            _VoteRow(label: 'P3', controller: p3, ocrValue: ocrVotes?['P3']),
+            _VoteRow(label: 'P4', controller: p4, ocrValue: ocrVotes?['P4']),
+            const SizedBox(height: 6),
             LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth < 620
@@ -974,57 +847,23 @@ class _ExtractionPanel extends StatelessWidget {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
-                    _NumberField(
-                      width: width,
-                      controller: total,
-                      label: 'Valid votes total',
-                    ),
-                    _NumberField(
-                      width: width,
-                      controller: rejected,
-                      label: 'Rejected votes',
-                    ),
-                    _NumberField(
-                      width: width,
-                      controller: accredited,
-                      label: 'Accredited voters',
-                    ),
-                    _NumberField(
-                      width: width,
-                      controller: registered,
-                      label: 'Registered voters',
-                    ),
+                    _NumberField(width: width, controller: total, label: 'Valid votes total'),
+                    _NumberField(width: width, controller: rejected, label: 'Rejected votes'),
+                    _NumberField(width: width, controller: accredited, label: 'Accredited voters'),
+                    _NumberField(width: width, controller: registered, label: 'Registered voters'),
                   ],
                 );
               },
             ),
             if (ocrConfidence != null) ...[
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.psychology_alt_outlined,
-                    size: 18,
-                    color: TgcgColors.ai,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    'OCR confidence ${(ocrConfidence! * 100).toStringAsFixed(1)}%',
-                    style: const TextStyle(
-                      color: TgcgColors.ai,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const Spacer(),
-                  const Text(
-                    'AI assistance only',
-                    style: TextStyle(
-                      color: TgcgColors.muted,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
+              Text(
+                'OCR confidence ${(ocrConfidence! * 100).toStringAsFixed(1)}% • AI assistance only',
+                style: const TextStyle(
+                  color: TgcgColors.ai,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ],
@@ -1032,40 +871,8 @@ class _ExtractionPanel extends StatelessWidget {
       );
 }
 
-class _ComparisonHeader extends StatelessWidget {
-  const _ComparisonHeader();
-
-  @override
-  Widget build(BuildContext context) => const Row(
-        children: [
-          SizedBox(
-            width: 54,
-            child: Text(
-              'Party',
-              style: TextStyle(fontSize: 10, color: TgcgColors.muted),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              'Manual entry',
-              style: TextStyle(fontSize: 10, color: TgcgColors.muted),
-            ),
-          ),
-          SizedBox(
-            width: 90,
-            child: Text(
-              'OCR',
-              textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 10, color: TgcgColors.muted),
-            ),
-          ),
-          SizedBox(width: 30),
-        ],
-      );
-}
-
-class _ComparisonRow extends StatelessWidget {
-  const _ComparisonRow({
+class _VoteRow extends StatelessWidget {
+  const _VoteRow({
     required this.label,
     required this.controller,
     required this.ocrValue,
@@ -1084,52 +891,27 @@ class _ComparisonRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 54,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: TgcgColors.ink,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+            width: 40,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
           ),
           Expanded(
-            child: SizedBox(
-              height: 43,
-              child: TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-                ),
-              ),
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Manual'),
             ),
           ),
+          const SizedBox(width: 10),
           SizedBox(
-            width: 90,
+            width: 86,
             child: Text(
-              ocrValue?.toString() ?? '—',
+              'OCR ${ocrValue?.toString() ?? '—'}',
               textAlign: TextAlign.right,
               style: TextStyle(
                 color: mismatch ? TgcgColors.danger : TgcgColors.ai,
+                fontSize: 10,
                 fontWeight: FontWeight.w900,
               ),
-            ),
-          ),
-          SizedBox(
-            width: 30,
-            child: Icon(
-              ocrValue == null
-                  ? Icons.remove_circle_outline_rounded
-                  : mismatch
-                      ? Icons.warning_amber_rounded
-                      : Icons.check_circle_rounded,
-              size: 18,
-              color: ocrValue == null
-                  ? TgcgColors.muted
-                  : mismatch
-                      ? TgcgColors.warning
-                      : TgcgColors.success,
             ),
           ),
         ],
@@ -1170,6 +952,7 @@ class _ValidationPanel extends StatelessWidget {
     required this.ocrMatches,
     required this.hasCanonicalUnit,
     required this.requiresReview,
+    required this.saving,
     required this.onSubmit,
   });
 
@@ -1181,7 +964,8 @@ class _ValidationPanel extends StatelessWidget {
   final bool? ocrMatches;
   final bool hasCanonicalUnit;
   final bool requiresReview;
-  final VoidCallback? onSubmit;
+  final bool saving;
+  final Future<void> Function()? onSubmit;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1191,93 +975,62 @@ class _ValidationPanel extends StatelessWidget {
               ? TgcgColors.ai.withValues(alpha: .045)
               : TgcgColors.success.withValues(alpha: .04),
           borderRadius: BorderRadius.circular(17),
-          border: Border.all(
-            color: requiresReview
-                ? TgcgColors.ai.withValues(alpha: .18)
-                : TgcgColors.success.withValues(alpha: .17),
-          ),
+          border: Border.all(color: TgcgColors.border),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final checks = Wrap(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
+                _Check('Canonical PU', hasCanonicalUnit, hasCanonicalUnit ? 'Matched' : 'Required'),
+                _Check('Arithmetic', arithmeticValid, '$partySum / $enteredTotal'),
+                _Check('Turnout bounds', turnoutValid, turnoutValid ? 'Valid' : 'Review'),
+                _Check('Duplicate', !duplicate, duplicate ? 'Detected' : 'Clear'),
                 _Check(
-                  label: 'Canonical PU',
-                  ok: hasCanonicalUnit,
-                  detail: hasCanonicalUnit ? 'Matched' : 'Required',
-                ),
-                _Check(
-                  label: 'Arithmetic',
-                  ok: arithmeticValid,
-                  detail: '$partySum / $enteredTotal',
-                ),
-                _Check(
-                  label: 'Turnout bounds',
-                  ok: turnoutValid,
-                  detail: turnoutValid ? 'Valid' : 'Review',
-                ),
-                _Check(
-                  label: 'Duplicate',
-                  ok: !duplicate,
-                  detail: duplicate ? 'Detected' : 'Clear',
-                ),
-                _Check(
-                  label: 'OCR / manual',
-                  ok: ocrMatches != false,
-                  detail: ocrMatches == null
+                  'OCR / manual',
+                  ocrMatches != false,
+                  ocrMatches == null
                       ? 'Not available'
                       : ocrMatches!
                           ? 'Match'
                           : 'Difference',
                 ),
               ],
-            );
-            final action = Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                TgcgStatusPill(
-                  label: requiresReview
-                      ? 'ROUTE TO HUMAN REVIEW'
-                      : 'AUTOMATED CHECKS PASSED',
-                  color: requiresReview ? TgcgColors.ai : TgcgColors.success,
-                  icon: requiresReview
-                      ? Icons.person_search_outlined
-                      : Icons.verified_outlined,
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onSubmit == null
+                    ? null
+                    : () async {
+                        await onSubmit!();
+                      },
+                icon: saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(
+                  saving
+                      ? 'Encrypting & journaling…'
+                      : requiresReview
+                          ? 'Save & route to review'
+                          : 'Validate & save locally',
                 ),
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  onPressed: onSubmit,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Validate & save'),
-                ),
-              ],
-            );
-            if (constraints.maxWidth < 760) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  checks,
-                  const SizedBox(height: 14),
-                  Align(alignment: Alignment.centerRight, child: action),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(child: checks),
-                const SizedBox(width: 16),
-                action,
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       );
 }
 
 class _Check extends StatelessWidget {
-  const _Check({required this.label, required this.ok, required this.detail});
+  const _Check(this.label, this.ok, this.detail);
 
   final String label;
   final bool ok;
@@ -1293,24 +1046,13 @@ class _Check extends StatelessWidget {
         borderRadius: BorderRadius.circular(11),
         border: Border.all(color: TgcgColors.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-            size: 15,
-            color: color,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '$label • $detail',
-            style: TextStyle(
-              color: color,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
+      child: Text(
+        '$label • $detail',
+        style: TextStyle(
+          color: color,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -1339,27 +1081,13 @@ class _FilterBar extends StatelessWidget {
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                'Submission filters',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: TgcgColors.ink,
-                ),
-              ),
-            ),
             SizedBox(
               width: 190,
               child: DropdownButtonFormField<RecordStatus?>(
                 initialValue: status,
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All statuses'),
-                  ),
+                  const DropdownMenuItem(value: null, child: Text('All statuses')),
                   ...RecordStatus.values.map(
                     (value) => DropdownMenuItem(
                       value: value,
@@ -1376,10 +1104,7 @@ class _FilterBar extends StatelessWidget {
                 initialValue: source,
                 decoration: const InputDecoration(labelText: 'Source'),
                 items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All sources'),
-                  ),
+                  const DropdownMenuItem(value: null, child: Text('All sources')),
                   ...SubmissionSource.values.map(
                     (value) => DropdownMenuItem(
                       value: value,
@@ -1409,7 +1134,7 @@ class _SubmissionLedger extends StatelessWidget {
   Widget build(BuildContext context) => TgcgSectionCard(
         title: 'Submission ledger',
         subtitle:
-            'Source, evidence and validation state remain attached to each unofficial field record.',
+            'Every record retains source, evidence and validation state. Totals are shown as submitted, not ranked.',
         child: submissions.isEmpty
             ? const TgcgEmptyState(
                 icon: Icons.ballot_outlined,
@@ -1431,11 +1156,11 @@ class _SubmissionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final validation = submission.validation;
-    final review = validation?.requiresHumanReview == true &&
+    final review = submission.validation?.requiresHumanReview == true &&
         submission.status != RecordStatus.verified;
     final color = review ? TgcgColors.ai : _statusColor(submission.status);
-
+    final parties = submission.partyVotes.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -1448,59 +1173,34 @@ class _SubmissionTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .09),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  review
-                      ? Icons.fact_check_outlined
-                      : Icons.ballot_outlined,
-                  color: color,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
+              Icon(Icons.ballot_outlined, color: color),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      submission.id,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: TgcgColors.ink,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
+                    Text(submission.id, style: const TextStyle(fontWeight: FontWeight.w900)),
                     Text(
                       submission.pollingUnitScope.label,
-                      style: const TextStyle(
-                        color: TgcgColors.muted,
-                        fontSize: 10.5,
-                      ),
+                      style: const TextStyle(color: TgcgColors.muted, fontSize: 10),
                     ),
                   ],
                 ),
               ),
               TgcgStatusPill(
-                label: submission.source.name.toUpperCase(),
-                color: TgcgColors.muted,
+                label: _label(submission.status.name).toUpperCase(),
+                color: _statusColor(submission.status),
                 compact: true,
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 9),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: [
-              ...submission.partyVotes.entries.map(
+              ...parties.map(
                 (entry) => TgcgStatusPill(
                   label: '${entry.key}: ${entry.value}',
                   color: TgcgColors.primary,
@@ -1513,57 +1213,18 @@ class _SubmissionTile extends StatelessWidget {
                 compact: true,
               ),
               TgcgStatusPill(
-                label: _label(submission.status.name).toUpperCase(),
-                color: _statusColor(submission.status),
+                label: submission.source.name.toUpperCase(),
+                color: TgcgColors.muted,
                 compact: true,
               ),
               if (submission.resultForm != null)
                 const TgcgStatusPill(
                   label: 'FORM EVIDENCE',
                   color: TgcgColors.ai,
-                  icon: Icons.image_outlined,
                   compact: true,
                 ),
             ],
           ),
-          if (validation != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(
-                  review
-                      ? Icons.person_search_outlined
-                      : Icons.check_circle_outline_rounded,
-                  size: 17,
-                  color: review ? TgcgColors.ai : TgcgColors.success,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    review
-                        ? 'Human review required'
-                        : submission.status == RecordStatus.verified
-                            ? 'Reviewer verified'
-                            : 'Automated integrity checks passed',
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      color: TgcgColors.ink,
-                    ),
-                  ),
-                ),
-                if (validation.ocrConfidence != null)
-                  Text(
-                    'OCR ${(validation.ocrConfidence! * 100).toStringAsFixed(0)}%',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: TgcgColors.ai,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
     );
@@ -1590,7 +1251,7 @@ class _ReviewQueue extends StatelessWidget {
     return TgcgSectionCard(
       title: 'Human review queue',
       subtitle:
-          'Automated checks explain concerns; reviewers decide whether a record is verified or disputed.',
+          'Automated checks identify concerns; authorized reviewers make the verification decision.',
       trailing: TgcgStatusPill(
         label: '${submissions.length} PENDING',
         color: submissions.isEmpty ? TgcgColors.success : TgcgColors.ai,
@@ -1601,159 +1262,144 @@ class _ReviewQueue extends StatelessWidget {
           ? const TgcgEmptyState(
               icon: Icons.verified_outlined,
               title: 'Review queue is clear',
-              message:
-                  'No current submission in this scope requires reviewer action.',
+              message: 'No submission in this scope currently needs reviewer action.',
             )
           : Column(
-              children: submissions.map((item) {
-                final notes = item.validation?.notes ?? const <String>[];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: TgcgColors.ai.withValues(alpha: .045),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: TgcgColors.ai.withValues(alpha: .16),
+              children: submissions
+                  .map(
+                    (item) => _ReviewTile(
+                      item: item,
+                      canVerify: canVerify,
+                      canDispute: canDispute,
+                      session: session,
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.id,
-                              style: const TextStyle(
-                                color: TgcgColors.ink,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                          TgcgStatusPill(
-                            label: _label(item.status.name).toUpperCase(),
-                            color: _statusColor(item.status),
-                            compact: true,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.pollingUnitScope.label,
-                        style: const TextStyle(
-                          color: TgcgColors.muted,
-                          fontSize: 10.5,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (notes.isEmpty)
-                        const Text(
-                          'Record is awaiting reviewer action.',
-                          style: TextStyle(
-                            color: TgcgColors.muted,
-                            fontSize: 11,
-                          ),
-                        )
-                      else
-                        ...notes.map(
-                          (note) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 15,
-                                  color: TgcgColors.warning,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    note,
-                                    style: const TextStyle(
-                                      color: TgcgColors.muted,
-                                      fontSize: 10.5,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      if (item.disputeReason != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Dispute: ${item.disputeReason}',
-                          style: const TextStyle(
-                            color: TgcgColors.danger,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                      if (canVerify || canDispute) ...[
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            if (canVerify)
-                              FilledButton.icon(
-                                onPressed: () {
-                                  final ok = ResultOperations.of(
-                                    context,
-                                    listen: false,
-                                  ).verify(
-                                    submissionId: item.id,
-                                    verifierId: session.accessId.isEmpty
-                                        ? session.operatorName
-                                        : session.accessId,
-                                    role: session.role!,
-                                    userScope: session.scope,
-                                  );
-                                  if (!ok) _showDenied(context);
-                                },
-                                icon: const Icon(Icons.verified_outlined, size: 17),
-                                label: const Text('Verify'),
-                              ),
-                            if (canDispute)
-                              OutlinedButton.icon(
-                                onPressed: () =>
-                                    _openDispute(context, item, session),
-                                icon: const Icon(Icons.flag_outlined, size: 17),
-                                label: const Text('Dispute'),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }).toList(),
+                  )
+                  .toList(),
             ),
     );
   }
+}
 
-  Future<void> _openDispute(
-    BuildContext context,
-    ElectionResultSubmission item,
-    TgcgSessionController session,
-  ) async {
+class _ReviewTile extends StatefulWidget {
+  const _ReviewTile({
+    required this.item,
+    required this.canVerify,
+    required this.canDispute,
+    required this.session,
+  });
+
+  final ElectionResultSubmission item;
+  final bool canVerify;
+  final bool canDispute;
+  final TgcgSessionController session;
+
+  @override
+  State<_ReviewTile> createState() => _ReviewTileState();
+}
+
+class _ReviewTileState extends State<_ReviewTile> {
+  bool busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final notes = item.validation?.notes ?? const <String>[];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: TgcgColors.ai.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: TgcgColors.ai.withValues(alpha: .16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(item.id, style: const TextStyle(fontWeight: FontWeight.w900)),
+              ),
+              TgcgStatusPill(
+                label: _label(item.status.name).toUpperCase(),
+                color: _statusColor(item.status),
+                compact: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            item.pollingUnitScope.label,
+            style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+          ),
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            ...notes.map(
+              (note) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '• $note',
+                  style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+                ),
+              ),
+            ),
+          ],
+          if (widget.canVerify || widget.canDispute) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (widget.canVerify)
+                  FilledButton.icon(
+                    onPressed: busy ? null : _verify,
+                    icon: const Icon(Icons.verified_outlined, size: 17),
+                    label: const Text('Verify'),
+                  ),
+                if (widget.canDispute)
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : _dispute,
+                    icon: const Icon(Icons.flag_outlined, size: 17),
+                    label: const Text('Dispute'),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _verify() async {
+    setState(() => busy = true);
+    try {
+      final session = widget.session;
+      final ok = await ResultOperations.of(context, listen: false).verify(
+        submissionId: widget.item.id,
+        verifierId: session.accessId.isEmpty ? session.operatorName : session.accessId,
+        role: session.role!,
+        userScope: session.scope,
+      );
+      if (!context.mounted) return;
+      if (!ok) _showDenied(context);
+    } catch (error) {
+      if (context.mounted) _showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _dispute() async {
     final controller = TextEditingController();
     final reason = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Dispute ${item.id}'),
+        title: Text('Dispute ${widget.item.id}'),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Review reason',
-            hintText: 'State the verification concern',
-          ),
+          decoration: const InputDecoration(labelText: 'Review reason'),
         ),
         actions: [
           TextButton(
@@ -1768,28 +1414,40 @@ class _ReviewQueue extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (reason == null || !context.mounted) return;
+    if (reason == null || !mounted) return;
 
-    final ok = ResultOperations.of(context, listen: false).dispute(
-      submissionId: item.id,
-      reviewerId:
-          session.accessId.isEmpty ? session.operatorName : session.accessId,
-      reason: reason,
-      role: session.role!,
-      userScope: session.scope,
-    );
-    if (!ok && context.mounted) _showDenied(context);
+    setState(() => busy = true);
+    try {
+      final session = widget.session;
+      final ok = await ResultOperations.of(context, listen: false).dispute(
+        submissionId: widget.item.id,
+        reviewerId: session.accessId.isEmpty ? session.operatorName : session.accessId,
+        reason: reason,
+        role: session.role!,
+        userScope: session.scope,
+      );
+      if (!context.mounted) return;
+      if (!ok) _showDenied(context);
+    } catch (error) {
+      if (context.mounted) _showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
+}
 
-  void _showDenied(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'This role or geographic scope cannot perform that action.',
-        ),
-      ),
-    );
-  }
+void _showDenied(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('This role or geographic scope cannot perform that action.'),
+    ),
+  );
+}
+
+void _showError(BuildContext context, Object error) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Local persistence failed: $error')),
+  );
 }
 
 Color _statusColor(RecordStatus status) => switch (status) {
@@ -1805,7 +1463,8 @@ String _label(String value) {
     RegExp(r'([a-z])([A-Z])'),
     (match) => '${match.group(1)} ${match.group(2)}',
   );
-  return spaced.isEmpty
-      ? spaced
-      : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
+  final clean = spaced.replaceAll('_', ' ');
+  return clean.isEmpty
+      ? clean
+      : '${clean[0].toUpperCase()}${clean.substring(1)}';
 }
