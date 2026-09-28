@@ -9,6 +9,14 @@ import '../offline/offline_persistence.dart';
 
 enum BulkCommunicationChannel { push, sms, email, voice }
 
+enum BulkCommunicationPurpose {
+  operations,
+  safety,
+  logistics,
+  technicalSupport,
+  incidentResponse,
+}
+
 enum BulkDeliveryJobState {
   draft,
   queued,
@@ -108,6 +116,7 @@ class BulkDeliveryJob {
     required this.id,
     required this.title,
     required this.body,
+    required this.purpose,
     required this.targetScope,
     required this.channels,
     required this.createdBy,
@@ -126,6 +135,7 @@ class BulkDeliveryJob {
   final String id;
   final String title;
   final String body;
+  final BulkCommunicationPurpose purpose;
   final GeographicScope targetScope;
   final List<BulkCommunicationChannel> channels;
   final String createdBy;
@@ -343,6 +353,7 @@ class BulkCommunicationsController extends ChangeNotifier {
   Future<BulkDeliveryJob?> queueJob({
     required String title,
     required String body,
+    required BulkCommunicationPurpose purpose,
     required GeographicScope targetScope,
     required List<BulkCommunicationChannel> channels,
     required String actorId,
@@ -395,6 +406,7 @@ class BulkCommunicationsController extends ChangeNotifier {
       id: 'BULK-${(now.microsecondsSinceEpoch % 1000000000).toString().padLeft(9, '0')}',
       title: cleanTitle,
       body: cleanBody,
+      purpose: purpose,
       targetScope: targetScope,
       channels: orderedChannels,
       createdBy: actorId,
@@ -424,7 +436,7 @@ class BulkCommunicationsController extends ChangeNotifier {
       entityType: 'bulk_delivery_job',
       entityId: job.id,
       detail:
-          'Queued ${job.eligibleRecipientCount} eligible recipients within ${targetScope.label}.',
+          '${job.purpose.name} delivery queued for ${job.eligibleRecipientCount} eligible recipients within ${targetScope.label}.',
       scope: targetScope,
     );
     notifyListeners();
@@ -447,6 +459,7 @@ class BulkCommunicationsController extends ChangeNotifier {
         'id': value.id,
         'title': value.title,
         'body': value.body,
+        'purpose': value.purpose.name,
         'target_scope': scopeStorageKey(value.targetScope),
         'channels': value.channels.map((item) => item.name).toList(),
         'created_by': value.createdBy,
