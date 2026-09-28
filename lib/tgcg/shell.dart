@@ -22,6 +22,7 @@ import 'operations/live_operations_page.dart';
 import 'presentation/presentation_tour_sheet.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
+import 'security/security_response_portal_page.dart';
 import 'session.dart';
 import 'ui/tgcg_design.dart';
 
@@ -146,6 +147,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.evidenceCapture => const EvidenceCapturePage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
+        TgcgModule.securityResponse => const SecurityResponsePortalPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const CollationPage(),
         TgcgModule.mediaIntelligence => const MediaIntelligencePage(),
@@ -174,6 +176,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
   _Destination(TgcgModule.membershipNetwork, 'Registered Members', Icons.groups_2_outlined, _NavGroup.command),
   _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
+  _Destination(TgcgModule.securityResponse, 'Security Response', Icons.emergency_share_outlined, _NavGroup.command),
   _Destination(TgcgModule.mediaIntelligence, 'Media Intelligence', Icons.insights_outlined, _NavGroup.command),
   _Destination(TgcgModule.geography, 'Geographic Operations', Icons.public_rounded, _NavGroup.command),
   _Destination(TgcgModule.accreditation, 'Member Enrolment', Icons.how_to_reg_outlined, _NavGroup.fieldOperations),
@@ -538,6 +541,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.fieldMonitoring => 'Field Monitoring',
       TgcgModule.evidenceCapture => 'Evidence Capture',
       TgcgModule.situationRoom => 'Situation Room',
+      TgcgModule.securityResponse => 'Security & Emergency Response',
       TgcgModule.resultCapture => 'Result Capture',
       TgcgModule.collation => 'Collation',
       TgcgModule.mediaIntelligence => 'Media Intelligence',
