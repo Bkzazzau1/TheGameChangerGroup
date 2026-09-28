@@ -18,6 +18,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
   final titleController = TextEditingController();
   final bodyController = TextEditingController();
   _BulkWorkspace workspace = _BulkWorkspace.audience;
+  BulkCommunicationPurpose purpose = BulkCommunicationPurpose.operations;
   final List<BulkCommunicationChannel> selectedChannels = [
     BulkCommunicationChannel.push,
     BulkCommunicationChannel.sms,
@@ -99,10 +100,12 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
           _BulkWorkspace.compose => _ComposeWorkspace(
               titleController: titleController,
               bodyController: bodyController,
+              purpose: purpose,
               selectedChannels: selectedChannels,
               scheduledFor: scheduledFor,
               canSend: canSend,
               contacts: contacts,
+              onPurposeChanged: (value) => setState(() => purpose = value),
               onToggleChannel: _toggleChannel,
               onSchedule: _pickSchedule,
               onClearSchedule: () => setState(() => scheduledFor = null),
@@ -165,6 +168,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
     final job = await store.queueJob(
       title: titleController.text,
       body: bodyController.text,
+      purpose: purpose,
       targetScope: session.scope,
       channels: selectedChannels,
       actorId: session.accessId.isEmpty ? session.operatorName : session.accessId,
@@ -606,10 +610,12 @@ class _ComposeWorkspace extends StatelessWidget {
   const _ComposeWorkspace({
     required this.titleController,
     required this.bodyController,
+    required this.purpose,
     required this.selectedChannels,
     required this.scheduledFor,
     required this.canSend,
     required this.contacts,
+    required this.onPurposeChanged,
     required this.onToggleChannel,
     required this.onSchedule,
     required this.onClearSchedule,
@@ -618,10 +624,12 @@ class _ComposeWorkspace extends StatelessWidget {
 
   final TextEditingController titleController;
   final TextEditingController bodyController;
+  final BulkCommunicationPurpose purpose;
   final List<BulkCommunicationChannel> selectedChannels;
   final DateTime? scheduledFor;
   final bool canSend;
   final List<CommunicationContact> contacts;
+  final ValueChanged<BulkCommunicationPurpose> onPurposeChanged;
   final ValueChanged<BulkCommunicationChannel> onToggleChannel;
   final VoidCallback onSchedule;
   final VoidCallback onClearSchedule;
@@ -641,10 +649,31 @@ class _ComposeWorkspace extends StatelessWidget {
         final compose = TgcgSectionCard(
           title: 'Create delivery job',
           subtitle:
-              'Channels are evaluated in the order selected; the first eligible channel becomes the contact route.',
+              'Every outbound job has an auditable operational purpose. Channels are evaluated in priority order.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              DropdownButtonFormField<BulkCommunicationPurpose>(
+                initialValue: purpose,
+                onChanged: canSend
+                    ? (value) {
+                        if (value != null) onPurposeChanged(value);
+                      }
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Operational purpose',
+                  prefixIcon: Icon(Icons.assignment_outlined),
+                ),
+                items: BulkCommunicationPurpose.values
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(_purposeLabel(value)),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 10),
               TextField(
                 controller: titleController,
                 enabled: canSend,
@@ -719,6 +748,7 @@ class _ComposeWorkspace extends StatelessWidget {
           subtitle: 'Calculated from current scope, recorded preferences and channel availability.',
           child: Column(
             children: [
+              _PreviewRow(label: 'Purpose', value: _purposeLabel(purpose)),
               _PreviewRow(label: 'Contacts in scope', value: '${contacts.length}'),
               _PreviewRow(label: 'Eligible recipients', value: '$eligible'),
               _PreviewRow(
@@ -842,7 +872,7 @@ class _JobCard extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            '${job.id} • ${job.targetScope.label} • ${_dateTime(job.createdAt)}',
+            '${job.id} • ${_purposeLabel(job.purpose)} • ${job.targetScope.label} • ${_dateTime(job.createdAt)}',
             style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
           ),
           if (job.scheduledFor != null) ...[
@@ -987,6 +1017,14 @@ String _channelLabel(BulkCommunicationChannel channel) => switch (channel) {
       BulkCommunicationChannel.sms => 'SMS',
       BulkCommunicationChannel.email => 'Email',
       BulkCommunicationChannel.voice => 'Voice / IVR',
+    };
+
+String _purposeLabel(BulkCommunicationPurpose purpose) => switch (purpose) {
+      BulkCommunicationPurpose.operations => 'Operations',
+      BulkCommunicationPurpose.safety => 'Safety',
+      BulkCommunicationPurpose.logistics => 'Logistics',
+      BulkCommunicationPurpose.technicalSupport => 'Technical support',
+      BulkCommunicationPurpose.incidentResponse => 'Incident response',
     };
 
 IconData _channelIcon(BulkCommunicationChannel channel) => switch (channel) {
