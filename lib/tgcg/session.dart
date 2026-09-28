@@ -17,6 +17,7 @@ enum TgcgModule {
   fieldMonitoring,
   evidenceCapture,
   situationRoom,
+  securityResponse,
   resultCapture,
   collation,
   mediaIntelligence,
@@ -185,6 +186,10 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom)) {
     modules.add(TgcgModule.situationRoom);
+  }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom) &&
+      TgcgPermissionPolicy.allows(role, TgcgCapability.assignIncident)) {
+    modules.add(TgcgModule.securityResponse);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.submitElectionResult) ||
       TgcgPermissionPolicy.allows(role, TgcgCapability.verifyElectionResult) ||
