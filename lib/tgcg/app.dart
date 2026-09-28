@@ -13,6 +13,7 @@ import 'offline/offline_persistence.dart';
 import 'presentation_access_login.dart';
 import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
+import 'security/emergency_response_store.dart';
 import 'session.dart';
 import 'shell.dart';
 import 'ui/tgcg_design.dart';
@@ -39,6 +40,7 @@ class _TgcgAppState extends State<TgcgApp> {
   late ResultOperationsController resultOperationsController;
   late CommunicationsController communicationsController;
   late ReportOperationsController reportOperationsController;
+  late EmergencyResponseController emergencyResponseController;
 
   @override
   void initState() {
@@ -64,6 +66,8 @@ class _TgcgAppState extends State<TgcgApp> {
         CommunicationsController.prototypeSeed(governanceOperationsController);
     reportOperationsController =
         ReportOperationsController.prototypeSeed(governanceOperationsController);
+    emergencyResponseController =
+        EmergencyResponseController.prototypeSeed(governanceOperationsController);
   }
 
   Future<void> _resetPresentation() async {
@@ -75,6 +79,7 @@ class _TgcgAppState extends State<TgcgApp> {
     final oldResults = resultOperationsController;
     final oldCommunications = communicationsController;
     final oldReports = reportOperationsController;
+    final oldEmergency = emergencyResponseController;
 
     try {
       await oldOffline.clearPresentationData();
@@ -95,6 +100,7 @@ class _TgcgAppState extends State<TgcgApp> {
       oldMembership.dispose();
       oldCommunications.dispose();
       oldReports.dispose();
+      oldEmergency.dispose();
       oldGovernance.dispose();
       oldOffline.dispose();
     });
@@ -108,6 +114,7 @@ class _TgcgAppState extends State<TgcgApp> {
     membershipOperationsController.dispose();
     communicationsController.dispose();
     reportOperationsController.dispose();
+    emergencyResponseController.dispose();
     governanceOperationsController.dispose();
     unawaited(offlinePersistenceController.close());
     offlinePersistenceController.dispose();
@@ -121,23 +128,26 @@ class _TgcgAppState extends State<TgcgApp> {
           controller: offlinePersistenceController,
           child: GovernanceOperations(
             controller: governanceOperationsController,
-            child: ReportOperations(
-              controller: reportOperationsController,
-              child: Communications(
-                controller: communicationsController,
-                child: MembershipOperations(
-                  controller: membershipOperationsController,
-                  child: FieldOperations(
-                    controller: fieldOperationsController,
-                    child: ResultOperations(
-                      controller: resultOperationsController,
-                      child: MaterialApp(
-                        navigatorKey: tgcgNavigatorKey,
-                        debugShowCheckedModeBanner: false,
-                        title: 'TGCG-EMCOP',
-                        theme: _theme(),
-                        home: _AuthenticationGate(
-                          onResetPresentation: _resetPresentation,
+            child: EmergencyResponse(
+              controller: emergencyResponseController,
+              child: ReportOperations(
+                controller: reportOperationsController,
+                child: Communications(
+                  controller: communicationsController,
+                  child: MembershipOperations(
+                    controller: membershipOperationsController,
+                    child: FieldOperations(
+                      controller: fieldOperationsController,
+                      child: ResultOperations(
+                        controller: resultOperationsController,
+                        child: MaterialApp(
+                          navigatorKey: tgcgNavigatorKey,
+                          debugShowCheckedModeBanner: false,
+                          title: 'TGCG-EMCOP',
+                          theme: _theme(),
+                          home: _AuthenticationGate(
+                            onResetPresentation: _resetPresentation,
+                          ),
                         ),
                       ),
                     ),
