@@ -94,7 +94,7 @@ class EmergencyResponseController extends ChangeNotifier {
     GovernanceOperationsController governance,
   ) {
     final now = DateTime.utc(2026, 9, 28, 2, 0);
-    final nigeria = GeographicScope.nigeria;
+    const nigeria = GeographicScope.nigeria;
     return EmergencyResponseController._(
       governance: governance,
       agencies: const [
