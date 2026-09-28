@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'ai/ai_verification_page.dart';
 import 'alerts/alert_center_page.dart';
+import 'analytics/ai_data_analytics_page.dart';
 import 'collation/collation_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
@@ -143,6 +144,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.geography => const GeographyPage(),
         TgcgModule.liveOperations => const LiveOperationsPage(),
         TgcgModule.aiVerification => const AiVerificationPage(),
+        TgcgModule.aiAnalytics => const AiDataAnalyticsPage(),
         TgcgModule.alertCenter => const AlertCenterPage(),
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.evidenceCapture => const EvidenceCapturePage(),
@@ -173,6 +175,7 @@ class _Destination {
 const _destinations = <_Destination>[
   _Destination(TgcgModule.overview, 'Command Overview', Icons.space_dashboard_outlined, _NavGroup.command),
   _Destination(TgcgModule.liveOperations, 'Live Operations', Icons.travel_explore_rounded, _NavGroup.command),
+  _Destination(TgcgModule.aiAnalytics, 'AI Data Analytics', Icons.query_stats_rounded, _NavGroup.command),
   _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
   _Destination(TgcgModule.membershipNetwork, 'Registered Members', Icons.groups_2_outlined, _NavGroup.command),
   _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
@@ -537,6 +540,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.geography => 'Geographic Operations',
       TgcgModule.liveOperations => 'Live Operations',
       TgcgModule.aiVerification => 'AI Verification Centre',
+      TgcgModule.aiAnalytics => 'AI Data Analytics Centre',
       TgcgModule.alertCenter => 'Alert Centre',
       TgcgModule.fieldMonitoring => 'Field Monitoring',
       TgcgModule.evidenceCapture => 'Evidence Capture',
