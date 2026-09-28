@@ -1,7 +1,11 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import '../domain/models.dart';
+import '../field/field_operations_store.dart';
+import '../geography/geography_registry.dart';
+import '../membership/membership_store.dart';
+import '../results/result_operations_store.dart';
+import '../security/emergency_response_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 
@@ -13,49 +17,102 @@ class LiveOperationsPage extends StatefulWidget {
 }
 
 class _LiveOperationsPageState extends State<LiveOperationsPage> {
-  String selectedZone = 'North West';
-
-  static const zones = [
-    _ZoneOps('North West', 'NW', 62, 18, 11, 39),
-    _ZoneOps('North Central', 'NC', 54, 14, 8, 31),
-    _ZoneOps('North East', 'NE', 41, 10, 7, 22),
-    _ZoneOps('South West', 'SW', 71, 16, 12, 44),
-    _ZoneOps('South South', 'SS', 49, 11, 9, 28),
-    _ZoneOps('South East', 'SE', 38, 7, 6, 19),
-  ];
+  String? selectedStateId;
 
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final selected = zones.firstWhere((item) => item.name == selectedZone);
+    final field = FieldOperations.of(context);
+    final membership = MembershipOperations.of(context);
+    final results = ResultOperations.of(context);
+    final emergency = EmergencyResponse.of(context);
+    final geography = membership.geography;
+
+    final snapshots = geography.states
+        .where((state) => _stateVisibleToScope(session.scope, state))
+        .map(
+          (state) => _StateSnapshot.build(
+            state: state,
+            field: field,
+            membership: membership,
+            results: results,
+            emergency: emergency,
+          ),
+        )
+        .toList(growable: false);
+
+    if (snapshots.isNotEmpty &&
+        (selectedStateId == null ||
+            !snapshots.any((item) => item.state.id == selectedStateId))) {
+      selectedStateId = _preferredState(snapshots).state.id;
+    }
+
+    final selected = _snapshotById(snapshots, selectedStateId);
+    final openIncidents = snapshots.fold<int>(
+      0,
+      (total, item) => total + item.openIncidents.length,
+    );
+    final activeResponses = snapshots.fold<int>(
+      0,
+      (total, item) => total + item.activeDispatches.length,
+    );
+    final resultSubmissions = snapshots.fold<int>(
+      0,
+      (total, item) => total + item.results.length,
+    );
+    final approvedAgents = snapshots.fold<int>(
+      0,
+      (total, item) => total + item.approvedAgents,
+    );
+    final attentionStates = snapshots
+        .where((item) => item.condition.index >= _SituationCondition.elevated.index)
+        .length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
       children: [
         TgcgPageHeader(
-          eyebrow: 'ELECTION-DAY OPERATIONS',
-          title: 'Live National Operations',
+          eyebrow: 'NATIONAL OPERATIONAL PICTURE',
+          title: 'Nigeria Situation Map',
           subtitle:
-              '${session.scope.label}: field check-ins, operational incidents, evidence activity and result-submission progress.',
+              '${session.scope.label}: state-by-state incidents, emergency response, field activity and submission status.',
           trailing: const TgcgStatusPill(
-            label: 'LIVE',
+            label: 'CURRENT VIEW',
             color: TgcgColors.success,
-            icon: Icons.circle,
+            icon: Icons.public_rounded,
           ),
         ),
         const SizedBox(height: 18),
-        const _TopMetrics(),
+        _TopMetrics(
+          states: snapshots.length,
+          attentionStates: attentionStates,
+          openIncidents: openIncidents,
+          activeResponses: activeResponses,
+          resultSubmissions: resultSubmissions,
+          approvedAgents: approvedAgents,
+        ),
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
-            final map = _MapPanel(
-              zones: zones,
-              selected: selectedZone,
-              onSelect: (value) => setState(() => selectedZone = value),
+            final map = _NigeriaStateMap(
+              allStates: geography.states,
+              snapshots: snapshots,
+              selectedStateId: selectedStateId,
+              onSelect: (value) => setState(() => selectedStateId = value),
             );
-            final detail = _ZoneDetail(zone: selected);
-            if (constraints.maxWidth < 980) {
-              return Column(children: [map, const SizedBox(height: 16), detail]);
+            final detail = _StateInspector(
+              snapshot: selected,
+              emergency: emergency,
+            );
+
+            if (constraints.maxWidth < 1050) {
+              return Column(
+                children: [
+                  map,
+                  const SizedBox(height: 16),
+                  detail,
+                ],
+              );
             }
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,72 +125,263 @@ class _LiveOperationsPageState extends State<LiveOperationsPage> {
           },
         ),
         const SizedBox(height: 16),
-        _ZoneStrip(
-          zones: zones,
-          selected: selectedZone,
-          onSelect: (value) => setState(() => selectedZone = value),
+        _ZoneOverview(
+          geography: geography,
+          snapshots: snapshots,
+          selectedStateId: selectedStateId,
+          onSelectState: (stateId) => setState(() => selectedStateId = stateId),
         ),
         const SizedBox(height: 16),
-        const _LiveActivityFeed(),
+        _OperationalActivity(
+          snapshots: snapshots,
+          emergency: emergency,
+        ),
       ],
     );
   }
 }
 
-class _ZoneOps {
-  const _ZoneOps(this.name, this.code, this.agents, this.results, this.incidents, this.checkIns);
-  final String name;
-  final String code;
+bool _stateVisibleToScope(GeographicScope scope, CanonicalState state) {
+  if (scope.level == GeographyLevel.country) return true;
+  if (scope.level == GeographyLevel.geopoliticalZone) {
+    return scope.zoneId == state.zoneId;
+  }
+  return scope.stateId == state.id;
+}
+
+_StateSnapshot? _snapshotById(
+  List<_StateSnapshot> snapshots,
+  String? stateId,
+) {
+  if (stateId == null) return null;
+  for (final item in snapshots) {
+    if (item.state.id == stateId) return item;
+  }
+  return null;
+}
+
+_StateSnapshot _preferredState(List<_StateSnapshot> snapshots) {
+  var selected = snapshots.first;
+  for (final item in snapshots.skip(1)) {
+    if (item.condition.index > selected.condition.index) {
+      selected = item;
+      continue;
+    }
+    if (item.condition == selected.condition &&
+        item.openIncidents.length > selected.openIncidents.length) {
+      selected = item;
+    }
+  }
+  return selected;
+}
+
+enum _SituationCondition { noData, normal, elevated, serious, critical }
+
+class _StateSnapshot {
+  const _StateSnapshot({
+    required this.state,
+    required this.members,
+    required this.agents,
+    required this.approvedAgents,
+    required this.incidents,
+    required this.reports,
+    required this.results,
+    required this.dispatches,
+    required this.condition,
+  });
+
+  final CanonicalState state;
+  final int members;
   final int agents;
-  final int results;
-  final int incidents;
-  final int checkIns;
+  final int approvedAgents;
+  final List<FieldIncident> incidents;
+  final List<FieldReport> reports;
+  final List<ElectionResultSubmission> results;
+  final List<EmergencyDispatch> dispatches;
+  final _SituationCondition condition;
+
+  List<FieldIncident> get openIncidents => incidents
+      .where(
+        (item) =>
+            item.status != IncidentStatus.resolved &&
+            item.status != IncidentStatus.closed,
+      )
+      .toList(growable: false);
+
+  List<EmergencyDispatch> get activeDispatches => dispatches
+      .where(
+        (item) =>
+            item.status != EmergencyDispatchStatus.resolved &&
+            item.status != EmergencyDispatchStatus.closed,
+      )
+      .toList(growable: false);
+
+  int get criticalIncidents => openIncidents
+      .where((item) => item.severity == IncidentSeverity.critical)
+      .length;
+
+  int get highIncidents => openIncidents
+      .where((item) => item.severity == IncidentSeverity.high)
+      .length;
+
+  int get awaitingResponse => activeDispatches
+      .where((item) => item.status == EmergencyDispatchStatus.assigned)
+      .length;
+
+  factory _StateSnapshot.build({
+    required CanonicalState state,
+    required FieldOperationsController field,
+    required MembershipOperationsController membership,
+    required ResultOperationsController results,
+    required EmergencyResponseController emergency,
+  }) {
+    final incidents = field.incidentsForScope(state.scope);
+    final reports = field.reportsForScope(state.scope);
+    final submissions = results.submissionsForScope(state.scope);
+    final dispatches = emergency.dispatchesForScope(state.scope);
+    final agents = membership.agentsForScope(state.scope);
+    final members = membership.memberCountForScope(state.scope);
+    final open = incidents
+        .where(
+          (item) =>
+              item.status != IncidentStatus.resolved &&
+              item.status != IncidentStatus.closed,
+        )
+        .toList(growable: false);
+    final activeDispatches = dispatches
+        .where(
+          (item) =>
+              item.status != EmergencyDispatchStatus.resolved &&
+              item.status != EmergencyDispatchStatus.closed,
+        )
+        .toList(growable: false);
+
+    var condition = _SituationCondition.noData;
+    final hasCriticalIncident =
+        open.any((item) => item.severity == IncidentSeverity.critical);
+    final hasCriticalDispatch = activeDispatches
+        .any((item) => item.priority == EmergencyDispatchPriority.critical);
+    final hasHighIncident =
+        open.any((item) => item.severity == IncidentSeverity.high);
+    final hasUrgentDispatch = activeDispatches.any(
+      (item) => item.priority == EmergencyDispatchPriority.urgent,
+    );
+
+    if (hasCriticalIncident || hasCriticalDispatch) {
+      condition = _SituationCondition.critical;
+    } else if (hasHighIncident || hasUrgentDispatch) {
+      condition = _SituationCondition.serious;
+    } else if (open.isNotEmpty || activeDispatches.isNotEmpty) {
+      condition = _SituationCondition.elevated;
+    } else if (members > 0 ||
+        agents.isNotEmpty ||
+        reports.isNotEmpty ||
+        submissions.isNotEmpty ||
+        dispatches.isNotEmpty) {
+      condition = _SituationCondition.normal;
+    }
+
+    return _StateSnapshot(
+      state: state,
+      members: members,
+      agents: agents.length,
+      approvedAgents: agents
+          .where((item) => item.status == AccreditationStatus.approved)
+          .length,
+      incidents: incidents,
+      reports: reports,
+      results: submissions,
+      dispatches: dispatches,
+      condition: condition,
+    );
+  }
 }
 
 class _TopMetrics extends StatelessWidget {
-  const _TopMetrics();
+  const _TopMetrics({
+    required this.states,
+    required this.attentionStates,
+    required this.openIncidents,
+    required this.activeResponses,
+    required this.resultSubmissions,
+    required this.approvedAgents,
+  });
+
+  final int states;
+  final int attentionStates;
+  final int openIncidents;
+  final int activeResponses;
+  final int resultSubmissions;
+  final int approvedAgents;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 520 ? 2 : 1;
+          final columns = constraints.maxWidth >= 1160
+              ? 6
+              : constraints.maxWidth >= 760
+                  ? 3
+                  : constraints.maxWidth >= 500
+                      ? 2
+                      : 1;
           const gap = 12.0;
-          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+          final width =
+              (constraints.maxWidth - gap * (columns - 1)) / columns;
           return Wrap(
             spacing: gap,
             runSpacing: gap,
             children: [
               TgcgMetricCard(
                 width: width,
-                label: 'Agents active',
-                value: '315',
-                detail: 'Across operational zones',
-                icon: Icons.badge_outlined,
-                tone: TgcgMetricTone.success,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Checked in',
-                value: '183',
-                detail: 'Field duty active',
-                icon: Icons.how_to_reg_outlined,
+                label: 'States in view',
+                value: '$states',
+                detail: 'Based on current access scope',
+                icon: Icons.map_outlined,
                 tone: TgcgMetricTone.info,
               ),
               TgcgMetricCard(
                 width: width,
+                label: 'Need attention',
+                value: '$attentionStates',
+                detail: 'Elevated, serious or critical',
+                icon: Icons.crisis_alert_outlined,
+                tone: attentionStates == 0
+                    ? TgcgMetricTone.success
+                    : TgcgMetricTone.warning,
+              ),
+              TgcgMetricCard(
+                width: width,
                 label: 'Open incidents',
-                value: '53',
-                detail: 'Operational review queue',
+                value: '$openIncidents',
+                detail: 'Unresolved operational issues',
                 icon: Icons.warning_amber_rounded,
                 tone: TgcgMetricTone.warning,
               ),
               TgcgMetricCard(
                 width: width,
-                label: 'Results received',
-                value: '86',
+                label: 'Active response',
+                value: '$activeResponses',
+                detail: 'Agency dispatches still open',
+                icon: Icons.emergency_share_outlined,
+                tone: activeResponses == 0
+                    ? TgcgMetricTone.neutral
+                    : TgcgMetricTone.danger,
+              ),
+              TgcgMetricCard(
+                width: width,
+                label: 'Result submissions',
+                value: '$resultSubmissions',
                 detail: 'Unofficial field submissions',
                 icon: Icons.ballot_outlined,
                 tone: TgcgMetricTone.ai,
+              ),
+              TgcgMetricCard(
+                width: width,
+                label: 'Approved agents',
+                value: '$approvedAgents',
+                detail: 'Accredited in current scope',
+                icon: Icons.badge_outlined,
+                tone: TgcgMetricTone.success,
               ),
             ],
           );
@@ -141,314 +389,1050 @@ class _TopMetrics extends StatelessWidget {
       );
 }
 
-class _MapPanel extends StatelessWidget {
-  const _MapPanel({required this.zones, required this.selected, required this.onSelect});
-  final List<_ZoneOps> zones;
-  final String selected;
+class _NigeriaStateMap extends StatelessWidget {
+  const _NigeriaStateMap({
+    required this.allStates,
+    required this.snapshots,
+    required this.selectedStateId,
+    required this.onSelect,
+  });
+
+  final List<CanonicalState> allStates;
+  final List<_StateSnapshot> snapshots;
+  final String? selectedStateId;
   final ValueChanged<String> onSelect;
 
   @override
-  Widget build(BuildContext context) => TgcgSectionCard(
-        title: 'National activity map',
-        subtitle: 'Select a zone to inspect current operational activity.',
-        trailing: const TgcgStatusPill(
-          label: '6 ZONES',
-          color: TgcgColors.primary,
-          icon: Icons.public_rounded,
-          compact: true,
-        ),
-        child: SizedBox(
-          height: 440,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _NigeriaOpsPainter(),
+  Widget build(BuildContext context) {
+    final stateById = <String, CanonicalState>{
+      for (final state in allStates) state.id: state,
+    };
+    final snapshotById = <String, _StateSnapshot>{
+      for (final snapshot in snapshots) snapshot.state.id: snapshot,
+    };
+
+    return TgcgSectionCard(
+      title: 'Nigeria state situation map',
+      subtitle:
+          'Select a state to inspect current operational issues, response activity and field data.',
+      trailing: TgcgStatusPill(
+        label: '${snapshots.length} IN SCOPE',
+        color: TgcgColors.primary,
+        icon: Icons.location_on_outlined,
+        compact: true,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 420,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: TgcgColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: TgcgColors.border),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: 570,
+                  height: 355,
+                  child: Stack(
+                    children: [
+                      for (final cell in _stateCells)
+                        if (stateById[cell.stateId] != null)
+                          Positioned(
+                            left: 20 + cell.column * 55.0,
+                            top: 12 + cell.row * 46.0,
+                            child: _StateHexTile(
+                              state: stateById[cell.stateId]!,
+                              snapshot: snapshotById[cell.stateId],
+                              selected: selectedStateId == cell.stateId,
+                              onTap: snapshotById[cell.stateId] == null
+                                  ? null
+                                  : () => onSelect(cell.stateId),
+                            ),
+                          ),
+                    ],
                   ),
                 ),
-                ..._nodes(constraints.biggest).map(
-                  (node) {
-                    final zone = zones.firstWhere((z) => z.code == node.code);
-                    final active = selected == zone.name;
-                    return Positioned(
-                      left: node.dx * constraints.maxWidth - 46,
-                      top: node.dy * constraints.maxHeight - 30,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () => onSelect(zone.name),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          width: 92,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-                          decoration: BoxDecoration(
-                            color: active ? TgcgColors.primary : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: active ? TgcgColors.accent : TgcgColors.border,
-                              width: active ? 2 : 1,
-                            ),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x18000000), blurRadius: 12, offset: Offset(0, 5)),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.circle, size: 8, color: active ? TgcgColors.accent : TgcgColors.success),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    zone.code,
-                                    style: TextStyle(
-                                      color: active ? Colors.white : TgcgColors.ink,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                '${zone.checkIns} active',
-                                style: TextStyle(
-                                  color: active ? const Color(0xFFD5E4DF) : TgcgColors.muted,
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          const _MapLegend(),
+        ],
+      ),
+    );
+  }
+}
+
+class _StateMapCell {
+  const _StateMapCell(this.stateId, this.row, this.column);
+  final String stateId;
+  final int row;
+  final int column;
+}
+
+const _stateCells = <_StateMapCell>[
+  _StateMapCell('KE', 0, 1),
+  _StateMapCell('SO', 0, 2),
+  _StateMapCell('ZA', 0, 3),
+  _StateMapCell('KT', 0, 4),
+  _StateMapCell('KN', 0, 5),
+  _StateMapCell('JI', 0, 6),
+  _StateMapCell('YO', 0, 7),
+  _StateMapCell('BO', 0, 8),
+  _StateMapCell('NI', 1, 1),
+  _StateMapCell('KD', 1, 3),
+  _StateMapCell('BA', 1, 5),
+  _StateMapCell('GO', 1, 6),
+  _StateMapCell('AD', 1, 7),
+  _StateMapCell('KW', 2, 0),
+  _StateMapCell('FCT', 2, 2),
+  _StateMapCell('NA', 2, 3),
+  _StateMapCell('PL', 2, 4),
+  _StateMapCell('TA', 2, 6),
+  _StateMapCell('OY', 3, 0),
+  _StateMapCell('OS', 3, 1),
+  _StateMapCell('EK', 3, 2),
+  _StateMapCell('KO', 3, 3),
+  _StateMapCell('BN', 3, 4),
+  _StateMapCell('OG', 4, 0),
+  _StateMapCell('ON', 4, 1),
+  _StateMapCell('ED', 4, 2),
+  _StateMapCell('EN', 4, 3),
+  _StateMapCell('EB', 4, 4),
+  _StateMapCell('CR', 4, 5),
+  _StateMapCell('LA', 5, 0),
+  _StateMapCell('DE', 5, 1),
+  _StateMapCell('AN', 5, 2),
+  _StateMapCell('IM', 5, 3),
+  _StateMapCell('AB', 5, 4),
+  _StateMapCell('BY', 6, 1),
+  _StateMapCell('RI', 6, 2),
+  _StateMapCell('AK', 6, 3),
+];
+
+class _StateHexTile extends StatelessWidget {
+  const _StateHexTile({
+    required this.state,
+    required this.snapshot,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final CanonicalState state;
+  final _StateSnapshot? snapshot;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final condition = snapshot?.condition ?? _SituationCondition.noData;
+    final fill = _conditionColor(condition);
+    final enabled = snapshot != null;
+    final foreground = condition == _SituationCondition.noData
+        ? TgcgColors.muted
+        : Colors.white;
+    final open = snapshot?.openIncidents.length ?? 0;
+
+    return Tooltip(
+      message: enabled
+          ? '${state.name} • ${_conditionLabel(condition)}'
+          : '${state.name} • outside current scope',
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: 64,
+          height: 56,
+          child: CustomPaint(
+            painter: _HexPainter(
+              fill: fill,
+              border: selected ? TgcgColors.accent : Colors.white,
+              borderWidth: selected ? 3.2 : 1.4,
+              muted: !enabled,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    state.id == 'FCT' ? 'FCT' : state.id,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: state.id == 'FCT' ? 10 : 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .15,
+                    ),
+                  ),
+                  if (enabled && open > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '$open OPEN',
+                      style: TextStyle(
+                        color: foreground.withValues(alpha: .88),
+                        fontSize: 6.8,
+                        fontWeight: FontWeight.w900,
                       ),
-                    );
-                  },
-                ),
-              ],
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
-      );
-
-  List<_MapNode> _nodes(Size size) => const [
-        _MapNode('NW', .33, .25),
-        _MapNode('NE', .66, .27),
-        _MapNode('NC', .51, .48),
-        _MapNode('SW', .31, .68),
-        _MapNode('SE', .58, .72),
-        _MapNode('SS', .48, .86),
-      ];
+      ),
+    );
+  }
 }
 
-class _MapNode {
-  const _MapNode(this.code, this.dx, this.dy);
-  final String code;
-  final double dx;
-  final double dy;
-}
+class _HexPainter extends CustomPainter {
+  const _HexPainter({
+    required this.fill,
+    required this.border,
+    required this.borderWidth,
+    required this.muted,
+  });
 
-class _NigeriaOpsPainter extends CustomPainter {
+  final Color fill;
+  final Color border;
+  final double borderWidth;
+  final bool muted;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final fill = Paint()..color = const Color(0xFFEAF2EF);
-    final border = Paint()
-      ..color = const Color(0xFF8FA79F)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
     final path = Path()
-      ..moveTo(size.width * .22, size.height * .10)
-      ..lineTo(size.width * .52, size.height * .06)
-      ..lineTo(size.width * .76, size.height * .18)
-      ..lineTo(size.width * .82, size.height * .42)
-      ..lineTo(size.width * .72, size.height * .62)
-      ..lineTo(size.width * .67, size.height * .85)
-      ..lineTo(size.width * .49, size.height * .94)
-      ..lineTo(size.width * .33, size.height * .82)
-      ..lineTo(size.width * .18, size.height * .70)
-      ..lineTo(size.width * .14, size.height * .43)
+      ..moveTo(size.width * .25, 1)
+      ..lineTo(size.width * .75, 1)
+      ..lineTo(size.width - 1, size.height * .5)
+      ..lineTo(size.width * .75, size.height - 1)
+      ..lineTo(size.width * .25, size.height - 1)
+      ..lineTo(1, size.height * .5)
       ..close();
-    canvas.drawPath(path, fill);
-    canvas.drawPath(path, border);
 
-    final line = Paint()
-      ..color = const Color(0x338FA79F)
-      ..strokeWidth = 1.2;
-    for (var i = 0; i < 6; i++) {
-      final y = size.height * (.22 + i * .11);
-      canvas.drawLine(Offset(size.width * .22, y), Offset(size.width * .74, y + math.sin(i) * 16), line);
-    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = muted ? TgcgColors.border.withValues(alpha: .72) : fill,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _HexPainter oldDelegate) =>
+      oldDelegate.fill != fill ||
+      oldDelegate.border != border ||
+      oldDelegate.borderWidth != borderWidth ||
+      oldDelegate.muted != muted;
 }
 
-class _ZoneDetail extends StatelessWidget {
-  const _ZoneDetail({required this.zone});
-  final _ZoneOps zone;
+class _MapLegend extends StatelessWidget {
+  const _MapLegend();
 
   @override
-  Widget build(BuildContext context) => TgcgSectionCard(
-        title: zone.name,
-        subtitle: '${zone.code} operational desk',
-        trailing: const TgcgStatusPill(label: 'ACTIVE', color: TgcgColors.success, compact: true),
-        child: Column(
-          children: [
-            _DetailRow(label: 'Agents assigned', value: '${zone.agents}', icon: Icons.badge_outlined),
-            _DetailRow(label: 'Checked in', value: '${zone.checkIns}', icon: Icons.how_to_reg_outlined),
-            _DetailRow(label: 'Open incidents', value: '${zone.incidents}', icon: Icons.warning_amber_rounded),
-            _DetailRow(label: 'Results received', value: '${zone.results}', icon: Icons.ballot_outlined),
-            const SizedBox(height: 12),
-            const Divider(),
-            const SizedBox(height: 8),
-            const _OperationalStatus(label: 'Field connectivity', value: 'Stable', color: TgcgColors.success),
-            const _OperationalStatus(label: 'Evidence queue', value: 'Normal', color: TgcgColors.info),
-            const _OperationalStatus(label: 'Result review', value: 'Active', color: TgcgColors.accent),
-          ],
-        ),
+  Widget build(BuildContext context) => Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: const [
+          _LegendItem(condition: _SituationCondition.normal, label: 'Normal'),
+          _LegendItem(condition: _SituationCondition.elevated, label: 'Elevated'),
+          _LegendItem(condition: _SituationCondition.serious, label: 'Serious'),
+          _LegendItem(condition: _SituationCondition.critical, label: 'Critical'),
+          _LegendItem(condition: _SituationCondition.noData, label: 'No current data'),
+        ],
       );
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value, required this.icon});
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.condition, required this.label});
+  final _SituationCondition condition;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: _conditionColor(condition),
+              borderRadius: BorderRadius.circular(3),
+              border: condition == _SituationCondition.noData
+                  ? Border.all(color: TgcgColors.muted.withValues(alpha: .3))
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: TgcgColors.muted,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
+}
+
+class _StateInspector extends StatelessWidget {
+  const _StateInspector({
+    required this.snapshot,
+    required this.emergency,
+  });
+
+  final _StateSnapshot? snapshot;
+  final EmergencyResponseController emergency;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = snapshot;
+    if (item == null) {
+      return const TgcgSectionCard(
+        child: TgcgEmptyState(
+          icon: Icons.touch_app_outlined,
+          title: 'Select a state',
+          message: 'Choose a state on the map to inspect its operational picture.',
+        ),
+      );
+    }
+
+    final openIncidents = [...item.openIncidents]
+      ..sort((a, b) => _severityRank(b.severity).compareTo(_severityRank(a.severity)));
+    final dispatches = [...item.activeDispatches]
+      ..sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
+
+    return TgcgSectionCard(
+      title: item.state.isFederalCapitalTerritory
+          ? item.state.name
+          : '${item.state.name} State',
+      subtitle: item.state.zoneName,
+      trailing: TgcgStatusPill(
+        label: _conditionLabel(item.condition).toUpperCase(),
+        color: _conditionColor(item.condition),
+        compact: true,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _InspectorMetrics(snapshot: item),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          const Text(
+            'Active issues',
+            style: TextStyle(
+              color: TgcgColors.ink,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (openIncidents.isEmpty)
+            const _QuietLine(
+              icon: Icons.check_circle_outline_rounded,
+              text: 'No unresolved incident in current data.',
+              color: TgcgColors.success,
+            )
+          else
+            ...openIncidents.take(4).map(
+                  (incident) => _IncidentLine(incident: incident),
+                ),
+          const SizedBox(height: 14),
+          const Text(
+            'Emergency response',
+            style: TextStyle(
+              color: TgcgColors.ink,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (dispatches.isEmpty)
+            const _QuietLine(
+              icon: Icons.shield_outlined,
+              text: 'No active agency dispatch.',
+              color: TgcgColors.muted,
+            )
+          else
+            ...dispatches.take(4).map(
+                  (dispatch) => _DispatchLine(
+                    dispatch: dispatch,
+                    agency: emergency.agencyById(dispatch.agencyId),
+                  ),
+                ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: TgcgColors.primarySoft,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: TgcgColors.border),
+            ),
+            child: Text(
+              '${item.results.length} unofficial field result submission${item.results.length == 1 ? '' : 's'} • '
+              '${item.reports.length} field report${item.reports.length == 1 ? '' : 's'} • '
+              '${item.members} registered member${item.members == 1 ? '' : 's'}',
+              style: const TextStyle(
+                color: TgcgColors.primary,
+                fontSize: 9.5,
+                height: 1.4,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InspectorMetrics extends StatelessWidget {
+  const _InspectorMetrics({required this.snapshot});
+  final _StateSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final width = (constraints.maxWidth - 8) / 2;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MiniMetric(
+                width: width,
+                label: 'Open incidents',
+                value: '${snapshot.openIncidents.length}',
+                icon: Icons.warning_amber_rounded,
+                color: TgcgColors.warning,
+              ),
+              _MiniMetric(
+                width: width,
+                label: 'Active response',
+                value: '${snapshot.activeDispatches.length}',
+                icon: Icons.emergency_share_outlined,
+                color: TgcgColors.danger,
+              ),
+              _MiniMetric(
+                width: width,
+                label: 'Approved agents',
+                value: '${snapshot.approvedAgents}',
+                icon: Icons.badge_outlined,
+                color: TgcgColors.success,
+              ),
+              _MiniMetric(
+                width: width,
+                label: 'Field submissions',
+                value: '${snapshot.results.length}',
+                icon: Icons.ballot_outlined,
+                color: TgcgColors.ai,
+              ),
+            ],
+          );
+        },
+      );
+}
+
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({
+    required this.width,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final double width;
   final String label;
   final String value;
   final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: TgcgColors.primary),
-            const SizedBox(width: 9),
-            Expanded(child: Text(label, style: const TextStyle(color: TgcgColors.muted, fontSize: 11))),
-            Text(value, style: const TextStyle(color: TgcgColors.ink, fontSize: 15, fontWeight: FontWeight.w900)),
-          ],
-        ),
-      );
-}
-
-class _OperationalStatus extends StatelessWidget {
-  const _OperationalStatus({required this.label, required this.value, required this.color});
-  final String label;
-  final String value;
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+  Widget build(BuildContext context) => Container(
+        width: width,
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: TgcgColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: TgcgColors.border),
+        ),
         child: Row(
           children: [
-            Icon(Icons.circle, size: 8, color: color),
+            Icon(icon, size: 17, color: color),
             const SizedBox(width: 8),
-            Expanded(child: Text(label, style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w700, fontSize: 10.5))),
-            Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 10)),
-          ],
-        ),
-      );
-}
-
-class _ZoneStrip extends StatelessWidget {
-  const _ZoneStrip({required this.zones, required this.selected, required this.onSelect});
-  final List<_ZoneOps> zones;
-  final String selected;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) => TgcgSectionCard(
-        title: 'Zone activity',
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 1050 ? 6 : constraints.maxWidth >= 680 ? 3 : 2;
-            const gap = 10.0;
-            final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: zones.map((zone) {
-                final active = zone.name == selected;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => onSelect(zone.name),
-                  child: Container(
-                    width: width,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: active ? TgcgColors.primarySoft : TgcgColors.surfaceSoft,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: active ? TgcgColors.primary : TgcgColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(zone.code, style: const TextStyle(color: TgcgColors.primary, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 3),
-                        Text(zone.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w800, fontSize: 10)),
-                        const SizedBox(height: 8),
-                        Text('${zone.checkIns} checked in', style: const TextStyle(color: TgcgColors.muted, fontSize: 9)),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-      );
-}
-
-class _LiveActivityFeed extends StatelessWidget {
-  const _LiveActivityFeed();
-
-  @override
-  Widget build(BuildContext context) => TgcgSectionCard(
-        title: 'Live operational activity',
-        trailing: const TgcgStatusPill(label: 'UPDATING', color: TgcgColors.info, compact: true),
-        child: const Column(
-          children: [
-            _Activity(icon: Icons.how_to_reg_outlined, title: 'Agent checked in', location: 'Kaduna North • Ward 01 • PU 001', time: '1 min'),
-            _Activity(icon: Icons.perm_media_outlined, title: 'Evidence package received', location: 'Makurdi • Ward 01 • PU 004', time: '3 min'),
-            _Activity(icon: Icons.fact_check_outlined, title: 'Result moved to verification', location: 'Kaduna North • PU 002', time: '5 min'),
-            _Activity(icon: Icons.warning_amber_rounded, title: 'Operational incident opened', location: 'Lagos • Ikeja', time: '7 min'),
-          ],
-        ),
-      );
-}
-
-class _Activity extends StatelessWidget {
-  const _Activity({required this.icon, required this.title, required this.location, required this.time});
-  final IconData icon;
-  final String title;
-  final String location;
-  final String time;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(color: TgcgColors.primarySoft, borderRadius: BorderRadius.circular(11)),
-              child: Icon(icon, color: TgcgColors.primary, size: 19),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w900, fontSize: 11.5)),
-                  const SizedBox(height: 2),
-                  Text(location, style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5)),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: TgcgColors.ink,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: TgcgColors.muted,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),
-            Text(time, style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5)),
           ],
         ),
       );
+}
+
+class _IncidentLine extends StatelessWidget {
+  const _IncidentLine({required this.incident});
+  final FieldIncident incident;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _severityColor(incident.severity);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: .15)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 17, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  incident.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: TgcgColors.ink,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${incident.id} • ${incident.scope.lgaName ?? incident.scope.label}',
+                  style: const TextStyle(
+                    color: TgcgColors.muted,
+                    fontSize: 8.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          TgcgStatusPill(
+            label: incident.severity.name.toUpperCase(),
+            color: color,
+            compact: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DispatchLine extends StatelessWidget {
+  const _DispatchLine({required this.dispatch, required this.agency});
+  final EmergencyDispatch dispatch;
+  final EmergencyAgency? agency;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _dispatchStatusColor(dispatch.status);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: TgcgColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: TgcgColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.local_police_outlined, size: 17, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  agency?.shortName ?? 'Response agency',
+                  style: const TextStyle(
+                    color: TgcgColors.ink,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${dispatch.incidentId} • ${_priorityLabel(dispatch.priority)} priority',
+                  style: const TextStyle(
+                    color: TgcgColors.muted,
+                    fontSize: 8.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TgcgStatusPill(
+            label: _dispatchStatusLabel(dispatch.status).toUpperCase(),
+            color: color,
+            compact: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuietLine extends StatelessWidget {
+  const _QuietLine({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: TgcgColors.surfaceSoft,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: TgcgColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 17, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: TgcgColors.muted,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _ZoneOverview extends StatelessWidget {
+  const _ZoneOverview({
+    required this.geography,
+    required this.snapshots,
+    required this.selectedStateId,
+    required this.onSelectState,
+  });
+
+  final GeographyRegistry geography;
+  final List<_StateSnapshot> snapshots;
+  final String? selectedStateId;
+  final ValueChanged<String> onSelectState;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleZones = geography.zones
+        .where((zone) => snapshots.any((item) => item.state.zoneId == zone.id))
+        .toList(growable: false);
+
+    return TgcgSectionCard(
+      title: 'Zone overview',
+      subtitle: 'Operational summary across the geopolitical zones in your scope.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 1080
+              ? 6
+              : constraints.maxWidth >= 680
+                  ? 3
+                  : constraints.maxWidth >= 440
+                      ? 2
+                      : 1;
+          const gap = 10.0;
+          final width =
+              (constraints.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: visibleZones.map((zone) {
+              final items = snapshots
+                  .where((item) => item.state.zoneId == zone.id)
+                  .toList(growable: false);
+              final selected = items.any((item) => item.state.id == selectedStateId);
+              final focus = _preferredState(items);
+              final incidents = items.fold<int>(
+                0,
+                (total, item) => total + item.openIncidents.length,
+              );
+              final responses = items.fold<int>(
+                0,
+                (total, item) => total + item.activeDispatches.length,
+              );
+              final agents = items.fold<int>(
+                0,
+                (total, item) => total + item.approvedAgents,
+              );
+              final condition = items.fold<_SituationCondition>(
+                _SituationCondition.noData,
+                (current, item) => item.condition.index > current.index
+                    ? item.condition
+                    : current,
+              );
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => onSelectState(focus.state.id),
+                child: Container(
+                  width: width,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? TgcgColors.primarySoft
+                        : TgcgColors.surfaceSoft,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: selected
+                          ? TgcgColors.primary
+                          : TgcgColors.border,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: _conditionColor(condition),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            zone.id,
+                            style: const TextStyle(
+                              color: TgcgColors.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        zone.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: TgcgColors.ink,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        '${items.length} states • $incidents incidents',
+                        style: const TextStyle(
+                          color: TgcgColors.muted,
+                          fontSize: 8.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$responses response • $agents approved agents',
+                        style: const TextStyle(
+                          color: TgcgColors.muted,
+                          fontSize: 8.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OperationalActivity extends StatelessWidget {
+  const _OperationalActivity({
+    required this.snapshots,
+    required this.emergency,
+  });
+
+  final List<_StateSnapshot> snapshots;
+  final EmergencyResponseController emergency;
+
+  @override
+  Widget build(BuildContext context) {
+    final records = <_ActivityRecord>[];
+    for (final snapshot in snapshots) {
+      for (final incident in snapshot.incidents) {
+        records.add(
+          _ActivityRecord(
+            at: incident.reportedAt,
+            icon: Icons.warning_amber_rounded,
+            color: _severityColor(incident.severity),
+            title: incident.title,
+            location: incident.scope.label,
+            tag: 'INCIDENT',
+          ),
+        );
+      }
+      for (final report in snapshot.reports) {
+        records.add(
+          _ActivityRecord(
+            at: report.reportedAt,
+            icon: Icons.feed_outlined,
+            color: TgcgColors.info,
+            title: report.category,
+            location: report.scope.label,
+            tag: 'FIELD REPORT',
+          ),
+        );
+      }
+      for (final result in snapshot.results) {
+        records.add(
+          _ActivityRecord(
+            at: result.submittedAt,
+            icon: Icons.ballot_outlined,
+            color: TgcgColors.ai,
+            title: 'Unofficial result submission received',
+            location: result.pollingUnitScope.label,
+            tag: 'RESULT',
+          ),
+        );
+      }
+      for (final dispatch in snapshot.dispatches) {
+        final agency = emergency.agencyById(dispatch.agencyId);
+        records.add(
+          _ActivityRecord(
+            at: dispatch.assignedAt,
+            icon: Icons.emergency_share_outlined,
+            color: _priorityColor(dispatch.priority),
+            title:
+                '${agency?.shortName ?? 'Response agency'} assigned to ${dispatch.incidentId}',
+            location: dispatch.scope.label,
+            tag: 'RESPONSE',
+          ),
+        );
+      }
+    }
+    records.sort((a, b) => b.at.compareTo(a.at));
+
+    return TgcgSectionCard(
+      title: 'Operational activity',
+      subtitle: 'Most recent incidents, field reports, response assignments and result submissions.',
+      trailing: TgcgStatusPill(
+        label: '${records.length} EVENTS',
+        color: TgcgColors.info,
+        compact: true,
+      ),
+      child: records.isEmpty
+          ? const TgcgEmptyState(
+              icon: Icons.timeline_outlined,
+              title: 'No activity in scope',
+              message: 'Operational events will appear here as they are recorded.',
+            )
+          : Column(
+              children: records.take(10).map((record) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: TgcgColors.border),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: record.color.withValues(alpha: .08),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(
+                          record.icon,
+                          size: 19,
+                          color: record.color,
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              record.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: TgcgColors.ink,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              record.location,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: TgcgColors.muted,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      TgcgStatusPill(
+                        label: record.tag,
+                        color: record.color,
+                        compact: true,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _shortTime(record.at),
+                        style: const TextStyle(
+                          color: TgcgColors.muted,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _ActivityRecord {
+  const _ActivityRecord({
+    required this.at,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.location,
+    required this.tag,
+  });
+
+  final DateTime at;
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String location;
+  final String tag;
+}
+
+Color _conditionColor(_SituationCondition condition) => switch (condition) {
+      _SituationCondition.noData => const Color(0xFFCBD5D1),
+      _SituationCondition.normal => TgcgColors.success,
+      _SituationCondition.elevated => TgcgColors.warning,
+      _SituationCondition.serious => TgcgColors.danger,
+      _SituationCondition.critical => const Color(0xFF7F1D1D),
+    };
+
+String _conditionLabel(_SituationCondition condition) => switch (condition) {
+      _SituationCondition.noData => 'No current data',
+      _SituationCondition.normal => 'Normal',
+      _SituationCondition.elevated => 'Elevated',
+      _SituationCondition.serious => 'Serious',
+      _SituationCondition.critical => 'Critical',
+    };
+
+int _severityRank(IncidentSeverity severity) => switch (severity) {
+      IncidentSeverity.info => 0,
+      IncidentSeverity.low => 1,
+      IncidentSeverity.medium => 2,
+      IncidentSeverity.high => 3,
+      IncidentSeverity.critical => 4,
+    };
+
+Color _severityColor(IncidentSeverity severity) => switch (severity) {
+      IncidentSeverity.info => TgcgColors.info,
+      IncidentSeverity.low => TgcgColors.success,
+      IncidentSeverity.medium => TgcgColors.warning,
+      IncidentSeverity.high => TgcgColors.danger,
+      IncidentSeverity.critical => const Color(0xFF7F1D1D),
+    };
+
+Color _priorityColor(EmergencyDispatchPriority priority) => switch (priority) {
+      EmergencyDispatchPriority.routine => TgcgColors.info,
+      EmergencyDispatchPriority.urgent => TgcgColors.warning,
+      EmergencyDispatchPriority.critical => TgcgColors.danger,
+    };
+
+String _priorityLabel(EmergencyDispatchPriority priority) => switch (priority) {
+      EmergencyDispatchPriority.routine => 'Routine',
+      EmergencyDispatchPriority.urgent => 'Urgent',
+      EmergencyDispatchPriority.critical => 'Critical',
+    };
+
+Color _dispatchStatusColor(EmergencyDispatchStatus status) => switch (status) {
+      EmergencyDispatchStatus.assigned => TgcgColors.warning,
+      EmergencyDispatchStatus.acknowledged => TgcgColors.info,
+      EmergencyDispatchStatus.responding => TgcgColors.info,
+      EmergencyDispatchStatus.onScene => TgcgColors.ai,
+      EmergencyDispatchStatus.resolved => TgcgColors.success,
+      EmergencyDispatchStatus.closed => TgcgColors.muted,
+    };
+
+String _dispatchStatusLabel(EmergencyDispatchStatus status) => switch (status) {
+      EmergencyDispatchStatus.assigned => 'Assigned',
+      EmergencyDispatchStatus.acknowledged => 'Acknowledged',
+      EmergencyDispatchStatus.responding => 'Responding',
+      EmergencyDispatchStatus.onScene => 'On Scene',
+      EmergencyDispatchStatus.resolved => 'Resolved',
+      EmergencyDispatchStatus.closed => 'Closed',
+    };
+
+String _shortTime(DateTime value) {
+  final local = value.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }
