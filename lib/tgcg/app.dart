@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'communications/bulk_communications_store.dart';
 import 'communications/communications_store.dart';
 import 'field/field_agent_shell.dart';
 import 'field/field_operations_store.dart';
@@ -39,6 +40,7 @@ class _TgcgAppState extends State<TgcgApp> {
   late FieldOperationsController fieldOperationsController;
   late ResultOperationsController resultOperationsController;
   late CommunicationsController communicationsController;
+  late BulkCommunicationsController bulkCommunicationsController;
   late ReportOperationsController reportOperationsController;
   late EmergencyResponseController emergencyResponseController;
 
@@ -64,6 +66,12 @@ class _TgcgAppState extends State<TgcgApp> {
     );
     communicationsController =
         CommunicationsController.prototypeSeed(governanceOperationsController);
+    bulkCommunicationsController =
+        BulkCommunicationsController.productionFoundation(
+      membership: membershipOperationsController,
+      governance: governanceOperationsController,
+      persistence: offlinePersistenceController,
+    );
     reportOperationsController =
         ReportOperationsController.prototypeSeed(governanceOperationsController);
     emergencyResponseController =
@@ -78,6 +86,7 @@ class _TgcgAppState extends State<TgcgApp> {
     final oldField = fieldOperationsController;
     final oldResults = resultOperationsController;
     final oldCommunications = communicationsController;
+    final oldBulkCommunications = bulkCommunicationsController;
     final oldReports = reportOperationsController;
     final oldEmergency = emergencyResponseController;
 
@@ -99,6 +108,7 @@ class _TgcgAppState extends State<TgcgApp> {
       oldResults.dispose();
       oldMembership.dispose();
       oldCommunications.dispose();
+      oldBulkCommunications.dispose();
       oldReports.dispose();
       oldEmergency.dispose();
       oldGovernance.dispose();
@@ -113,6 +123,7 @@ class _TgcgAppState extends State<TgcgApp> {
     resultOperationsController.dispose();
     membershipOperationsController.dispose();
     communicationsController.dispose();
+    bulkCommunicationsController.dispose();
     reportOperationsController.dispose();
     emergencyResponseController.dispose();
     governanceOperationsController.dispose();
@@ -134,19 +145,22 @@ class _TgcgAppState extends State<TgcgApp> {
                 controller: reportOperationsController,
                 child: Communications(
                   controller: communicationsController,
-                  child: MembershipOperations(
-                    controller: membershipOperationsController,
-                    child: FieldOperations(
-                      controller: fieldOperationsController,
-                      child: ResultOperations(
-                        controller: resultOperationsController,
-                        child: MaterialApp(
-                          navigatorKey: tgcgNavigatorKey,
-                          debugShowCheckedModeBanner: false,
-                          title: 'TGCG-EMCOP',
-                          theme: _theme(),
-                          home: _AuthenticationGate(
-                            onResetPresentation: _resetPresentation,
+                  child: BulkCommunications(
+                    controller: bulkCommunicationsController,
+                    child: MembershipOperations(
+                      controller: membershipOperationsController,
+                      child: FieldOperations(
+                        controller: fieldOperationsController,
+                        child: ResultOperations(
+                          controller: resultOperationsController,
+                          child: MaterialApp(
+                            navigatorKey: tgcgNavigatorKey,
+                            debugShowCheckedModeBanner: false,
+                            title: 'TGCG-EMCOP',
+                            theme: _theme(),
+                            home: _AuthenticationGate(
+                              onResetPresentation: _resetPresentation,
+                            ),
                           ),
                         ),
                       ),
