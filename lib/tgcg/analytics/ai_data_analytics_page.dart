@@ -25,16 +25,14 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
     final field = FieldOperations.of(context);
     final results = ResultOperations.of(context);
     final offline = OfflinePersistence.of(context);
-
     final scope = session.scope;
+
     final incidents = field.incidentsForScope(scope);
     final reports = field.reportsForScope(scope);
     final submissions = results.submissionsForScope(scope);
     final reviewQueue = results.reviewQueueForScope(scope);
     final agents = membership.agentsForScope(scope);
     final members = membership.membersForScope(scope);
-    final pendingSync = offline.pendingOutbox;
-
     final unresolved = incidents
         .where((item) =>
             item.status != IncidentStatus.resolved &&
@@ -45,7 +43,7 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
             item.severity == IncidentSeverity.high ||
             item.severity == IncidentSeverity.critical)
         .toList(growable: false);
-    final evidenceItems = incidents.fold<int>(
+    final evidenceCount = incidents.fold<int>(
           0,
           (total, item) => total + item.evidence.length,
         ) +
@@ -53,10 +51,16 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
           0,
           (total, item) => total + item.evidence.length,
         );
+    final unresolvedWithEvidence =
+        unresolved.where((item) => item.evidence.isNotEmpty).length;
+    final approvedAgents = agents
+        .where((item) => item.status == AccreditationStatus.approved)
+        .length;
+    final pendingSync = offline.pendingOutbox.length;
 
-    final visibleZones = _visibleZones(membership.geography, scope)
+    final zones = _visibleZones(membership.geography, scope)
         .map(
-          (zone) => _zoneAnalytics(
+          (zone) => _zoneSummary(
             zone: zone,
             sessionScope: scope,
             membership: membership,
@@ -66,11 +70,16 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
         )
         .toList(growable: false);
 
-    final busiest = visibleZones.isEmpty
-        ? null
-        : visibleZones.reduce(
-            (a, b) => a.activityTotal >= b.activityTotal ? a : b,
-          );
+    final arithmeticFlags = submissions
+        .where((item) => item.validation?.arithmeticValid == false)
+        .length;
+    final duplicateFlags = submissions
+        .where((item) => item.validation?.duplicateSuspected == true)
+        .length;
+    final ocrMismatch = submissions
+        .where((item) => item.validation?.ocrMatchedManualEntry == false)
+        .length;
+    final missingForms = submissions.where((item) => item.resultForm == null).length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
@@ -79,7 +88,7 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
           eyebrow: 'AI-ASSISTED OPERATIONAL ANALYTICS',
           title: 'AI Data Analytics Centre',
           subtitle:
-              '${scope.label}: verification workload, field incidents, evidence quality, activity distribution and data-integrity indicators.',
+              '${scope.label}: verification workload, incident pressure, evidence quality, field activity and data-integrity indicators.',
           trailing: const TgcgStatusPill(
             label: 'HUMAN REVIEW',
             color: TgcgColors.ai,
@@ -88,10 +97,11 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
         ),
         const SizedBox(height: 18),
         _MetricGrid(
-          dataPoints: incidents.length + reports.length + submissions.length + agents.length,
-          reviewItems: reviewQueue.length,
+          operationalRecords:
+              incidents.length + reports.length + submissions.length + agents.length,
+          reviewQueue: reviewQueue.length,
           highPriority: highPriority.length,
-          pendingSync: pendingSync.length,
+          pendingSync: pendingSync,
         ),
         const SizedBox(height: 16),
         _FocusSelector(
@@ -99,40 +109,36 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
           onChanged: (value) => setState(() => focus = value),
         ),
         const SizedBox(height: 16),
-        _ExecutiveInsights(
-          submissions: submissions,
-          reviewQueue: reviewQueue,
-          unresolved: unresolved,
-          incidentsWithEvidence:
-              incidents.where((item) => item.evidence.isNotEmpty).length,
-          evidenceItems: evidenceItems,
-          approvedAgents: agents
-              .where((item) => item.status == AccreditationStatus.approved)
-              .length,
+        _InsightPanel(
+          submissions: submissions.length,
+          reviewQueue: reviewQueue.length,
+          unresolved: unresolved.length,
+          unresolvedWithEvidence: unresolvedWithEvidence,
+          approvedAgents: approvedAgents,
           totalAgents: agents.length,
-          busiest: busiest,
-          pendingSync: pendingSync.length,
+          pendingSync: pendingSync,
+          zones: zones,
         ),
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
-            final distribution = _OperationalDistribution(
-              zones: visibleZones,
-              focus: focus,
+            final distribution = _DistributionPanel(zones: zones, focus: focus);
+            final integrity = _IntegrityPanel(
+              submissions: submissions.length,
+              reviewQueue: reviewQueue.length,
+              arithmeticFlags: arithmeticFlags,
+              duplicateFlags: duplicateFlags,
+              ocrMismatch: ocrMismatch,
+              missingForms: missingForms,
+              evidenceCount: evidenceCount,
+              pendingSync: pendingSync,
             );
-            final quality = _DataQualityPanel(
-              submissions: submissions,
-              reviewQueue: reviewQueue,
-              incidents: incidents,
-              reports: reports,
-              pendingSync: pendingSync.length,
-            );
-            if (constraints.maxWidth < 1040) {
+            if (constraints.maxWidth < 1030) {
               return Column(
                 children: [
                   distribution,
                   const SizedBox(height: 16),
-                  quality,
+                  integrity,
                 ],
               );
             }
@@ -141,24 +147,24 @@ class _AiDataAnalyticsPageState extends State<AiDataAnalyticsPage> {
               children: [
                 Expanded(flex: 7, child: distribution),
                 const SizedBox(width: 16),
-                Expanded(flex: 4, child: quality),
+                Expanded(flex: 4, child: integrity),
               ],
             );
           },
         ),
         const SizedBox(height: 16),
-        _ReviewQueue(
-          submissions: reviewQueue,
+        _AttentionQueue(
+          results: reviewQueue,
           incidents: unresolved,
         ),
         const SizedBox(height: 16),
-        _ScopeCoverage(
+        _CoveragePanel(
           members: members.length,
           agents: agents.length,
           reports: reports.length,
           results: submissions.length,
           incidents: incidents.length,
-          evidence: evidenceItems,
+          evidence: evidenceCount,
         ),
       ],
     );
@@ -169,14 +175,14 @@ enum _AnalyticsFocus { overview, incidents, verification, fieldActivity }
 
 class _MetricGrid extends StatelessWidget {
   const _MetricGrid({
-    required this.dataPoints,
-    required this.reviewItems,
+    required this.operationalRecords,
+    required this.reviewQueue,
     required this.highPriority,
     required this.pendingSync,
   });
 
-  final int dataPoints;
-  final int reviewItems;
+  final int operationalRecords;
+  final int reviewQueue;
   final int highPriority;
   final int pendingSync;
 
@@ -197,7 +203,7 @@ class _MetricGrid extends StatelessWidget {
               TgcgMetricCard(
                 width: width,
                 label: 'Operational records',
-                value: '$dataPoints',
+                value: '$operationalRecords',
                 detail: 'Current authorized scope',
                 icon: Icons.dataset_outlined,
                 tone: TgcgMetricTone.info,
@@ -205,10 +211,10 @@ class _MetricGrid extends StatelessWidget {
               TgcgMetricCard(
                 width: width,
                 label: 'Human review queue',
-                value: '$reviewItems',
-                detail: 'Result integrity review',
+                value: '$reviewQueue',
+                detail: 'Result-integrity review',
                 icon: Icons.fact_check_outlined,
-                tone: reviewItems == 0
+                tone: reviewQueue == 0
                     ? TgcgMetricTone.success
                     : TgcgMetricTone.warning,
               ),
@@ -226,7 +232,9 @@ class _MetricGrid extends StatelessWidget {
                 width: width,
                 label: 'Offline queue',
                 value: '$pendingSync',
-                detail: pendingSync == 0 ? 'No pending mutations' : 'Awaiting synchronization',
+                detail: pendingSync == 0
+                    ? 'No pending mutations'
+                    : 'Awaiting synchronization',
                 icon: Icons.sync_outlined,
                 tone: pendingSync == 0
                     ? TgcgMetricTone.success
@@ -247,15 +255,27 @@ class _FocusSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TgcgSectionCard(
         title: 'Analysis focus',
-        subtitle: 'Change the operational signal emphasized in the distribution view.',
+        subtitle: 'Change the operational signal emphasized in the geographic view.',
         child: Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             _chip(_AnalyticsFocus.overview, 'Overview', Icons.dashboard_outlined),
-            _chip(_AnalyticsFocus.incidents, 'Incidents', Icons.warning_amber_rounded),
-            _chip(_AnalyticsFocus.verification, 'Verification', Icons.fact_check_outlined),
-            _chip(_AnalyticsFocus.fieldActivity, 'Field activity', Icons.sensors_outlined),
+            _chip(
+              _AnalyticsFocus.incidents,
+              'Incidents',
+              Icons.warning_amber_rounded,
+            ),
+            _chip(
+              _AnalyticsFocus.verification,
+              'Verification',
+              Icons.fact_check_outlined,
+            ),
+            _chip(
+              _AnalyticsFocus.fieldActivity,
+              'Field activity',
+              Icons.sensors_outlined,
+            ),
           ],
         ),
       );
@@ -277,55 +297,85 @@ class _FocusSelector extends StatelessWidget {
       ),
       selectedColor: TgcgColors.primary,
       backgroundColor: TgcgColors.surfaceSoft,
-      side: BorderSide(color: active ? TgcgColors.primary : TgcgColors.border),
+      side: BorderSide(
+        color: active ? TgcgColors.primary : TgcgColors.border,
+      ),
       showCheckmark: false,
     );
   }
 }
 
-class _ExecutiveInsights extends StatelessWidget {
-  const _ExecutiveInsights({
+class _InsightPanel extends StatelessWidget {
+  const _InsightPanel({
     required this.submissions,
     required this.reviewQueue,
     required this.unresolved,
-    required this.incidentsWithEvidence,
-    required this.evidenceItems,
+    required this.unresolvedWithEvidence,
     required this.approvedAgents,
     required this.totalAgents,
-    required this.busiest,
     required this.pendingSync,
+    required this.zones,
   });
 
-  final List<ElectionResultSubmission> submissions;
-  final List<ElectionResultSubmission> reviewQueue;
-  final List<FieldIncident> unresolved;
-  final int incidentsWithEvidence;
-  final int evidenceItems;
+  final int submissions;
+  final int reviewQueue;
+  final int unresolved;
+  final int unresolvedWithEvidence;
   final int approvedAgents;
   final int totalAgents;
-  final _ZoneAnalytics? busiest;
   final int pendingSync;
+  final List<_ZoneSummary> zones;
 
   @override
   Widget build(BuildContext context) {
-    final verificationText = submissions.isEmpty
-        ? 'No result submissions are available in this scope.'
-        : reviewQueue.isEmpty
-            ? 'All current result submissions are clear of the human-review queue.'
-            : '${reviewQueue.length} of ${submissions.length} result submissions currently require human review.';
-    final incidentText = unresolved.isEmpty
-        ? 'No unresolved field incidents are currently recorded in this scope.'
-        : '${unresolved.length} unresolved incident${unresolved.length == 1 ? '' : 's'} require operational follow-up.';
-    final evidenceText = unresolved.isEmpty
-        ? 'No unresolved incident evidence requirement is pending.'
-        : '$incidentsWithEvidence of ${unresolved.length} recorded incidents currently include attached evidence; $evidenceItems evidence item${evidenceItems == 1 ? '' : 's'} are indexed.';
-    final readinessText = totalAgents == 0
-        ? 'No accredited agents are currently assigned in this scope.'
-        : '$approvedAgents of $totalAgents assigned agents are approved for operations.';
+    final busiest = zones.isEmpty
+        ? null
+        : zones.reduce((a, b) => a.activity >= b.activity ? a : b);
+    final items = <_Insight>[
+      _Insight(
+        icon: Icons.fact_check_outlined,
+        title: 'Verification workload',
+        text: submissions == 0
+            ? 'No result submissions are available in this scope.'
+            : reviewQueue == 0
+                ? 'All current submissions are clear of the human-review queue.'
+                : '$reviewQueue of $submissions submissions currently require human review.',
+        color: reviewQueue == 0 ? TgcgColors.success : TgcgColors.warning,
+      ),
+      _Insight(
+        icon: Icons.crisis_alert_outlined,
+        title: 'Incident attention',
+        text: unresolved == 0
+            ? 'No unresolved field incidents are currently recorded.'
+            : '$unresolved unresolved incident${unresolved == 1 ? '' : 's'} require operational follow-up.',
+        color: unresolved == 0 ? TgcgColors.success : TgcgColors.danger,
+      ),
+      _Insight(
+        icon: Icons.perm_media_outlined,
+        title: 'Evidence coverage',
+        text: unresolved == 0
+            ? 'No unresolved incident evidence requirement is pending.'
+            : '$unresolvedWithEvidence of $unresolved unresolved incidents include attached evidence.',
+        color: unresolvedWithEvidence == unresolved && unresolved > 0
+            ? TgcgColors.success
+            : TgcgColors.info,
+      ),
+      _Insight(
+        icon: Icons.badge_outlined,
+        title: 'Operational readiness',
+        text: totalAgents == 0
+            ? 'No accredited agents are assigned in this scope.'
+            : '$approvedAgents of $totalAgents assigned agents are approved.${busiest == null ? '' : ' Highest recorded activity is ${busiest.name}.'}${pendingSync == 0 ? '' : ' $pendingSync local mutation${pendingSync == 1 ? '' : 's'} await sync.'}',
+        color: approvedAgents == totalAgents && totalAgents > 0
+            ? TgcgColors.success
+            : TgcgColors.primary,
+      ),
+    ];
 
     return TgcgSectionCard(
       title: 'Operational intelligence summary',
-      subtitle: 'System-derived indicators for human decision support; these are not election-outcome predictions.',
+      subtitle:
+          'System-derived indicators for human decision support; no election-outcome prediction is performed.',
       trailing: const TgcgStatusPill(
         label: 'CURRENT DATA',
         color: TgcgColors.ai,
@@ -334,44 +384,19 @@ class _ExecutiveInsights extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 920 ? 4 : constraints.maxWidth >= 560 ? 2 : 1;
+          final columns = constraints.maxWidth >= 920
+              ? 4
+              : constraints.maxWidth >= 560
+                  ? 2
+                  : 1;
           const gap = 10.0;
           final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
           return Wrap(
             spacing: gap,
             runSpacing: gap,
-            children: [
-              _InsightCard(
-                width: width,
-                icon: Icons.fact_check_outlined,
-                title: 'Verification workload',
-                body: verificationText,
-                tone: reviewQueue.isEmpty ? TgcgColors.success : TgcgColors.warning,
-              ),
-              _InsightCard(
-                width: width,
-                icon: Icons.crisis_alert_outlined,
-                title: 'Incident attention',
-                body: incidentText,
-                tone: unresolved.isEmpty ? TgcgColors.success : TgcgColors.danger,
-              ),
-              _InsightCard(
-                width: width,
-                icon: Icons.perm_media_outlined,
-                title: 'Evidence coverage',
-                body: evidenceText,
-                tone: evidenceItems > 0 ? TgcgColors.info : TgcgColors.muted,
-              ),
-              _InsightCard(
-                width: width,
-                icon: Icons.badge_outlined,
-                title: 'Agent readiness',
-                body: '$readinessText${busiest == null ? '' : ' Highest recorded activity: ${busiest!.name}.'}${pendingSync == 0 ? '' : ' $pendingSync local mutation${pendingSync == 1 ? '' : 's'} await sync.'}',
-                tone: approvedAgents == totalAgents && totalAgents > 0
-                    ? TgcgColors.success
-                    : TgcgColors.primary,
-              ),
-            ],
+            children: items
+                .map((item) => _InsightCard(item: item, width: width))
+                .toList(growable: false),
           );
         },
       ),
@@ -379,20 +404,25 @@ class _ExecutiveInsights extends StatelessWidget {
   }
 }
 
-class _InsightCard extends StatelessWidget {
-  const _InsightCard({
-    required this.width,
+class _Insight {
+  const _Insight({
     required this.icon,
     required this.title,
-    required this.body,
-    required this.tone,
+    required this.text,
+    required this.color,
   });
 
-  final double width;
   final IconData icon;
   final String title;
-  final String body;
-  final Color tone;
+  final String text;
+  final Color color;
+}
+
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({required this.item, required this.width});
+
+  final _Insight item;
+  final double width;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -411,14 +441,14 @@ class _InsightCard extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: tone.withValues(alpha: .10),
+                color: item.color.withValues(alpha: .10),
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: Icon(icon, size: 19, color: tone),
+              child: Icon(item.icon, size: 19, color: item.color),
             ),
             const SizedBox(height: 11),
             Text(
-              title,
+              item.title,
               style: const TextStyle(
                 color: TgcgColors.ink,
                 fontSize: 12,
@@ -427,7 +457,7 @@ class _InsightCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              body,
+              item.text,
               style: const TextStyle(
                 color: TgcgColors.muted,
                 fontSize: 10.5,
@@ -440,22 +470,31 @@ class _InsightCard extends StatelessWidget {
       );
 }
 
-class _OperationalDistribution extends StatelessWidget {
-  const _OperationalDistribution({required this.zones, required this.focus});
+class _DistributionPanel extends StatelessWidget {
+  const _DistributionPanel({required this.zones, required this.focus});
 
-  final List<_ZoneAnalytics> zones;
+  final List<_ZoneSummary> zones;
   final _AnalyticsFocus focus;
 
   @override
   Widget build(BuildContext context) {
-    final maxValue = zones.fold<int>(1, (current, item) {
-      final value = item.valueFor(focus);
+    final maxValue = zones.fold<int>(1, (current, zone) {
+      final value = zone.valueFor(focus);
       return value > current ? value : current;
     });
 
     return TgcgSectionCard(
       title: 'Geographic operational distribution',
-      subtitle: _focusSubtitle(focus),
+      subtitle: switch (focus) {
+        _AnalyticsFocus.overview =>
+          'Combined operational activity from approved agents, reports, incidents and result submissions.',
+        _AnalyticsFocus.incidents =>
+          'Unresolved field incidents by authorized geopolitical scope.',
+        _AnalyticsFocus.verification =>
+          'Result submissions requiring human integrity review.',
+        _AnalyticsFocus.fieldActivity =>
+          'Approved agent assignments and field reports.',
+      },
       trailing: TgcgStatusPill(
         label: '${zones.length} ZONE${zones.length == 1 ? '' : 'S'}',
         color: TgcgColors.primary,
@@ -466,52 +505,46 @@ class _OperationalDistribution extends StatelessWidget {
           ? const TgcgEmptyState(
               icon: Icons.public_off_outlined,
               title: 'No geographic analytics available',
-              message: 'No operational records are available for the current scope.',
+              message: 'No operational records are available for this scope.',
             )
           : Column(
               children: zones
                   .map(
-                    (zone) => _DistributionBar(
+                    (zone) => _ZoneBar(
                       zone: zone,
-                      value: zone.valueFor(focus),
-                      maxValue: maxValue,
                       focus: focus,
+                      maxValue: maxValue,
                     ),
                   )
                   .toList(growable: false),
             ),
     );
   }
-
-  String _focusSubtitle(_AnalyticsFocus value) => switch (value) {
-        _AnalyticsFocus.overview =>
-          'Combined operational activity from agents, reports, incidents and result submissions.',
-        _AnalyticsFocus.incidents =>
-          'Recorded unresolved field incidents by geopolitical zone.',
-        _AnalyticsFocus.verification =>
-          'Result submissions requiring human integrity review by geopolitical zone.',
-        _AnalyticsFocus.fieldActivity =>
-          'Field reports and approved agent assignments by geopolitical zone.',
-      };
 }
 
-class _DistributionBar extends StatelessWidget {
-  const _DistributionBar({
+class _ZoneBar extends StatelessWidget {
+  const _ZoneBar({
     required this.zone,
-    required this.value,
-    required this.maxValue,
     required this.focus,
+    required this.maxValue,
   });
 
-  final _ZoneAnalytics zone;
-  final int value;
-  final int maxValue;
+  final _ZoneSummary zone;
   final _AnalyticsFocus focus;
+  final int maxValue;
 
   @override
   Widget build(BuildContext context) {
-    final fraction = maxValue <= 0 ? 0.0 : value / maxValue;
-    final color = _barColor(focus, zone);
+    final value = zone.valueFor(focus);
+    final fraction = maxValue == 0 ? 0.0 : value / maxValue;
+    final color = focus == _AnalyticsFocus.incidents && zone.highPriority > 0
+        ? TgcgColors.danger
+        : focus == _AnalyticsFocus.verification
+            ? TgcgColors.ai
+            : focus == _AnalyticsFocus.fieldActivity
+                ? TgcgColors.info
+                : TgcgColors.primary;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -565,7 +598,7 @@ class _DistributionBar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 118),
             child: Text(
-              '${zone.agents} agents • ${zone.reports} reports • ${zone.unresolvedIncidents} unresolved • ${zone.results} results • ${zone.reviewItems} review',
+              '${zone.agents} agents • ${zone.reports} reports • ${zone.unresolved} unresolved • ${zone.results} results • ${zone.review} review',
               style: const TextStyle(
                 color: TgcgColors.muted,
                 fontSize: 8.8,
@@ -577,97 +610,141 @@ class _DistributionBar extends StatelessWidget {
       ),
     );
   }
-
-  Color _barColor(_AnalyticsFocus focus, _ZoneAnalytics zone) {
-    if (focus == _AnalyticsFocus.incidents) {
-      return zone.highPriorityIncidents > 0 ? TgcgColors.danger : TgcgColors.warning;
-    }
-    if (focus == _AnalyticsFocus.verification) {
-      return zone.reviewItems > 0 ? TgcgColors.ai : TgcgColors.success;
-    }
-    if (focus == _AnalyticsFocus.fieldActivity) return TgcgColors.info;
-    return TgcgColors.primary;
-  }
 }
 
-class _DataQualityPanel extends StatelessWidget {
-  const _DataQualityPanel({
+class _IntegrityPanel extends StatelessWidget {
+  const _IntegrityPanel({
     required this.submissions,
     required this.reviewQueue,
-    required this.incidents,
-    required this.reports,
+    required this.arithmeticFlags,
+    required this.duplicateFlags,
+    required this.ocrMismatch,
+    required this.missingForms,
+    required this.evidenceCount,
     required this.pendingSync,
   });
 
-  final List<ElectionResultSubmission> submissions;
-  final List<ElectionResultSubmission> reviewQueue;
-  final List<FieldIncident> incidents;
-  final List<FieldReport> reports;
+  final int submissions;
+  final int reviewQueue;
+  final int arithmeticFlags;
+  final int duplicateFlags;
+  final int ocrMismatch;
+  final int missingForms;
+  final int evidenceCount;
   final int pendingSync;
 
   @override
-  Widget build(BuildContext context) {
-    final verified = submissions
-        .where((item) => item.status == RecordStatus.verified)
-        .length;
-    final resultEvidence = submissions
-        .where((item) => item.resultForm != null)
-        .length;
-    final incidentEvidence = incidents
-        .where((item) => item.evidence.isNotEmpty)
-        .length;
-    final reviewedReports = reports
-        .where((item) =>
-            item.status == RecordStatus.verified ||
-            item.status == RecordStatus.underReview)
-        .length;
+  Widget build(BuildContext context) => TgcgSectionCard(
+        title: 'Data quality & integrity',
+        subtitle: 'Current deterministic checks and review indicators.',
+        child: Column(
+          children: [
+            _IntegrityRow(
+              icon: Icons.calculate_outlined,
+              label: 'Arithmetic flags',
+              value: arithmeticFlags,
+              warning: arithmeticFlags > 0,
+            ),
+            _IntegrityRow(
+              icon: Icons.content_copy_outlined,
+              label: 'Duplicate flags',
+              value: duplicateFlags,
+              warning: duplicateFlags > 0,
+            ),
+            _IntegrityRow(
+              icon: Icons.document_scanner_outlined,
+              label: 'OCR/manual mismatches',
+              value: ocrMismatch,
+              warning: ocrMismatch > 0,
+            ),
+            _IntegrityRow(
+              icon: Icons.image_not_supported_outlined,
+              label: 'Missing result forms',
+              value: missingForms,
+              warning: missingForms > 0,
+            ),
+            _IntegrityRow(
+              icon: Icons.manage_search_outlined,
+              label: 'Human review queue',
+              value: reviewQueue,
+              warning: reviewQueue > 0,
+            ),
+            _IntegrityRow(
+              icon: Icons.perm_media_outlined,
+              label: 'Evidence indexed',
+              value: evidenceCount,
+              warning: false,
+            ),
+            _IntegrityRow(
+              icon: Icons.sync_problem_outlined,
+              label: 'Pending sync',
+              value: pendingSync,
+              warning: pendingSync > 0,
+            ),
+            if (submissions == 0)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Result-integrity indicators will populate when submissions are available.',
+                  style: TextStyle(
+                    color: TgcgColors.muted,
+                    fontSize: 9.5,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+}
 
-    return TgcgSectionCard(
-      title: 'Data quality & integrity',
-      subtitle: 'Rule-based indicators from current records.',
-      child: Column(
+class _IntegrityRow extends StatelessWidget {
+  const _IntegrityRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.warning,
+  });
+
+  final IconData icon;
+  final String label;
+  final int value;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning ? TgcgColors.warning : TgcgColors.success;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
         children: [
-          _QualityRow(
-            icon: Icons.verified_outlined,
-            label: 'Verified results',
-            value: '$verified / ${submissions.length}',
-            color: verified == submissions.length && submissions.isNotEmpty
-                ? TgcgColors.success
-                : TgcgColors.info,
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 17, color: color),
           ),
-          _QualityRow(
-            icon: Icons.manage_search_outlined,
-            label: 'Human review required',
-            value: '${reviewQueue.length}',
-            color: reviewQueue.isEmpty ? TgcgColors.success : TgcgColors.warning,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: TgcgColors.ink,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-          _QualityRow(
-            icon: Icons.image_outlined,
-            label: 'Result forms attached',
-            value: '$resultEvidence / ${submissions.length}',
-            color: resultEvidence == submissions.length && submissions.isNotEmpty
-                ? TgcgColors.success
-                : TgcgColors.info,
-          ),
-          _QualityRow(
-            icon: Icons.perm_media_outlined,
-            label: 'Incidents with evidence',
-            value: '$incidentEvidence / ${incidents.length}',
-            color: incidentEvidence == incidents.length && incidents.isNotEmpty
-                ? TgcgColors.success
-                : TgcgColors.warning,
-          ),
-          _QualityRow(
-            icon: Icons.assignment_turned_in_outlined,
-            label: 'Reports reviewed',
-            value: '$reviewedReports / ${reports.length}',
-            color: TgcgColors.info,
-          ),
-          _QualityRow(
-            icon: Icons.sync_problem_outlined,
-            label: 'Pending sync mutations',
-            value: '$pendingSync',
-            color: pendingSync == 0 ? TgcgColors.success : TgcgColors.warning,
+          Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -675,61 +752,10 @@ class _DataQualityPanel extends StatelessWidget {
   }
 }
 
-class _QualityRow extends StatelessWidget {
-  const _QualityRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+class _AttentionQueue extends StatelessWidget {
+  const _AttentionQueue({required this.results, required this.incidents});
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 17, color: color),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: TgcgColors.ink,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
-class _ReviewQueue extends StatelessWidget {
-  const _ReviewQueue({required this.submissions, required this.incidents});
-
-  final List<ElectionResultSubmission> submissions;
+  final List<ElectionResultSubmission> results;
   final List<FieldIncident> incidents;
 
   @override
@@ -742,23 +768,24 @@ class _ReviewQueue extends StatelessWidget {
             item.category.toLowerCase().contains('technical'))
         .take(4)
         .toList(growable: false);
-    final reviewResults = submissions.take(4).toList(growable: false);
+    final reviewResults = results.take(4).toList(growable: false);
+    final count = priorityIncidents.length + reviewResults.length;
 
     return TgcgSectionCard(
-      title: 'AI-assisted review queue',
-      subtitle: 'Records surfaced for human attention based on existing integrity and operational rules.',
+      title: 'AI-assisted attention queue',
+      subtitle:
+          'Records surfaced for human attention from existing integrity and operational rules.',
       trailing: TgcgStatusPill(
-        label: '${reviewResults.length + priorityIncidents.length} ITEMS',
-        color: reviewResults.isEmpty && priorityIncidents.isEmpty
-            ? TgcgColors.success
-            : TgcgColors.warning,
+        label: '$count ITEMS',
+        color: count == 0 ? TgcgColors.success : TgcgColors.warning,
         compact: true,
       ),
-      child: reviewResults.isEmpty && priorityIncidents.isEmpty
+      child: count == 0
           ? const TgcgEmptyState(
               icon: Icons.task_alt_rounded,
-              title: 'No review items',
-              message: 'No current result-integrity or priority operational item requires attention.',
+              title: 'No attention items',
+              message:
+                  'No current result-integrity or priority operational item requires attention.',
             )
           : Column(
               children: [
@@ -775,14 +802,14 @@ class _ReviewQueue extends StatelessWidget {
                 ...priorityIncidents.map(
                   (item) => _QueueRow(
                     icon: Icons.warning_amber_rounded,
-                    color: item.severity == IncidentSeverity.critical ||
-                            item.severity == IncidentSeverity.high
+                    color: item.severity == IncidentSeverity.high ||
+                            item.severity == IncidentSeverity.critical
                         ? TgcgColors.danger
                         : TgcgColors.warning,
                     title: '${item.id} • ${item.title}',
                     detail:
                         '${item.scope.stateName ?? 'State'} • ${item.scope.lgaName ?? 'LGA'} • ${item.category}',
-                    status: _incidentLabel(item.severity),
+                    status: _severityLabel(item.severity),
                   ),
                 ),
               ],
@@ -790,12 +817,15 @@ class _ReviewQueue extends StatelessWidget {
     );
   }
 
-  String _incidentLabel(IncidentSeverity severity) => switch (severity) {
-        IncidentSeverity.critical => 'CRITICAL',
-        IncidentSeverity.high => 'HIGH',
-        IncidentSeverity.medium => 'REVIEW',
-        IncidentSeverity.low => 'INFO',
-      };
+  String _severityLabel(IncidentSeverity severity) => severity == IncidentSeverity.critical
+      ? 'CRITICAL'
+      : severity == IncidentSeverity.high
+          ? 'HIGH'
+          : severity == IncidentSeverity.medium
+              ? 'REVIEW'
+              : severity == IncidentSeverity.low
+                  ? 'LOW'
+                  : 'INFO';
 }
 
 class _QueueRow extends StatelessWidget {
@@ -868,8 +898,8 @@ class _QueueRow extends StatelessWidget {
       );
 }
 
-class _ScopeCoverage extends StatelessWidget {
-  const _ScopeCoverage({
+class _CoveragePanel extends StatelessWidget {
+  const _CoveragePanel({
     required this.members,
     required this.agents,
     required this.reports,
@@ -886,95 +916,99 @@ class _ScopeCoverage extends StatelessWidget {
   final int evidence;
 
   @override
-  Widget build(BuildContext context) => TgcgSectionCard(
-        title: 'Authorized data coverage',
-        subtitle: 'Record volumes currently available to analytics in this operator scope.',
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 900 ? 6 : constraints.maxWidth >= 560 ? 3 : 2;
-            const gap = 9.0;
-            final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-            final values = <(String, int, IconData)>[
-              ('Members', members, Icons.groups_2_outlined),
-              ('Agents', agents, Icons.badge_outlined),
-              ('Reports', reports, Icons.description_outlined),
-              ('Results', results, Icons.ballot_outlined),
-              ('Incidents', incidents, Icons.warning_amber_outlined),
-              ('Evidence', evidence, Icons.perm_media_outlined),
-            ];
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: values
-                  .map(
-                    (item) => Container(
-                      width: width,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: TgcgColors.surfaceSoft,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: TgcgColors.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(item.$3, size: 18, color: TgcgColors.primary),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${item.$2}',
-                            style: const TextStyle(
-                              color: TgcgColors.ink,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            item.$1,
-                            style: const TextStyle(
-                              color: TgcgColors.muted,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
+  Widget build(BuildContext context) {
+    final values = <(String, int, IconData)>[
+      ('Members', members, Icons.groups_2_outlined),
+      ('Agents', agents, Icons.badge_outlined),
+      ('Reports', reports, Icons.description_outlined),
+      ('Results', results, Icons.ballot_outlined),
+      ('Incidents', incidents, Icons.warning_amber_outlined),
+      ('Evidence', evidence, Icons.perm_media_outlined),
+    ];
+
+    return TgcgSectionCard(
+      title: 'Authorized data coverage',
+      subtitle: 'Record volumes available to analytics in this operator scope.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 900
+              ? 6
+              : constraints.maxWidth >= 560
+                  ? 3
+                  : 2;
+          const gap = 9.0;
+          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: values
+                .map(
+                  (item) => Container(
+                    width: width,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: TgcgColors.surfaceSoft,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: TgcgColors.border),
                     ),
-                  )
-                  .toList(growable: false),
-            );
-          },
-        ),
-      );
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(item.$3, size: 18, color: TgcgColors.primary),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${item.$2}',
+                          style: const TextStyle(
+                            color: TgcgColors.ink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          item.$1,
+                          style: const TextStyle(
+                            color: TgcgColors.muted,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
 }
 
-class _ZoneAnalytics {
-  const _ZoneAnalytics({
+class _ZoneSummary {
+  const _ZoneSummary({
     required this.name,
-    required this.code,
     required this.agents,
     required this.reports,
-    required this.unresolvedIncidents,
-    required this.highPriorityIncidents,
+    required this.unresolved,
+    required this.highPriority,
     required this.results,
-    required this.reviewItems,
+    required this.review,
   });
 
   final String name;
-  final String code;
   final int agents;
   final int reports;
-  final int unresolvedIncidents;
-  final int highPriorityIncidents;
+  final int unresolved;
+  final int highPriority;
   final int results;
-  final int reviewItems;
+  final int review;
 
-  int get activityTotal =>
-      agents + reports + unresolvedIncidents + results + reviewItems;
+  int get activity => agents + reports + unresolved + results + review;
 
   int valueFor(_AnalyticsFocus focus) => switch (focus) {
-        _AnalyticsFocus.overview => activityTotal,
-        _AnalyticsFocus.incidents => unresolvedIncidents,
-        _AnalyticsFocus.verification => reviewItems,
+        _AnalyticsFocus.overview => activity,
+        _AnalyticsFocus.incidents => unresolved,
+        _AnalyticsFocus.verification => review,
         _AnalyticsFocus.fieldActivity => agents + reports,
       };
 }
@@ -983,9 +1017,7 @@ List<CanonicalZone> _visibleZones(
   GeographyRegistry geography,
   GeographicScope sessionScope,
 ) {
-  if (sessionScope.level == GeographyLevel.country) {
-    return geography.zones;
-  }
+  if (sessionScope.level == GeographyLevel.country) return geography.zones;
   final zoneId = sessionScope.zoneId;
   if (zoneId == null) return const [];
   return geography.zones
@@ -993,7 +1025,7 @@ List<CanonicalZone> _visibleZones(
       .toList(growable: false);
 }
 
-_ZoneAnalytics _zoneAnalytics({
+_ZoneSummary _zoneSummary({
   required CanonicalZone zone,
   required GeographicScope sessionScope,
   required MembershipOperationsController membership,
@@ -1009,21 +1041,21 @@ _ZoneAnalytics _zoneAnalytics({
           item.status != IncidentStatus.resolved &&
           item.status != IncidentStatus.closed)
       .toList(growable: false);
-  return _ZoneAnalytics(
+
+  return _ZoneSummary(
     name: zone.name,
-    code: zone.id,
     agents: membership
         .agentsForScope(scope)
         .where((item) => item.status == AccreditationStatus.approved)
         .length,
     reports: field.reportsForScope(scope).length,
-    unresolvedIncidents: unresolved.length,
-    highPriorityIncidents: unresolved
+    unresolved: unresolved.length,
+    highPriority: unresolved
         .where((item) =>
             item.severity == IncidentSeverity.high ||
             item.severity == IncidentSeverity.critical)
         .length,
     results: results.submissionsForScope(scope).length,
-    reviewItems: results.reviewQueueForScope(scope).length,
+    review: results.reviewQueueForScope(scope).length,
   );
 }
