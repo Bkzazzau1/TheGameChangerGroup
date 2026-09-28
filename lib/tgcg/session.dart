@@ -13,6 +13,7 @@ enum TgcgModule {
   geography,
   liveOperations,
   aiVerification,
+  aiAnalytics,
   alertCenter,
   fieldMonitoring,
   evidenceCapture,
@@ -173,6 +174,7 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
     modules.add(TgcgModule.geography);
     if (role != TgcgRole.pollingUnitAgent && role != TgcgRole.observer) {
       modules.add(TgcgModule.liveOperations);
+      modules.add(TgcgModule.aiAnalytics);
       modules.add(TgcgModule.alertCenter);
     }
   }
