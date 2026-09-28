@@ -4,6 +4,7 @@ import 'ai/ai_verification_page.dart';
 import 'alerts/alert_center_page.dart';
 import 'analytics/ai_data_analytics_page.dart';
 import 'collation/collation_page.dart';
+import 'communications/bulk_communications_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
 import 'discussion/discussion_room_page.dart';
@@ -154,6 +155,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.collation => const CollationPage(),
         TgcgModule.mediaIntelligence => const MediaIntelligencePage(),
         TgcgModule.communications => const CommunicationsPage(),
+        TgcgModule.bulkCommunications => const BulkCommunicationsPage(),
         TgcgModule.discussionRoom => const DiscussionRoomPage(),
         TgcgModule.meetingRoom => const MeetingRoomPage(),
         TgcgModule.systemMonitoring => const SystemMonitoringPage(),
@@ -189,6 +191,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.resultCapture, 'Result Capture', Icons.ballot_outlined, _NavGroup.fieldOperations),
   _Destination(TgcgModule.collation, 'Collation', Icons.account_tree_outlined, _NavGroup.fieldOperations),
   _Destination(TgcgModule.communications, 'Communications', Icons.forum_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.bulkCommunications, 'Bulk Communications', Icons.send_to_mobile_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.discussionRoom, 'Discussion Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.roleAssignment, 'Role Assignment', Icons.manage_accounts_outlined, _NavGroup.control),
@@ -550,6 +553,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.collation => 'Collation',
       TgcgModule.mediaIntelligence => 'Media Intelligence',
       TgcgModule.communications => 'Communications',
+      TgcgModule.bulkCommunications => 'Bulk Communications Centre',
       TgcgModule.discussionRoom => 'Discussion Forum',
       TgcgModule.meetingRoom => 'Meeting Room',
       TgcgModule.systemMonitoring => 'System Monitoring',
