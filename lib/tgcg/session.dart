@@ -23,6 +23,7 @@ enum TgcgModule {
   collation,
   mediaIntelligence,
   communications,
+  bulkCommunications,
   discussionRoom,
   meetingRoom,
   systemMonitoring,
@@ -211,6 +212,9 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewCommunications)) {
     modules.add(TgcgModule.communications);
+  }
+  if (TgcgPermissionPolicy.allows(role, TgcgCapability.sendBroadcast)) {
+    modules.add(TgcgModule.bulkCommunications);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewDiscussionRoom)) {
     modules.add(TgcgModule.discussionRoom);
