@@ -248,9 +248,7 @@ class BulkCommunicationsController extends ChangeNotifier {
       .toList(growable: false);
 
   List<BulkDeliveryJob> jobsForScope(GeographicScope scope) => jobs
-      .where((job) =>
-          TgcgPermissionPolicy.scopeAllows(scope, job.targetScope) ||
-          TgcgPermissionPolicy.scopeAllows(job.targetScope, scope))
+      .where((job) => TgcgPermissionPolicy.scopeAllows(scope, job.targetScope))
       .toList(growable: false);
 
   CommunicationContact _contactForMember(TgcgMember member) {
@@ -395,6 +393,7 @@ class BulkCommunicationsController extends ChangeNotifier {
         channelPlan[route] = (channelPlan[route] ?? 0) + 1;
       }
     }
+    if (eligible == 0) return null;
 
     final providerReady = orderedChannels.any(
       (channel) => _providers.any(
