@@ -177,7 +177,7 @@ class _MeetingHero extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF0B2520), Color(0xFF123D33)],
+            colors: [Color(0xFF04102C), Color(0xFF061A49)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -215,7 +215,7 @@ class _MeetingHero extends StatelessWidget {
                       Text(
                         'Local voice and video coordination',
                         style: TextStyle(
-                          color: Color(0xFFC6D7D1),
+                          color: Color(0xFFC6CBD7),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -229,7 +229,7 @@ class _MeetingHero extends StatelessWidget {
             Text(
               '$ward • $lga',
               style: const TextStyle(
-                color: Color(0xFFD7E3DF),
+                color: Color(0xFFD7DBE3),
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
@@ -503,7 +503,7 @@ class _CallStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        color: const Color(0xFF071411),
+        color: const Color(0xFF030918),
         child: SafeArea(
           child: Column(
             children: [
@@ -535,7 +535,7 @@ class _CallStage extends StatelessWidget {
                           Text(
                             '${participants.length + 1} participants',
                             style: const TextStyle(
-                              color: Color(0xFF9CB2AB),
+                              color: Color(0xFF9BA2B3),
                               fontSize: 9,
                             ),
                           ),
@@ -543,7 +543,7 @@ class _CallStage extends StatelessWidget {
                       ),
                     ),
                     const Icon(Icons.lock_outline_rounded,
-                        color: Color(0xFF9CB2AB), size: 18),
+                        color: Color(0xFF9BA2B3), size: 18),
                   ],
                 ),
               ),
@@ -650,12 +650,12 @@ class _VideoTile extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Container(
-              color: const Color(0xFF102721),
+              color: const Color(0xFF09142E),
               child: child ??
                   Center(
                     child: CircleAvatar(
                       radius: 31,
-                      backgroundColor: const Color(0xFF28443B),
+                      backgroundColor: const Color(0xFF1D2C4F),
                       child: Text(
                         _initials(label),
                         style: const TextStyle(
@@ -695,7 +695,7 @@ class _VideoTile extends StatelessWidget {
                           Text(
                             subtitle,
                             style: const TextStyle(
-                              color: Color(0xFFC2D0CB),
+                              color: Color(0xFFC2C6D0),
                               fontSize: 8,
                             ),
                           ),
@@ -740,7 +740,7 @@ class _CallControl extends StatelessWidget {
             color: danger
                 ? TgcgColors.danger
                 : active
-                    ? const Color(0xFF23463D)
+                    ? const Color(0xFF172952)
                     : const Color(0xFF3A2525),
             shape: BoxShape.circle,
           ),

@@ -814,7 +814,7 @@ class _LiveMeetingStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        color: const Color(0xFF081D19),
+        color: const Color(0xFF020C23),
         child: SafeArea(
           child: Column(
             children: [
@@ -841,7 +841,7 @@ class _LiveMeetingStage extends StatelessWidget {
                           Text(
                             '${meeting.participants.length} participants • ${meeting.id}',
                             style: const TextStyle(
-                              color: Color(0xFF9CB3AB),
+                              color: Color(0xFF9BA2B4),
                               fontSize: 9.5,
                             ),
                           ),
@@ -898,8 +898,8 @@ class _LiveMeetingStage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 13, 16, 16),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF0D2923),
-                  border: Border(top: BorderSide(color: Color(0xFF1E4038))),
+                  color: Color(0xFF051231),
+                  border: Border(top: BorderSide(color: Color(0xFF12244C))),
                 ),
                 child: Wrap(
                   alignment: WrapAlignment.center,
@@ -974,10 +974,10 @@ class _ParticipantTile extends StatelessWidget {
         width: width,
         height: 250,
         decoration: BoxDecoration(
-          color: const Color(0xFF12372F),
+          color: const Color(0xFF071942),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: presenting ? TgcgColors.accent : const Color(0xFF244A42),
+            color: presenting ? TgcgColors.accent : const Color(0xFF172A57),
             width: presenting ? 2 : 1,
           ),
         ),
@@ -1006,7 +1006,7 @@ class _ParticipantTile extends StatelessWidget {
                         Text(
                           participant.role,
                           style: const TextStyle(
-                            color: Color(0xFFA7BBB5),
+                            color: Color(0xFFA6ADBC),
                             fontSize: 9.5,
                           ),
                         ),
@@ -1014,7 +1014,7 @@ class _ParticipantTile extends StatelessWidget {
                     )
                   : const Icon(
                       Icons.videocam_off_rounded,
-                      color: Color(0xFF708A82),
+                      color: Color(0xFF6F778B),
                       size: 52,
                     ),
             ),
@@ -1085,12 +1085,12 @@ class _CallControl extends StatelessWidget {
         ? TgcgColors.danger
         : active
             ? Colors.white
-            : const Color(0xFFB2C3BE);
+            : const Color(0xFFB1B7C4);
     final background = danger
         ? TgcgColors.danger
         : active
-            ? const Color(0xFF31554C)
-            : const Color(0xFF173A32);
+            ? const Color(0xFF233663)
+            : const Color(0xFF0C1D45);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),

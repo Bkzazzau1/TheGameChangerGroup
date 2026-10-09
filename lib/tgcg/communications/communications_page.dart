@@ -615,7 +615,7 @@ class _ConversationWorkspace extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFFB9CBC5),
+                          color: Color(0xFFB9BECB),
                           fontSize: 10.5,
                           height: 1.35,
                         ),
@@ -1062,7 +1062,7 @@ class _GatewayCard extends StatelessWidget {
                         Text(
                           protocol,
                           style: const TextStyle(
-                            color: Color(0xFFB9CBC5),
+                            color: Color(0xFFB9BECB),
                             fontSize: 10.5,
                           ),
                         ),
@@ -1227,7 +1227,7 @@ class _MediaIntegrationCard extends StatelessWidget {
                     'Connect WebRTC / approved provider before enabling calls.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Color(0xFFB9CBC5),
+                      color: Color(0xFFB9BECB),
                       fontSize: 10.5,
                     ),
                   ),

@@ -234,7 +234,7 @@ class _Navigation extends StatelessWidget {
                         child: Text(
                           _groupLabel(group),
                           style: const TextStyle(
-                            color: Color(0xFF8EA49D),
+                            color: Color(0xFF8D94A5),
                             fontSize: 9.5,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.1,
@@ -275,7 +275,7 @@ class _NavTile extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 3),
         child: Material(
-          color: active ? const Color(0xFF173A32) : Colors.transparent,
+          color: active ? const Color(0xFF0C1D45) : Colors.transparent,
           borderRadius: BorderRadius.circular(11),
           child: InkWell(
             borderRadius: BorderRadius.circular(11),
@@ -290,7 +290,7 @@ class _NavTile extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(item.icon, size: 19, color: active ? Colors.white : const Color(0xFFA9BBB5)),
+                  Icon(item.icon, size: 19, color: active ? Colors.white : const Color(0xFFA8AEBC)),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Text(
@@ -298,7 +298,7 @@ class _NavTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: active ? Colors.white : const Color(0xFFB8C7C2),
+                        color: active ? Colors.white : const Color(0xFFB8BCC7),
                         fontSize: 12,
                         fontWeight: active ? FontWeight.w900 : FontWeight.w700,
                       ),
@@ -353,7 +353,7 @@ class _OperatorCard extends StatelessWidget {
                         roleLabel(session.role!),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFFA5B8B1), fontSize: 9.5),
+                        style: const TextStyle(color: Color(0xFFA4AAB9), fontSize: 9.5),
                       ),
                     ],
                   ),
@@ -362,21 +362,21 @@ class _OperatorCard extends StatelessWidget {
                   tooltip: 'Sign out',
                   onPressed: session.signOut,
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.logout_rounded, color: Color(0xFFA5B8B1), size: 18),
+                  icon: const Icon(Icons.logout_rounded, color: Color(0xFFA4AAB9), size: 18),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, color: Color(0xFF80968E), size: 14),
+                const Icon(Icons.location_on_outlined, color: Color(0xFF7F8697), size: 14),
                 const SizedBox(width: 5),
                 Expanded(
                   child: Text(
                     session.scope.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5),
+                    style: const TextStyle(color: Color(0xFF8D94A5), fontSize: 9.5),
                   ),
                 ),
               ],
@@ -506,7 +506,7 @@ class _Brand extends StatelessWidget {
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: .7, fontSize: 14),
                 ),
                 SizedBox(height: 2),
-                Text('National Operations', style: TextStyle(color: Color(0xFF8EA49D), fontSize: 9.5)),
+                Text('National Operations', style: TextStyle(color: Color(0xFF8D94A5), fontSize: 9.5)),
               ],
             ),
           ),

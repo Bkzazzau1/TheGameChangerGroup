@@ -229,7 +229,7 @@ class GeoMapStyle {
   static const light = GeoMapStyle(
     background: TgcgColors.surfaceSoft,
     border: Colors.white,
-    mutedFill: Color(0xFFE3E9E6),
+    mutedFill: Color(0xFFE3E5E9),
     hoverBorder: TgcgColors.primary,
     selectedBorder: TgcgColors.accent,
     labelDark: TgcgColors.ink,
@@ -239,13 +239,13 @@ class GeoMapStyle {
 
   static const dark = GeoMapStyle(
     background: TgcgColors.primaryDark,
-    border: Color(0xFF3F6A60),
-    mutedFill: Color(0xFF143730),
-    hoverBorder: Color(0xFFB8CEC6),
+    border: Color(0xFF2D457C),
+    mutedFill: Color(0xFF091A42),
+    hoverBorder: Color(0xFFB8BFCE),
     selectedBorder: TgcgColors.accent,
-    labelDark: Color(0xFF0B2520),
-    labelLight: Color(0xFFB8CEC6),
-    captionColor: Color(0xFF8FB0A6),
+    labelDark: Color(0xFF04102C),
+    labelLight: Color(0xFFB8BFCE),
+    captionColor: Color(0xFF8D98B2),
   );
 
   final Color background;
@@ -440,7 +440,7 @@ class _GeoShapeMapViewState extends State<GeoShapeMapView> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xEE0B2520),
+                    color: const Color(0xEE04102C),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

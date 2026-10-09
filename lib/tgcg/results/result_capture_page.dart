@@ -654,7 +654,7 @@ class _EvidencePanel extends StatelessWidget {
               height: 210,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF2F0),
+                color: const Color(0xFFEEEFF2),
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: TgcgColors.border),
               ),

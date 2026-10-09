@@ -225,7 +225,7 @@ class _Hero extends StatelessWidget {
                       Text(
                         '${agent.agentId} • Polling Unit Agent',
                         style: const TextStyle(
-                          color: Color(0xFFC8D7D2),
+                          color: Color(0xFFC8CCD7),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -272,7 +272,7 @@ class _Hero extends StatelessWidget {
             Text(
               '${agent.scope.pollingUnitName ?? 'Polling Unit'} • ${agent.scope.wardName ?? ''} • ${agent.scope.lgaName ?? ''}',
               style: const TextStyle(
-                color: Color(0xFFC6D6D0),
+                color: Color(0xFFC6CBD6),
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -333,7 +333,7 @@ class _HeroStat extends StatelessWidget {
                 children: [
                   Text(label,
                       style: const TextStyle(
-                        color: Color(0xFFBDD0CA),
+                        color: Color(0xFFBDC3D0),
                         fontSize: 8.5,
                         fontWeight: FontWeight.w700,
                       )),

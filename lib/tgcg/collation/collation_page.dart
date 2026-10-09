@@ -244,7 +244,7 @@ class _CompletionHero extends StatelessWidget {
               const Text(
                 'VERIFIED COVERAGE',
                 style: TextStyle(
-                  color: Color(0xFF9EC8BB),
+                  color: Color(0xFF9CAACA),
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.1,
@@ -264,7 +264,7 @@ class _CompletionHero extends StatelessWidget {
               Text(
                 '${summary.verifiedPollingUnitCount} of ${summary.expectedPollingUnitCount} canonical polling units are included in this verified-only snapshot.',
                 style: const TextStyle(
-                  color: Color(0xFFD2E1DC),
+                  color: Color(0xFFD2D6E1),
                   fontSize: 12,
                   height: 1.45,
                 ),
@@ -299,7 +299,7 @@ class _CompletionHero extends StatelessWidget {
                           ? Icons.shield_outlined
                           : Icons.warning_amber_rounded,
                       color: healthy
-                          ? const Color(0xFF8FE0C2)
+                          ? const Color(0xFFF2CF73)
                           : const Color(0xFFFFC56D),
                       size: 20,
                     ),
@@ -371,13 +371,13 @@ class _DarkRule extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 15, color: const Color(0xFF9EC8BB)),
+            Icon(icon, size: 15, color: const Color(0xFF9CAACA)),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 text,
                 style: const TextStyle(
-                  color: Color(0xFFD2E1DC),
+                  color: Color(0xFFD2D6E1),
                   fontSize: 10.5,
                   height: 1.35,
                 ),

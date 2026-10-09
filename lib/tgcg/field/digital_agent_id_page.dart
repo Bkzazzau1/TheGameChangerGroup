@@ -100,7 +100,7 @@ class DigitalAgentIdPage extends StatelessWidget {
                                         Text(
                                           'POLLING UNIT AGENT',
                                           style: TextStyle(
-                                            color: Color(0xFFBDD0CA),
+                                            color: Color(0xFFBDC3D0),
                                             fontSize: 9.5,
                                             fontWeight: FontWeight.w800,
                                             letterSpacing: 1,
@@ -119,7 +119,7 @@ class DigitalAgentIdPage extends StatelessWidget {
                                     width: 94,
                                     height: 108,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF244F45),
+                                      color: const Color(0xFF162B5D),
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(color: Colors.white.withValues(alpha: .18)),
                                     ),

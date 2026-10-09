@@ -1368,7 +1368,7 @@ class _ActivityRecord {
 }
 
 Color _conditionColor(_SituationCondition condition) => switch (condition) {
-      _SituationCondition.noData => const Color(0xFFCBD5D1),
+      _SituationCondition.noData => const Color(0xFFCBCED5),
       _SituationCondition.normal => TgcgColors.success,
       _SituationCondition.elevated => TgcgColors.warning,
       _SituationCondition.serious => TgcgColors.danger,

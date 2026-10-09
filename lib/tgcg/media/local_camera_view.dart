@@ -63,14 +63,14 @@ class _LocalCameraViewState extends State<LocalCameraView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_photography_outlined, color: Color(0xFF9CB3AB)),
+            const Icon(Icons.no_photography_outlined, color: Color(0xFF9BA2B4)),
             const SizedBox(height: 8),
             Text(
               _error!,
               textAlign: TextAlign.center,
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Color(0xFFA7BBB5), fontSize: 10),
+              style: const TextStyle(color: Color(0xFFA6ADBC), fontSize: 10),
             ),
           ],
         ),

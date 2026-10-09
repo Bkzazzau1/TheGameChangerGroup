@@ -1,23 +1,34 @@
 import 'package:flutter/material.dart';
 
+/// Brand palette taken from the TGCG logo: deep navy ring (#001E5A) and
+/// metallic gold lettering (#BE8C00).
 class TgcgColors {
   const TgcgColors._();
 
-  static const primary = Color(0xFF123D33);
-  static const primaryDark = Color(0xFF0B2520);
-  static const primarySoft = Color(0xFFE8F1EE);
-  static const primaryMid = Color(0xFF17614F);
-  static const accent = Color(0xFFD7A928);
-  static const accentSoft = Color(0xFFFFF7DB);
-  static const canvas = Color(0xFFF4F7F6);
+  // Navy (logo ring)
+  static const primary = Color(0xFF0A2463);
+  static const primaryDark = Color(0xFF061740);
+  static const primaryMid = Color(0xFF1D3F94);
+  static const primarySoft = Color(0xFFE9EEF9);
+
+  // Gold (logo lettering)
+  static const accent = Color(0xFFC9971A);
+  static const accentBright = Color(0xFFE6BE4C);
+  static const accentDeep = Color(0xFF9A7008);
+  static const accentSoft = Color(0xFFFBF3DC);
+
+  // Neutrals, cool-tinted to sit with navy
+  static const canvas = Color(0xFFF3F5FA);
   static const surface = Colors.white;
-  static const surfaceSoft = Color(0xFFF8FAF9);
-  static const ink = Color(0xFF17211E);
-  static const muted = Color(0xFF66726E);
-  static const border = Color(0xFFE1E8E5);
+  static const surfaceSoft = Color(0xFFF7F9FD);
+  static const ink = Color(0xFF101A33);
+  static const muted = Color(0xFF5D6782);
+  static const border = Color(0xFFDFE4EF);
+
+  // Semantic
   static const success = Color(0xFF087A55);
   static const info = Color(0xFF2563EB);
-  static const warning = Color(0xFFB7791F);
+  static const warning = Color(0xFFD0690F); // orange, kept clear of brand gold
   static const danger = Color(0xFFB42318);
   static const ai = Color(0xFF6550B5);
 }

@@ -85,7 +85,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         margin: const EdgeInsets.all(18),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: const Color(0xFF012E23),
+          color: const Color(0xFF000E2F),
           borderRadius: BorderRadius.circular(30),
         ),
         child: Image.asset(
@@ -103,7 +103,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(30),
           gradient: const LinearGradient(
-            colors: [Color(0xFF0B2E27), Color(0xFF17614F)],
+            colors: [Color(0xFF011238), Color(0xFF032575)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -383,12 +383,12 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   constraints: const BoxConstraints(minHeight: 94),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: active ? const Color(0xFFE7F1EE) : Colors.white,
+                    color: active ? const Color(0xFFE7EAF1) : Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: active
                           ? TgcgApp.primary
-                          : const Color(0xFFDDE5E2),
+                          : const Color(0xFFDDDFE5),
                       width: active ? 1.5 : 1,
                     ),
                   ),
@@ -442,7 +442,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFDDE5E2)),
+          borderSide: const BorderSide(color: Color(0xFFDDDFE5)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),

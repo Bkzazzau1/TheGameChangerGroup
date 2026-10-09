@@ -582,7 +582,7 @@ class _CaptureReadinessBanner extends StatelessWidget {
                 Text(
                   'Photo, video, audio and coordinates are never fabricated. A record explicitly shows when capture data is unavailable.',
                   style: TextStyle(
-                    color: Color(0xFFB8CAC4),
+                    color: Color(0xFFB8BDCA),
                     fontSize: 10.5,
                     height: 1.4,
                   ),
@@ -635,12 +635,12 @@ class _DarkPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: const Color(0xFFBFD0CA), size: 15),
+            Icon(icon, color: const Color(0xFFBFC4D0), size: 15),
             const SizedBox(width: 5),
             Text(
               label,
               style: const TextStyle(
-                color: Color(0xFFBFD0CA),
+                color: Color(0xFFBFC4D0),
                 fontSize: 9,
                 fontWeight: FontWeight.w900,
               ),

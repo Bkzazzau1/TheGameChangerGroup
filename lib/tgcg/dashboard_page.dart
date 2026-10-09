@@ -558,7 +558,7 @@ class _OperationsProgressPanel extends StatelessWidget {
             child: LinearProgressIndicator(
               value: readiness.clamp(0, 1).toDouble(),
               minHeight: 10,
-              backgroundColor: const Color(0xFFE5ECE9),
+              backgroundColor: const Color(0xFFE5E7EC),
               valueColor: const AlwaysStoppedAnimation(TgcgColors.success),
             ),
           ),

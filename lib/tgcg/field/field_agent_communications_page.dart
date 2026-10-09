@@ -161,7 +161,7 @@ class _Header extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFFC7D8D2),
+                      color: Color(0xFFC7CCD8),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
                     ),

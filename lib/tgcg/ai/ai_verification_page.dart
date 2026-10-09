@@ -349,7 +349,7 @@ class _DocumentPreview extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: const Color(0xFFF9FBFA),
+            color: const Color(0xFFF9FAFB),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: TgcgColors.border),
           ),
@@ -394,7 +394,7 @@ class _FacePreview extends StatelessWidget {
         child: Container(
           height: 330,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFF0B2520), Color(0xFF1A5446)]),
+            gradient: const LinearGradient(colors: [Color(0xFF04102C), Color(0xFF092565)]),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Stack(
@@ -402,8 +402,8 @@ class _FacePreview extends StatelessWidget {
             children: [
               const CircleAvatar(
                 radius: 82,
-                backgroundColor: Color(0xFF244F45),
-                child: Icon(Icons.person_rounded, size: 112, color: Color(0xFFABC2BA)),
+                backgroundColor: Color(0xFF162B5D),
+                child: Icon(Icons.person_rounded, size: 112, color: Color(0xFFAAB1C3)),
               ),
               Container(
                 width: 196,

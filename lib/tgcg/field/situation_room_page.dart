@@ -603,7 +603,7 @@ class _CommandMap extends StatelessWidget {
                           child: Text(
                             'No active incident markers in this scope',
                             style: TextStyle(
-                              color: Color(0xFFB8CEC6),
+                              color: Color(0xFFB8BFCE),
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -616,12 +616,12 @@ class _CommandMap extends StatelessWidget {
                     child: IgnorePointer(
                       child: Row(
                         children: [
-                          Icon(Icons.layers_outlined, color: Color(0xFFB8CEC6), size: 16),
+                          Icon(Icons.layers_outlined, color: Color(0xFFB8BFCE), size: 16),
                           SizedBox(width: 6),
                           Text(
                             'State boundaries  •  Incidents',
                             style: TextStyle(
-                              color: Color(0xFFB8CEC6),
+                              color: Color(0xFFB8BFCE),
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
@@ -691,7 +691,7 @@ class _MapIncidentNode extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: selected
-                  ? const Color(0xFF173B34)
+                  ? const Color(0xFF0C1D46)
                   : exact
                       ? color
                       : TgcgColors.primaryDark,
@@ -758,7 +758,7 @@ class _MapLegend extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(color: Color(0xFFB8CEC6), fontSize: 9.5),
+            style: const TextStyle(color: Color(0xFFB8BFCE), fontSize: 9.5),
           ),
         ],
       );

@@ -1056,7 +1056,7 @@ class _AgentInspector extends StatelessWidget {
                   '${agent!.agentId} • ${roleLabel(agent!.role)}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Color(0xFFB8CEC6),
+                    color: Color(0xFFB8BFCE),
                     fontSize: 11,
                   ),
                 ),
@@ -1469,7 +1469,7 @@ class _PrivacyPanel extends StatelessWidget {
                   Text(
                     'The Flutter prototype stores biometric-enrollment readiness only—not raw face templates. Production consent records, facial templates, liveness/anti-spoof checks, encryption and retention policies remain inside the secured backend and identity-service boundary.',
                     style: TextStyle(
-                      color: Color(0xFFB8CEC6),
+                      color: Color(0xFFB8BFCE),
                       height: 1.5,
                       fontSize: 11,
                     ),

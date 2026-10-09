@@ -178,8 +178,17 @@ class _TgcgAppState extends State<TgcgApp> {
       seedColor: TgcgColors.primary,
       brightness: Brightness.light,
       primary: TgcgColors.primary,
+      onPrimary: Colors.white,
+      primaryContainer: TgcgColors.primarySoft,
+      onPrimaryContainer: TgcgColors.primary,
       secondary: TgcgColors.accent,
+      onSecondary: TgcgColors.primaryDark,
+      secondaryContainer: TgcgColors.accentSoft,
+      onSecondaryContainer: TgcgColors.accentDeep,
+      tertiary: TgcgColors.accentDeep,
       surface: TgcgColors.surface,
+      onSurface: TgcgColors.ink,
+      outline: TgcgColors.border,
       error: TgcgColors.danger,
     );
 
@@ -230,7 +239,7 @@ class _TgcgAppState extends State<TgcgApp> {
         fillColor: TgcgColors.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
         labelStyle: const TextStyle(color: TgcgColors.muted, fontSize: 12),
-        hintStyle: const TextStyle(color: Color(0xFF98A39F), fontSize: 12),
+        hintStyle: const TextStyle(color: Color(0xFF979BA4), fontSize: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
           borderSide: const BorderSide(color: TgcgColors.border),
@@ -272,6 +281,97 @@ class _TgcgAppState extends State<TgcgApp> {
         behavior: SnackBarBehavior.floating,
         backgroundColor: TgcgColors.primaryDark,
         contentTextStyle: TextStyle(color: Colors.white),
+        actionTextColor: TgcgColors.accentBright,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: TgcgColors.primaryDark,
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: TgcgColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: TgcgColors.primaryDark.withValues(alpha: .94),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 11.5),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: TgcgColors.accent,
+        linearTrackColor: TgcgColors.primarySoft,
+        circularTrackColor: TgcgColors.primarySoft,
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? TgcgColors.primary
+                : TgcgColors.surface,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? TgcgColors.accentBright
+                : TgcgColors.primary,
+          ),
+          side: const WidgetStatePropertyAll(
+            BorderSide(color: TgcgColors.border),
+          ),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: TgcgColors.surface,
+        selectedColor: TgcgColors.primary,
+        secondarySelectedColor: TgcgColors.primary,
+        checkmarkColor: TgcgColors.accentBright,
+        side: const BorderSide(color: TgcgColors.border),
+        labelStyle: const TextStyle(
+          color: TgcgColors.ink,
+          fontWeight: FontWeight.w700,
+        ),
+        secondaryLabelStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      tabBarTheme: const TabBarThemeData(
+        labelColor: TgcgColors.primary,
+        unselectedLabelColor: TgcgColors.muted,
+        indicatorColor: TgcgColors.accent,
+        dividerColor: TgcgColors.border,
+        labelStyle: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? TgcgColors.accentBright
+              : null,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? TgcgColors.primary
+              : null,
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? TgcgColors.primary
+              : null,
+        ),
+        checkColor: const WidgetStatePropertyAll(TgcgColors.accentBright),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: TgcgColors.accent,
+        foregroundColor: TgcgColors.primaryDark,
       ),
     );
   }

@@ -394,7 +394,7 @@ class _ScannerPanel extends StatelessWidget {
                                   ? 'Identity text recognized'
                                   : 'Card captured',
                               style: const TextStyle(
-                                color: Color(0xFFAFC2BB),
+                                color: Color(0xFFAEB4C3),
                                 fontSize: 11,
                               ),
                             ),

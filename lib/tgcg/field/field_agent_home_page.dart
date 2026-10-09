@@ -286,7 +286,7 @@ class _DutyHeader extends StatelessWidget {
                       Text(
                         agent.agentId,
                         style: const TextStyle(
-                          color: Color(0xFFBDD0CA),
+                          color: Color(0xFFBDC3D0),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -327,7 +327,7 @@ class _DutyHeader extends StatelessWidget {
             Text(
               agent.scope.label,
               style: const TextStyle(
-                color: Color(0xFFBCD0C9),
+                color: Color(0xFFBCC2D0),
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),

@@ -292,7 +292,7 @@ class _CoverageHero extends StatelessWidget {
                       Text(
                         _coverageSubtitle(scope.level, children.length),
                         style: const TextStyle(
-                          color: Color(0xFFAFC2BB),
+                          color: Color(0xFFAEB4C3),
                           fontSize: 10.5,
                         ),
                       ),
@@ -365,7 +365,7 @@ class _CoverageHero extends StatelessWidget {
                                       ),
                                       const Icon(
                                         Icons.chevron_right_rounded,
-                                        color: Color(0xFF9CB2AA),
+                                        color: Color(0xFF9BA2B3),
                                         size: 18,
                                       ),
                                     ],
@@ -436,7 +436,7 @@ class _DarkMetric extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF9FB4AD),
+              color: Color(0xFF9EA5B5),
               fontSize: 8.5,
             ),
           ),

@@ -148,7 +148,7 @@ Future<void> showPresentationTour(
                         Text(
                           'Recommended flow for the TGCG-EMCOP demonstration',
                           style: TextStyle(
-                            color: Color(0xFFB8CBC4),
+                            color: Color(0xFFB8BECB),
                             fontSize: 10.5,
                           ),
                         ),

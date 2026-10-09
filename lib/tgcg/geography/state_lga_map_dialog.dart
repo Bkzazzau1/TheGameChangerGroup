@@ -39,9 +39,9 @@ Future<void> showStateLgaMap(
 
 /// Sequential green scale for member density; [max] is the busiest area.
 Color memberDensityColor(int count, int max) {
-  if (count <= 0) return const Color(0xFFEDF1EF);
+  if (count <= 0) return const Color(0xFFEDEEF1);
   final t = max <= 0 ? 1.0 : math.sqrt(count / max).clamp(0.0, 1.0);
-  return Color.lerp(const Color(0xFFBFE0D3), TgcgColors.primary, t)!;
+  return Color.lerp(const Color(0xFFBFC9E0), TgcgColors.primary, t)!;
 }
 
 class StateLgaMapDialog extends StatefulWidget {
@@ -72,9 +72,9 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
 
   // Soft tints that tell senatorial districts apart when there is no incident.
   static const _districtTints = [
-    Color(0xFFD5E6E0),
-    Color(0xFFE6EEDB),
-    Color(0xFFDCE3EE),
+    Color(0xFFD3DCF0), // navy tint
+    Color(0xFFF3E5BD), // gold tint
+    Color(0xFFDDE9D6), // sage tint
   ];
 
   late final Map<String, CanonicalLga> _lgaById = {

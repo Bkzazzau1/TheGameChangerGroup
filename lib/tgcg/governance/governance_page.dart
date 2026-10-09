@@ -397,7 +397,7 @@ class _ControlSnapshot extends StatelessWidget {
                 Text(
                   'Queued does not mean synced. Synced does not mean verified, approved, published or legally declared.',
                   style: TextStyle(
-                    color: Color(0xFFC6D3CF),
+                    color: Color(0xFFC6CAD3),
                     fontSize: 11,
                     height: 1.45,
                   ),
@@ -464,7 +464,7 @@ class _DarkStat extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                color: Color(0xFF9FB1AB),
+                color: Color(0xFF9EA4B2),
                 fontSize: 9.5,
               ),
             ),
