@@ -17,8 +17,11 @@ class LiveOperationsPage extends StatefulWidget {
   State<LiveOperationsPage> createState() => _LiveOperationsPageState();
 }
 
+enum _MapLayer { situation, members }
+
 class _LiveOperationsPageState extends State<LiveOperationsPage> {
   String? selectedStateId;
+  _MapLayer layer = _MapLayer.situation;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +71,10 @@ class _LiveOperationsPageState extends State<LiveOperationsPage> {
     final attentionStates = snapshots
         .where((item) => item.condition.index >= _SituationCondition.elevated.index)
         .length;
+    final totalMembers = snapshots.fold<int>(
+      0,
+      (total, item) => total + item.members,
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
@@ -91,53 +98,56 @@ class _LiveOperationsPageState extends State<LiveOperationsPage> {
           activeResponses: activeResponses,
           resultSubmissions: resultSubmissions,
           approvedAgents: approvedAgents,
+          members: totalMembers,
+          membersActive: layer == _MapLayer.members,
+          onMembersTap: () => setState(
+            () => layer = layer == _MapLayer.members
+                ? _MapLayer.situation
+                : _MapLayer.members,
+          ),
         ),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
+        Builder(
+          builder: (context) {
             void openLgaMap(String stateId) {
               final snapshot = _snapshotById(snapshots, stateId);
               if (snapshot == null) return;
+              final lgas = geography.lgasForState(stateId);
               showStateLgaMap(
                 context,
                 state: snapshot.state,
-                lgas: geography.lgasForState(stateId),
+                lgas: lgas,
                 incidents: snapshot.incidents,
+                memberCounts: {
+                  for (final lga in lgas)
+                    lga.id: membership.memberCountForScope(lga.scope),
+                },
+                stateMemberCount: snapshot.members,
+                showMembers: layer == _MapLayer.members,
               );
             }
 
-            final map = _NigeriaStateMap(
-              allStates: geography.states,
-              snapshots: snapshots,
-              selectedStateId: selectedStateId,
-              onSelect: (value) {
-                setState(() => selectedStateId = value);
-                openLgaMap(value);
-              },
-            );
-            final detail = _StateInspector(
-              snapshot: selected,
-              emergency: emergency,
-              onOpenLgaMap: selected == null
-                  ? null
-                  : () => openLgaMap(selected.state.id),
-            );
-
-            if (constraints.maxWidth < 1050) {
-              return Column(
-                children: [
-                  map,
-                  const SizedBox(height: 16),
-                  detail,
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            return Column(
               children: [
-                Expanded(flex: 7, child: map),
-                const SizedBox(width: 16),
-                Expanded(flex: 4, child: detail),
+                _NigeriaStateMap(
+                  allStates: geography.states,
+                  snapshots: snapshots,
+                  selectedStateId: selectedStateId,
+                  layer: layer,
+                  onLayerChanged: (value) => setState(() => layer = value),
+                  onSelect: (value) {
+                    setState(() => selectedStateId = value);
+                    openLgaMap(value);
+                  },
+                ),
+                const SizedBox(height: 16),
+                _StateInspector(
+                  snapshot: selected,
+                  emergency: emergency,
+                  onOpenLgaMap: selected == null
+                      ? null
+                      : () => openLgaMap(selected.state.id),
+                ),
               ],
             );
           },
@@ -323,8 +333,14 @@ class _TopMetrics extends StatelessWidget {
     required this.activeResponses,
     required this.resultSubmissions,
     required this.approvedAgents,
+    required this.members,
+    required this.membersActive,
+    required this.onMembersTap,
   });
 
+  final int members;
+  final bool membersActive;
+  final VoidCallback onMembersTap;
   final int states;
   final int attentionStates;
   final int openIncidents;
@@ -335,10 +351,10 @@ class _TopMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1160
-              ? 6
+          final columns = constraints.maxWidth >= 1300
+              ? 7
               : constraints.maxWidth >= 760
-                  ? 3
+                  ? 4
                   : constraints.maxWidth >= 500
                       ? 2
                       : 1;
@@ -401,6 +417,19 @@ class _TopMetrics extends StatelessWidget {
                 icon: Icons.badge_outlined,
                 tone: TgcgMetricTone.success,
               ),
+              TgcgMetricCard(
+                width: width,
+                label: membersActive ? 'Members • on map' : 'Members',
+                value: '$members',
+                detail: membersActive
+                    ? 'Tap to return to situation view'
+                    : 'Tap to map members by state and LGA',
+                icon: Icons.groups_outlined,
+                tone: membersActive
+                    ? TgcgMetricTone.success
+                    : TgcgMetricTone.info,
+                onTap: onMembersTap,
+              ),
             ],
           );
         },
@@ -412,12 +441,16 @@ class _NigeriaStateMap extends StatelessWidget {
     required this.allStates,
     required this.snapshots,
     required this.selectedStateId,
+    required this.layer,
+    required this.onLayerChanged,
     required this.onSelect,
   });
 
   final List<CanonicalState> allStates;
   final List<_StateSnapshot> snapshots;
   final String? selectedStateId;
+  final _MapLayer layer;
+  final ValueChanged<_MapLayer> onLayerChanged;
   final ValueChanged<String> onSelect;
 
   @override
@@ -428,62 +461,149 @@ class _NigeriaStateMap extends StatelessWidget {
     final snapshotById = <String, _StateSnapshot>{
       for (final snapshot in snapshots) snapshot.state.id: snapshot,
     };
+    final members = layer == _MapLayer.members;
+    final maxMembers = snapshots.fold<int>(
+      0,
+      (max, item) => item.members > max ? item.members : max,
+    );
 
     return TgcgSectionCard(
-      title: 'Nigeria state situation map',
-      subtitle:
-          'Click a state to open its local government map and inspect current operational issues.',
-      trailing: TgcgStatusPill(
-        label: '${snapshots.length} IN SCOPE',
-        color: TgcgColors.primary,
-        icon: Icons.location_on_outlined,
-        compact: true,
+      title: members ? 'Nigeria membership map' : 'Nigeria state situation map',
+      subtitle: members
+          ? 'Registered members per state. Click a state to see members per local government.'
+          : 'Click a state to open its local government map and inspect current operational issues.',
+      trailing: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SegmentedButton<_MapLayer>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [
+              ButtonSegment(
+                value: _MapLayer.situation,
+                icon: Icon(Icons.crisis_alert_outlined, size: 16),
+                label: Text('Situation'),
+              ),
+              ButtonSegment(
+                value: _MapLayer.members,
+                icon: Icon(Icons.groups_outlined, size: 16),
+                label: Text('Members'),
+              ),
+            ],
+            selected: {layer},
+            onSelectionChanged: (value) => onLayerChanged(value.first),
+          ),
+          TgcgStatusPill(
+            label: '${snapshots.length} IN SCOPE',
+            color: TgcgColors.primary,
+            icon: Icons.location_on_outlined,
+            compact: true,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 460,
-            width: double.infinity,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: TgcgColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: TgcgColors.border),
-            ),
-            child: GeoShapeMapView(
-              source: GeoShapeSet.nigeriaStates(),
-              selectedId: selectedStateId,
-              onTap: onSelect,
-              isInteractive: snapshotById.containsKey,
-              focusIds: snapshots.length == allStates.length
-                  ? const []
-                  : [for (final item in snapshots) item.state.id],
-              fillFor: (id) {
-                final snapshot = snapshotById[id];
-                return snapshot == null
-                    ? null
-                    : _conditionColor(snapshot.condition);
-              },
-              labelFor: (id) {
-                final open = snapshotById[id]?.openIncidents.length ?? 0;
-                return open > 0 ? '$id\n$open' : id;
-              },
-              tooltipFor: (id) {
-                final state = stateById[id];
-                final snapshot = snapshotById[id];
-                final name = state?.name ?? id;
-                if (snapshot == null) return '$name • outside current scope';
-                final open = snapshot.openIncidents.length;
-                return '$name • ${_conditionLabel(snapshot.condition)}'
-                    '${open > 0 ? ' • $open open' : ''}';
-              },
+          LayoutBuilder(
+            // Nigeria is ~1.27x wider than tall; size the map to fill the width.
+            builder: (context, constraints) => Container(
+              height: (constraints.maxWidth / 1.25).clamp(420.0, 860.0),
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: TgcgColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: TgcgColors.border),
+              ),
+              child: GeoShapeMapView(
+                source: GeoShapeSet.nigeriaStates(),
+                padding: 14,
+                selectedId: selectedStateId,
+                onTap: onSelect,
+                isInteractive: snapshotById.containsKey,
+                focusIds: snapshots.length == allStates.length
+                    ? const []
+                    : [for (final item in snapshots) item.state.id],
+                fillFor: (id) {
+                  final snapshot = snapshotById[id];
+                  if (snapshot == null) return null;
+                  return members
+                      ? memberDensityColor(snapshot.members, maxMembers)
+                      : _conditionColor(snapshot.condition);
+                },
+                labelFor: (id) {
+                  final snapshot = snapshotById[id];
+                  if (members) {
+                    return snapshot == null ? id : '$id\n${snapshot.members}';
+                  }
+                  final open = snapshot?.openIncidents.length ?? 0;
+                  return open > 0 ? '$id\n$open' : id;
+                },
+                tooltipFor: (id) {
+                  final state = stateById[id];
+                  final snapshot = snapshotById[id];
+                  final name = state?.name ?? id;
+                  if (snapshot == null) return '$name • outside current scope';
+                  if (members) {
+                    return '$name • ${snapshot.members} member'
+                        '${snapshot.members == 1 ? '' : 's'} • click for LGAs';
+                  }
+                  final open = snapshot.openIncidents.length;
+                  return '$name • ${_conditionLabel(snapshot.condition)}'
+                      '${open > 0 ? ' • $open open' : ''}';
+                },
+              ),
             ),
           ),
           const SizedBox(height: 14),
-          const _MapLegend(),
+          members ? _MembersMapLegend(max: maxMembers) : const _MapLegend(),
         ],
       ),
+    );
+  }
+}
+
+class _MembersMapLegend extends StatelessWidget {
+  const _MembersMapLegend({required this.max});
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(Color color, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+                border: Border.all(color: TgcgColors.border),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: TgcgColors.muted,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        );
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        item(memberDensityColor(0, max), 'No members'),
+        if (max > 0) ...[
+          item(memberDensityColor(1, max), 'Few members'),
+          item(memberDensityColor(max, max), 'Most members ($max)'),
+        ],
+      ],
     );
   }
 }
@@ -669,7 +789,8 @@ class _InspectorMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
-          final width = (constraints.maxWidth - 8) / 2;
+          final columns = constraints.maxWidth >= 900 ? 6 : constraints.maxWidth >= 560 ? 3 : 2;
+          final width = (constraints.maxWidth - 8 * (columns - 1)) / columns;
           return Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -701,6 +822,20 @@ class _InspectorMetrics extends StatelessWidget {
                 value: '${snapshot.results.length}',
                 icon: Icons.ballot_outlined,
                 color: TgcgColors.ai,
+              ),
+              _MiniMetric(
+                width: width,
+                label: 'Registered members',
+                value: '${snapshot.members}',
+                icon: Icons.groups_outlined,
+                color: TgcgColors.primary,
+              ),
+              _MiniMetric(
+                width: width,
+                label: 'All agents',
+                value: '${snapshot.agents}',
+                icon: Icons.person_pin_circle_outlined,
+                color: TgcgColors.info,
               ),
             ],
           );

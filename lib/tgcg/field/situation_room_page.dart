@@ -131,37 +131,25 @@ class _SituationRoomPageState extends State<SituationRoomPage> {
               role: session.role!,
             );
 
-            if (constraints.maxWidth < 1180) {
-              return Column(
-                children: [
-                  map,
-                  const SizedBox(height: 14),
-                  if (constraints.maxWidth >= 760)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: priorityRail),
-                        const SizedBox(width: 14),
-                        Expanded(child: inspector),
-                      ],
-                    )
-                  else ...[
-                    priorityRail,
-                    const SizedBox(height: 14),
-                    inspector,
-                  ],
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // The map takes the full width; queue and inspector sit below it.
+            return Column(
               children: [
-                SizedBox(width: 310, child: priorityRail),
-                const SizedBox(width: 14),
-                Expanded(child: map),
-                const SizedBox(width: 14),
-                SizedBox(width: 350, child: inspector),
+                map,
+                const SizedBox(height: 14),
+                if (constraints.maxWidth >= 760)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: priorityRail),
+                      const SizedBox(width: 14),
+                      Expanded(child: inspector),
+                    ],
+                  )
+                else ...[
+                  priorityRail,
+                  const SizedBox(height: 14),
+                  inspector,
+                ],
               ],
             );
           },
@@ -544,8 +532,10 @@ class _CommandMap extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
         child: Column(
           children: [
-            Container(
-              height: 430,
+            LayoutBuilder(
+              // Nigeria is ~1.27x wider than tall; size the map to fill the width.
+              builder: (context, constraints) => Container(
+              height: (constraints.maxWidth / 1.3).clamp(440.0, 860.0),
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: TgcgColors.primaryDark,
@@ -557,7 +547,7 @@ class _CommandMap extends StatelessWidget {
                     child: GeoShapeMapView(
                       source: GeoShapeSet.nigeriaStates(),
                       style: GeoMapStyle.dark,
-                      padding: 56,
+                      padding: 48,
                       focusIds: focusStateIds,
                       onTap: onOpenState,
                       isInteractive: (id) =>
@@ -642,6 +632,7 @@ class _CommandMap extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
             const SizedBox(height: 12),
             Row(
