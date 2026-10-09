@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
 import '../geography/nigeria_map.dart';
+import '../geography/state_lga_map_dialog.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -104,12 +105,23 @@ class _SituationRoomPageState extends State<SituationRoomPage> {
               selectedIncidentId: selectedIncidentId,
               onSelect: (id) => setState(() => selectedIncidentId = id),
             );
+            final geography = MembershipOperations.of(context).geography;
             final map = _CommandMap(
               scope: session.scope,
-              focusStateIds: _focusStateIds(
-                session.scope,
-                MembershipOperations.of(context).geography.states,
-              ),
+              focusStateIds: _focusStateIds(session.scope, geography.states),
+              stateNames: {
+                for (final state in geography.states) state.id: state.name,
+              },
+              onOpenState: (stateId) {
+                final state = geography.state(stateId);
+                if (state == null) return;
+                showStateLgaMap(
+                  context,
+                  state: state,
+                  lgas: geography.lgasForState(stateId),
+                  incidents: incidents,
+                );
+              },
               incidents: open,
               selectedIncidentId: selectedIncidentId,
               onSelect: (id) => setState(() => selectedIncidentId = id),
@@ -412,6 +424,8 @@ class _CommandMap extends StatelessWidget {
   const _CommandMap({
     required this.scope,
     required this.focusStateIds,
+    required this.stateNames,
+    required this.onOpenState,
     required this.incidents,
     required this.selectedIncidentId,
     required this.onSelect,
@@ -419,6 +433,8 @@ class _CommandMap extends StatelessWidget {
 
   final GeographicScope scope;
   final List<String> focusStateIds;
+  final Map<String, String> stateNames;
+  final ValueChanged<String> onOpenState;
   final List<FieldIncident> incidents;
   final String? selectedIncidentId;
   final ValueChanged<String> onSelect;
@@ -447,8 +463,8 @@ class _CommandMap extends StatelessWidget {
   }
 
   List<Widget> _incidentMarkers(
-    NigeriaMapGeometry geometry,
-    NigeriaMapProjection projection,
+    GeoShapeSet geometry,
+    GeoProjection projection,
   ) {
     // Incidents without a GPS fix are fanned out around their state's
     // interior label point so they never land outside the state.
@@ -471,11 +487,11 @@ class _CommandMap extends StatelessWidget {
         ));
         continue;
       }
-      final shape = geometry.states[incident.scope.stateId];
+      final shape = geometry.shapes[incident.scope.stateId];
       if (shape == null) continue;
-      final index = unfixedSeen[shape.stateId] ?? 0;
-      unfixedSeen[shape.stateId] = index + 1;
-      final total = unfixedTotals[shape.stateId]!;
+      final index = unfixedSeen[shape.id] ?? 0;
+      unfixedSeen[shape.id] = index + 1;
+      final total = unfixedTotals[shape.id]!;
       final center =
           projection.projectGeo(shape.labelPoint) + const Offset(0, 18);
       final radius = total == 1 ? 0.0 : 16.0;
@@ -538,24 +554,29 @@ class _CommandMap extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: NigeriaStateMapView(
-                      style: NigeriaMapStyle.dark,
+                    child: GeoShapeMapView(
+                      source: GeoShapeSet.nigeriaStates(),
+                      style: GeoMapStyle.dark,
                       padding: 56,
-                      focusStateIds: focusStateIds,
+                      focusIds: focusStateIds,
+                      onTap: onOpenState,
+                      isInteractive: (id) =>
+                          focusStateIds.isEmpty || focusStateIds.contains(id),
                       fillFor: (id) {
                         final severity = worstByState[id];
                         if (severity == null) return null;
                         return Color.alphaBlend(
                           _severityColor(severity).withValues(alpha: .42),
-                          NigeriaMapStyle.dark.mutedFill,
+                          GeoMapStyle.dark.mutedFill,
                         );
                       },
                       labelFor: (id) => id,
                       tooltipFor: (id) {
+                        final name = stateNames[id] ?? id;
                         final count = openByState[id] ?? 0;
-                        return count == 0
-                            ? id
-                            : '$id • $count open incident${count == 1 ? '' : 's'}';
+                        return '$name'
+                            '${count == 0 ? '' : ' • $count open incident${count == 1 ? '' : 's'}'}'
+                            ' • click for LGA map';
                       },
                       overlayBuilder: _incidentMarkers,
                     ),

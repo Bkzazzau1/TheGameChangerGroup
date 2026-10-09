@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../field/field_operations_store.dart';
 import '../geography/geography_registry.dart';
 import '../geography/nigeria_map.dart';
+import '../geography/state_lga_map_dialog.dart';
 import '../membership/membership_store.dart';
 import '../results/result_operations_store.dart';
 import '../security/emergency_response_store.dart';
@@ -94,15 +95,32 @@ class _LiveOperationsPageState extends State<LiveOperationsPage> {
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
+            void openLgaMap(String stateId) {
+              final snapshot = _snapshotById(snapshots, stateId);
+              if (snapshot == null) return;
+              showStateLgaMap(
+                context,
+                state: snapshot.state,
+                lgas: geography.lgasForState(stateId),
+                incidents: snapshot.incidents,
+              );
+            }
+
             final map = _NigeriaStateMap(
               allStates: geography.states,
               snapshots: snapshots,
               selectedStateId: selectedStateId,
-              onSelect: (value) => setState(() => selectedStateId = value),
+              onSelect: (value) {
+                setState(() => selectedStateId = value);
+                openLgaMap(value);
+              },
             );
             final detail = _StateInspector(
               snapshot: selected,
               emergency: emergency,
+              onOpenLgaMap: selected == null
+                  ? null
+                  : () => openLgaMap(selected.state.id),
             );
 
             if (constraints.maxWidth < 1050) {
@@ -414,7 +432,7 @@ class _NigeriaStateMap extends StatelessWidget {
     return TgcgSectionCard(
       title: 'Nigeria state situation map',
       subtitle:
-          'Select a state to inspect current operational issues, response activity and field data.',
+          'Click a state to open its local government map and inspect current operational issues.',
       trailing: TgcgStatusPill(
         label: '${snapshots.length} IN SCOPE',
         color: TgcgColors.primary,
@@ -433,11 +451,12 @@ class _NigeriaStateMap extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: TgcgColors.border),
             ),
-            child: NigeriaStateMapView(
-              selectedStateId: selectedStateId,
-              onStateTap: onSelect,
+            child: GeoShapeMapView(
+              source: GeoShapeSet.nigeriaStates(),
+              selectedId: selectedStateId,
+              onTap: onSelect,
               isInteractive: snapshotById.containsKey,
-              focusStateIds: snapshots.length == allStates.length
+              focusIds: snapshots.length == allStates.length
                   ? const []
                   : [for (final item in snapshots) item.state.id],
               fillFor: (id) {
@@ -523,10 +542,12 @@ class _StateInspector extends StatelessWidget {
   const _StateInspector({
     required this.snapshot,
     required this.emergency,
+    required this.onOpenLgaMap,
   });
 
   final _StateSnapshot? snapshot;
   final EmergencyResponseController emergency;
+  final VoidCallback? onOpenLgaMap;
 
   @override
   Widget build(BuildContext context) {
@@ -560,6 +581,15 @@ class _StateInspector extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _InspectorMetrics(snapshot: item),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onOpenLgaMap,
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: const Text('Open LGA map'),
+            ),
+          ),
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 14),

@@ -8,16 +8,20 @@ import '../ui/tgcg_design.dart';
 
 const nigeriaStatesAsset = 'assets/geo/nigeria_states.json';
 
-/// One state (or FCT) boundary in geographic space. Offsets are (lng, lat).
-class NigeriaStateShape {
-  const NigeriaStateShape({
-    required this.stateId,
+String nigeriaLgaAsset(String stateId) => 'assets/geo/lga/$stateId.json';
+
+/// One boundary (state or LGA) in geographic space. Offsets are (lng, lat).
+class GeoShape {
+  const GeoShape({
+    required this.id,
     required this.rings,
     required this.labelPoint,
     required this.bounds,
+    this.name,
   });
 
-  final String stateId;
+  final String id;
+  final String? name;
   final List<List<Offset>> rings;
   final Offset labelPoint;
   final Rect bounds;
@@ -39,41 +43,57 @@ class NigeriaStateShape {
   }
 }
 
-/// Real Nigerian state boundaries bundled as an offline asset
-/// (GRID3 / geoBoundaries ADM1, simplified, CC BY 4.0).
-class NigeriaMapGeometry {
-  const NigeriaMapGeometry({
-    required this.states,
+/// A set of boundaries keyed by canonical id: Nigeria's states (keyed by
+/// state id) or one state's LGAs (keyed by canonical LGA id, e.g. `LA-IKEJA`).
+///
+/// Source: GRID3 / geoBoundaries ADM1 and ADM2 (2022), simplified, CC BY 4.0.
+class GeoShapeSet {
+  const GeoShapeSet({
+    required this.shapes,
     required this.bounds,
     required this.attribution,
   });
 
-  final Map<String, NigeriaStateShape> states;
+  final Map<String, GeoShape> shapes;
 
   /// Geographic bounds: left/right are longitude, top/bottom are min/max latitude.
   final Rect bounds;
   final String attribution;
 
-  static Future<NigeriaMapGeometry>? _cached;
+  static Future<GeoShapeSet>? _states;
+  static final _lgas = <String, Future<GeoShapeSet>>{};
 
-  static Future<NigeriaMapGeometry> load() => _cached ??= rootBundle
-      .loadString(nigeriaStatesAsset)
-      .then(parse)
-      .catchError((Object error) {
-        _cached = null;
+  /// All 36 states and FCT.
+  static Future<GeoShapeSet> nigeriaStates() =>
+      _states ??= _load(nigeriaStatesAsset, 'states', () => _states = null);
+
+  /// LGAs of one state, loaded on demand.
+  static Future<GeoShapeSet> lgasOf(String stateId) => _lgas[stateId] ??=
+      _load(nigeriaLgaAsset(stateId), 'lgas', () => _lgas.remove(stateId));
+
+  static Future<GeoShapeSet> _load(
+    String asset,
+    String key,
+    void Function() evict,
+  ) =>
+      rootBundle
+          .loadString(asset)
+          .then((source) => parse(source, key))
+          .catchError((Object error) {
+        evict();
         throw error;
       });
 
-  static NigeriaMapGeometry parse(String source) {
+  static GeoShapeSet parse(String source, String key) {
     final json = jsonDecode(source) as Map<String, dynamic>;
-    final rawStates = json['states'] as Map<String, dynamic>;
-    final states = <String, NigeriaStateShape>{};
+    final raw = json[key] as Map<String, dynamic>;
+    final shapes = <String, GeoShape>{};
     Rect? all;
-    for (final entry in rawStates.entries) {
-      final raw = entry.value as Map<String, dynamic>;
+    for (final entry in raw.entries) {
+      final item = entry.value as Map<String, dynamic>;
       final rings = <List<Offset>>[];
-      Rect? stateBounds;
-      for (final flat in raw['rings'] as List<dynamic>) {
+      Rect? shapeBounds;
+      for (final flat in item['rings'] as List<dynamic>) {
         final values = (flat as List<dynamic>).cast<num>();
         final ring = <Offset>[
           for (var i = 0; i + 1 < values.length; i += 2)
@@ -81,35 +101,37 @@ class NigeriaMapGeometry {
         ];
         rings.add(ring);
         final ringBounds = _boundsOf(ring);
-        stateBounds = stateBounds?.expandToInclude(ringBounds) ?? ringBounds;
+        shapeBounds = shapeBounds?.expandToInclude(ringBounds) ?? ringBounds;
       }
-      final label = (raw['label'] as List<dynamic>).cast<num>();
-      states[entry.key] = NigeriaStateShape(
-        stateId: entry.key,
+      final label = (item['label'] as List<dynamic>).cast<num>();
+      shapes[entry.key] = GeoShape(
+        id: entry.key,
+        name: item['name'] as String?,
         rings: rings,
         labelPoint: Offset(label[0].toDouble(), label[1].toDouble()),
-        bounds: stateBounds!,
+        bounds: shapeBounds!,
       );
-      all = all?.expandToInclude(stateBounds) ?? stateBounds;
+      all = all?.expandToInclude(shapeBounds) ?? shapeBounds;
     }
-    return NigeriaMapGeometry(
-      states: states,
+    return GeoShapeSet(
+      shapes: shapes,
       bounds: all!,
       attribution: json['attribution'] as String? ?? '',
     );
   }
 
-  String? stateAt(double latitude, double longitude) {
-    for (final shape in states.values) {
-      if (shape.contains(latitude, longitude)) return shape.stateId;
+  /// Id of the shape containing the point, or null.
+  String? idAt(double latitude, double longitude) {
+    for (final shape in shapes.values) {
+      if (shape.contains(latitude, longitude)) return shape.id;
     }
     return null;
   }
 
-  Rect boundsFor(Iterable<String> stateIds) {
+  Rect boundsFor(Iterable<String> ids) {
     Rect? result;
-    for (final id in stateIds) {
-      final shape = states[id];
+    for (final id in ids) {
+      final shape = shapes[id];
       if (shape == null) continue;
       result = result?.expandToInclude(shape.bounds) ?? shape.bounds;
     }
@@ -130,8 +152,8 @@ class NigeriaMapGeometry {
 }
 
 /// Fits geographic bounds into a widget size (equirectangular, latitude-corrected).
-class NigeriaMapProjection {
-  factory NigeriaMapProjection.fit(
+class GeoProjection {
+  factory GeoProjection.fit(
     Rect geoBounds,
     Size size, {
     double padding = 18,
@@ -146,7 +168,7 @@ class NigeriaMapProjection {
         (size.height - padding * 2) / height,
       ),
     );
-    return NigeriaMapProjection._(
+    return GeoProjection._(
       geoBounds: geoBounds,
       size: size,
       kx: kx,
@@ -158,7 +180,7 @@ class NigeriaMapProjection {
     );
   }
 
-  const NigeriaMapProjection._({
+  const GeoProjection._({
     required this.geoBounds,
     required this.size,
     required this.kx,
@@ -179,7 +201,9 @@ class NigeriaMapProjection {
 
   Offset projectGeo(Offset lngLat) => project(lngLat.dy, lngLat.dx);
 
-  Path pathFor(NigeriaStateShape shape) {
+  double projectedWidth(Rect geo) => geo.width * kx * scale;
+
+  Path pathFor(GeoShape shape) {
     final path = Path()..fillType = PathFillType.evenOdd;
     for (final ring in shape.rings) {
       if (ring.isEmpty) continue;
@@ -190,8 +214,8 @@ class NigeriaMapProjection {
 }
 
 /// Visual palette for the map surface.
-class NigeriaMapStyle {
-  const NigeriaMapStyle({
+class GeoMapStyle {
+  const GeoMapStyle({
     required this.background,
     required this.border,
     required this.mutedFill,
@@ -202,7 +226,7 @@ class NigeriaMapStyle {
     required this.captionColor,
   });
 
-  static const light = NigeriaMapStyle(
+  static const light = GeoMapStyle(
     background: TgcgColors.surfaceSoft,
     border: Colors.white,
     mutedFill: Color(0xFFE3E9E6),
@@ -213,7 +237,7 @@ class NigeriaMapStyle {
     captionColor: TgcgColors.muted,
   );
 
-  static const dark = NigeriaMapStyle(
+  static const dark = GeoMapStyle(
     background: TgcgColors.primaryDark,
     border: Color(0xFF3F6A60),
     mutedFill: Color(0xFF143730),
@@ -234,57 +258,65 @@ class NigeriaMapStyle {
   final Color captionColor;
 }
 
-/// Interactive map of Nigeria drawn from real state boundaries.
-class NigeriaStateMapView extends StatefulWidget {
-  const NigeriaStateMapView({
+/// Interactive choropleth map of a [GeoShapeSet] (states or a state's LGAs).
+class GeoShapeMapView extends StatefulWidget {
+  const GeoShapeMapView({
     super.key,
+    required this.source,
     required this.fillFor,
-    this.style = NigeriaMapStyle.light,
-    this.selectedStateId,
-    this.onStateTap,
+    this.style = GeoMapStyle.light,
+    this.selectedId,
+    this.onTap,
     this.isInteractive,
     this.labelFor,
+    this.fitLabels = false,
+    this.labelFontSize,
     this.tooltipFor,
-    this.focusStateIds = const [],
+    this.focusIds = const [],
     this.overlayBuilder,
     this.padding = 18,
   });
 
-  /// Fill colour for each state id; null draws the style's muted fill.
-  final Color? Function(String stateId) fillFor;
-  final NigeriaMapStyle style;
-  final String? selectedStateId;
-  final ValueChanged<String>? onStateTap;
-  final bool Function(String stateId)? isInteractive;
+  /// Pass a cached future, e.g. [GeoShapeSet.nigeriaStates].
+  final Future<GeoShapeSet> source;
 
-  /// Short on-map label (e.g. state code); null hides it.
-  final String? Function(String stateId)? labelFor;
-  final String Function(String stateId)? tooltipFor;
+  /// Fill colour for each shape id; null draws the style's muted fill.
+  final Color? Function(String id) fillFor;
+  final GeoMapStyle style;
+  final String? selectedId;
+  final ValueChanged<String>? onTap;
+  final bool Function(String id)? isInteractive;
 
-  /// When non-empty, the viewport fits these states instead of all of Nigeria.
-  final List<String> focusStateIds;
+  /// Short on-map label; null hides it.
+  final String? Function(String id)? labelFor;
+
+  /// Hide labels wider than their shape (useful for dense LGA maps).
+  final bool fitLabels;
+  final double? labelFontSize;
+  final String Function(String id)? tooltipFor;
+
+  /// When non-empty, the viewport fits these shapes instead of the whole set.
+  final List<String> focusIds;
 
   /// Builds positioned widgets (markers) on top of the map.
-  final List<Widget> Function(
-    NigeriaMapGeometry geometry,
-    NigeriaMapProjection projection,
-  )? overlayBuilder;
+  final List<Widget> Function(GeoShapeSet shapes, GeoProjection projection)?
+      overlayBuilder;
   final double padding;
 
   @override
-  State<NigeriaStateMapView> createState() => _NigeriaStateMapViewState();
+  State<GeoShapeMapView> createState() => _GeoShapeMapViewState();
 }
 
-class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
-  late final Future<NigeriaMapGeometry> _geometry = NigeriaMapGeometry.load();
-  NigeriaMapProjection? _projection;
+class _GeoShapeMapViewState extends State<GeoShapeMapView> {
+  GeoShapeSet? _pathsFor;
+  GeoProjection? _projection;
   Map<String, Path> _paths = const {};
-  String? _hoveredStateId;
+  String? _hoveredId;
   Offset? _hoverPosition;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<NigeriaMapGeometry>(
-        future: _geometry,
+  Widget build(BuildContext context) => FutureBuilder<GeoShapeSet>(
+        future: widget.source,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
@@ -297,8 +329,8 @@ class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
               ),
             );
           }
-          final geometry = snapshot.data;
-          if (geometry == null) {
+          final shapes = snapshot.data;
+          if (shapes == null) {
             return const Center(
               child: SizedBox(
                 width: 22,
@@ -309,24 +341,26 @@ class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
           }
           return LayoutBuilder(
             builder: (context, constraints) =>
-                _buildMap(geometry, constraints.biggest),
+                _buildMap(shapes, constraints.biggest),
           );
         },
       );
 
-  Widget _buildMap(NigeriaMapGeometry geometry, Size size) {
-    final viewBounds = widget.focusStateIds.isEmpty
-        ? geometry.bounds
-        : geometry.boundsFor(widget.focusStateIds);
+  Widget _buildMap(GeoShapeSet shapes, Size size) {
+    final viewBounds = widget.focusIds.isEmpty
+        ? shapes.bounds
+        : shapes.boundsFor(widget.focusIds);
     var projection = _projection;
     if (projection == null ||
+        !identical(_pathsFor, shapes) ||
         projection.size != size ||
         projection.geoBounds != viewBounds) {
       projection = _projection =
-          NigeriaMapProjection.fit(viewBounds, size, padding: widget.padding);
+          GeoProjection.fit(viewBounds, size, padding: widget.padding);
+      _pathsFor = shapes;
       _paths = {
-        for (final shape in geometry.states.values)
-          shape.stateId: projection.pathFor(shape),
+        for (final shape in shapes.shapes.values)
+          shape.id: projection.pathFor(shape),
       };
     }
     final paths = _paths;
@@ -339,9 +373,9 @@ class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
     }
 
     bool interactive(String id) =>
-        widget.onStateTap != null && (widget.isInteractive?.call(id) ?? true);
+        widget.onTap != null && (widget.isInteractive?.call(id) ?? true);
 
-    final hovered = _hoveredStateId;
+    final hovered = _hoveredId;
     final tooltip = hovered == null ? null : widget.tooltipFor?.call(hovered);
 
     return ClipRect(
@@ -355,45 +389,50 @@ class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
               onHover: (event) {
                 final id = hitTest(event.localPosition);
                 // Tooltip follows the cursor, so only skip when nothing changes.
-                if (id != _hoveredStateId ||
+                if (id != _hoveredId ||
                     (id != null && widget.tooltipFor != null)) {
                   setState(() {
-                    _hoveredStateId = id;
+                    _hoveredId = id;
                     _hoverPosition = event.localPosition;
                   });
                 }
               },
               onExit: (_) => setState(() {
-                _hoveredStateId = null;
+                _hoveredId = null;
                 _hoverPosition = null;
               }),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTapUp: (details) {
                   final id = hitTest(details.localPosition);
-                  if (id != null && interactive(id)) widget.onStateTap!(id);
+                  if (id != null && interactive(id)) widget.onTap!(id);
                 },
                 child: CustomPaint(
                   size: size,
-                  painter: _NigeriaMapPainter(
-                    geometry: geometry,
+                  painter: _GeoShapePainter(
+                    shapes: shapes,
                     projection: projection,
                     paths: paths,
                     style: widget.style,
                     fillFor: widget.fillFor,
                     labelFor: widget.labelFor,
-                    selectedStateId: widget.selectedStateId,
-                    hoveredStateId: hovered,
+                    fitLabels: widget.fitLabels,
+                    labelFontSize: widget.labelFontSize,
+                    selectedId: widget.selectedId,
+                    hoveredId: hovered,
                   ),
                 ),
               ),
             ),
           ),
           if (widget.overlayBuilder != null)
-            ...widget.overlayBuilder!(geometry, projection),
+            ...widget.overlayBuilder!(shapes, projection),
           if (tooltip != null && _hoverPosition != null)
             Positioned(
-              left: math.min(_hoverPosition!.dx + 14, size.width - 220),
+              left: math.max(
+                4,
+                math.min(_hoverPosition!.dx + 14, size.width - 220),
+              ),
               top: math.max(_hoverPosition!.dy - 34, 4),
               child: IgnorePointer(
                 child: Container(
@@ -415,13 +454,13 @@ class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
                 ),
               ),
             ),
-          if (geometry.attribution.isNotEmpty)
+          if (shapes.attribution.isNotEmpty)
             Positioned(
               right: 8,
               bottom: 4,
               child: IgnorePointer(
                 child: Text(
-                  geometry.attribution,
+                  shapes.attribution,
                   style: TextStyle(
                     color: widget.style.captionColor.withValues(alpha: .8),
                     fontSize: 8,
@@ -435,26 +474,30 @@ class _NigeriaStateMapViewState extends State<NigeriaStateMapView> {
   }
 }
 
-class _NigeriaMapPainter extends CustomPainter {
-  _NigeriaMapPainter({
-    required this.geometry,
+class _GeoShapePainter extends CustomPainter {
+  _GeoShapePainter({
+    required this.shapes,
     required this.projection,
     required this.paths,
     required this.style,
     required this.fillFor,
     required this.labelFor,
-    required this.selectedStateId,
-    required this.hoveredStateId,
+    required this.fitLabels,
+    required this.labelFontSize,
+    required this.selectedId,
+    required this.hoveredId,
   });
 
-  final NigeriaMapGeometry geometry;
-  final NigeriaMapProjection projection;
+  final GeoShapeSet shapes;
+  final GeoProjection projection;
   final Map<String, Path> paths;
-  final NigeriaMapStyle style;
-  final Color? Function(String stateId) fillFor;
-  final String? Function(String stateId)? labelFor;
-  final String? selectedStateId;
-  final String? hoveredStateId;
+  final GeoMapStyle style;
+  final Color? Function(String id) fillFor;
+  final String? Function(String id)? labelFor;
+  final bool fitLabels;
+  final double? labelFontSize;
+  final String? selectedId;
+  final String? hoveredId;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -474,8 +517,8 @@ class _NigeriaMapPainter extends CustomPainter {
       canvas.drawPath(path, borderPaint);
     }
 
-    final hovered = paths[hoveredStateId];
-    if (hovered != null && hoveredStateId != selectedStateId) {
+    final hovered = paths[hoveredId];
+    if (hovered != null && hoveredId != selectedId) {
       canvas.drawPath(
         hovered,
         Paint()
@@ -485,7 +528,7 @@ class _NigeriaMapPainter extends CustomPainter {
           ..color = style.hoverBorder,
       );
     }
-    final selected = paths[selectedStateId];
+    final selected = paths[selectedId];
     if (selected != null) {
       canvas.drawPath(
         selected,
@@ -499,11 +542,11 @@ class _NigeriaMapPainter extends CustomPainter {
 
     final labeler = labelFor;
     if (labeler == null) return;
-    final fontSize = (projection.scale * .2).clamp(7.0, 12.0);
-    for (final shape in geometry.states.values) {
-      final text = labeler(shape.stateId);
+    final fontSize = labelFontSize ?? (projection.scale * .2).clamp(7.0, 12.0);
+    for (final shape in shapes.shapes.values) {
+      final text = labeler(shape.id);
       if (text == null || text.isEmpty) continue;
-      final fill = fills[shape.stateId] ?? style.mutedFill;
+      final fill = fills[shape.id] ?? style.mutedFill;
       final color = fill.computeLuminance() > .45
           ? style.labelDark
           : style.labelLight;
@@ -521,6 +564,10 @@ class _NigeriaMapPainter extends CustomPainter {
         textAlign: TextAlign.center,
         textDirection: TextDirection.ltr,
       )..layout();
+      if (fitLabels &&
+          painter.width > projection.projectedWidth(shape.bounds) * .9) {
+        continue;
+      }
       final center = projection.projectGeo(shape.labelPoint);
       painter.paint(
         canvas,
@@ -530,12 +577,11 @@ class _NigeriaMapPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _NigeriaMapPainter old) =>
-      old.projection.size != projection.size ||
-      old.projection.geoBounds != projection.geoBounds ||
+  bool shouldRepaint(covariant _GeoShapePainter old) =>
+      !identical(old.paths, paths) ||
       old.style != style ||
-      old.selectedStateId != selectedStateId ||
-      old.hoveredStateId != hoveredStateId ||
+      old.selectedId != selectedId ||
+      old.hoveredId != hoveredId ||
       old.fillFor != fillFor ||
       old.labelFor != labelFor;
 }
