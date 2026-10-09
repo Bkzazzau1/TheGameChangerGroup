@@ -1,6 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../domain/permissions.dart';
+import '../geography/geography_registry.dart';
+import '../geography/nigeria_map.dart';
+import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
@@ -101,6 +106,10 @@ class _SituationRoomPageState extends State<SituationRoomPage> {
             );
             final map = _CommandMap(
               scope: session.scope,
+              focusStateIds: _focusStateIds(
+                session.scope,
+                MembershipOperations.of(context).geography.states,
+              ),
               incidents: open,
               selectedIncidentId: selectedIncidentId,
               onSelect: (id) => setState(() => selectedIncidentId = id),
@@ -402,23 +411,116 @@ class _PriorityItem extends StatelessWidget {
 class _CommandMap extends StatelessWidget {
   const _CommandMap({
     required this.scope,
+    required this.focusStateIds,
     required this.incidents,
     required this.selectedIncidentId,
     required this.onSelect,
   });
 
   final GeographicScope scope;
+  final List<String> focusStateIds;
   final List<FieldIncident> incidents;
   final String? selectedIncidentId;
   final ValueChanged<String> onSelect;
+
+  Map<String, IncidentSeverity> get worstByState {
+    final result = <String, IncidentSeverity>{};
+    for (final incident in incidents) {
+      final id = incident.scope.stateId;
+      if (id == null) continue;
+      final current = result[id];
+      if (current == null ||
+          _severityRank(incident.severity) > _severityRank(current)) {
+        result[id] = incident.severity;
+      }
+    }
+    return result;
+  }
+
+  Map<String, int> get openByState {
+    final result = <String, int>{};
+    for (final incident in incidents) {
+      final id = incident.scope.stateId;
+      if (id != null) result[id] = (result[id] ?? 0) + 1;
+    }
+    return result;
+  }
+
+  List<Widget> _incidentMarkers(
+    NigeriaMapGeometry geometry,
+    NigeriaMapProjection projection,
+  ) {
+    // Incidents without a GPS fix are fanned out around their state's
+    // interior label point so they never land outside the state.
+    final unfixedTotals = <String, int>{};
+    for (final incident in incidents) {
+      final id = incident.scope.stateId;
+      if (!_hasFix(incident) && id != null) {
+        unfixedTotals[id] = (unfixedTotals[id] ?? 0) + 1;
+      }
+    }
+    final unfixedSeen = <String, int>{};
+
+    final placed = <({FieldIncident incident, Offset point, bool exact})>[];
+    for (final incident in incidents) {
+      if (_hasFix(incident)) {
+        placed.add((
+          incident: incident,
+          point: projection.project(incident.latitude!, incident.longitude!),
+          exact: true,
+        ));
+        continue;
+      }
+      final shape = geometry.states[incident.scope.stateId];
+      if (shape == null) continue;
+      final index = unfixedSeen[shape.stateId] ?? 0;
+      unfixedSeen[shape.stateId] = index + 1;
+      final total = unfixedTotals[shape.stateId]!;
+      final center =
+          projection.projectGeo(shape.labelPoint) + const Offset(0, 18);
+      final radius = total == 1 ? 0.0 : 16.0;
+      final angle = index * 2 * math.pi / total - math.pi / 2;
+      placed.add((
+        incident: incident,
+        point: center + Offset(math.cos(angle), math.sin(angle)) * radius,
+        exact: false,
+      ));
+    }
+    // Paint the selected marker last so it sits above its neighbours.
+    int selectedLast(FieldIncident incident) =>
+        incident.id == selectedIncidentId ? 1 : 0;
+    placed.sort((a, b) =>
+        selectedLast(a.incident).compareTo(selectedLast(b.incident)));
+
+    final size = projection.size;
+    const half = _MapIncidentNode.pinSize / 2;
+    return [
+      for (final item in placed)
+        Positioned(
+          left: (item.point.dx - half)
+              .clamp(4.0, math.max(4.0, size.width - 150))
+              .toDouble(),
+          top: (item.point.dy - half)
+              .clamp(4.0, math.max(4.0, size.height - 30))
+              .toDouble(),
+          child: _MapIncidentNode(
+            incident: item.incident,
+            color: _severityColor(item.incident.severity),
+            selected: item.incident.id == selectedIncidentId,
+            exact: item.exact,
+            onTap: () => onSelect(item.incident.id),
+          ),
+        ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) => TgcgSectionCard(
         title: 'Live operational map',
         subtitle:
-            'Incident command surface. Production polling-unit geometry and heatmaps will be rendered from the GIS/PostGIS layer.',
+            'Open incidents plotted on Nigerian state boundaries. States are shaded by their most severe open incident.',
         trailing: const TgcgStatusPill(
-          label: 'GIS PREVIEW',
+          label: 'STATE GIS',
           color: TgcgColors.info,
           icon: Icons.map_outlined,
           compact: true,
@@ -433,64 +535,60 @@ class _CommandMap extends StatelessWidget {
                 color: TgcgColors.primaryDark,
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const positions = <Offset>[
-                    Offset(.18, .26),
-                    Offset(.56, .20),
-                    Offset(.76, .46),
-                    Offset(.32, .63),
-                    Offset(.60, .72),
-                    Offset(.84, .76),
-                    Offset(.15, .78),
-                  ];
-                  return Stack(
-                    children: [
-                      const Positioned.fill(
-                        child: CustomPaint(painter: _CommandGridPainter()),
-                      ),
-                      Positioned(
-                        left: 18,
-                        top: 16,
-                        child: TgcgStatusPill(
-                          label: scope.label.toUpperCase(),
-                          color: TgcgColors.accent,
-                          icon: Icons.location_on_outlined,
-                          compact: true,
-                        ),
-                      ),
-                      Positioned(
-                        right: 18,
-                        top: 16,
-                        child: Wrap(
-                          spacing: 10,
-                          children: const [
-                            _MapLegend(label: 'Critical / high', color: TgcgColors.danger),
-                            _MapLegend(label: 'Medium', color: TgcgColors.warning),
-                            _MapLegend(label: 'Low / info', color: TgcgColors.info),
-                          ],
-                        ),
-                      ),
-                      ...List.generate(incidents.length, (index) {
-                        final incident = incidents[index];
-                        final p = positions[index % positions.length];
-                        final selected = incident.id == selectedIncidentId;
-                        final color = _severityColor(incident.severity);
-                        final maxLeft = constraints.maxWidth - 150;
-                        final maxTop = constraints.maxHeight - 95;
-                        return Positioned(
-                          left: (p.dx * maxLeft).clamp(8, maxLeft).toDouble(),
-                          top: (p.dy * maxTop).clamp(55, maxTop).toDouble(),
-                          child: _MapIncidentNode(
-                            incident: incident,
-                            color: color,
-                            selected: selected,
-                            onTap: () => onSelect(incident.id),
-                          ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: NigeriaStateMapView(
+                      style: NigeriaMapStyle.dark,
+                      padding: 56,
+                      focusStateIds: focusStateIds,
+                      fillFor: (id) {
+                        final severity = worstByState[id];
+                        if (severity == null) return null;
+                        return Color.alphaBlend(
+                          _severityColor(severity).withValues(alpha: .42),
+                          NigeriaMapStyle.dark.mutedFill,
                         );
-                      }),
-                      if (incidents.isEmpty)
-                        const Center(
+                      },
+                      labelFor: (id) => id,
+                      tooltipFor: (id) {
+                        final count = openByState[id] ?? 0;
+                        return count == 0
+                            ? id
+                            : '$id • $count open incident${count == 1 ? '' : 's'}';
+                      },
+                      overlayBuilder: _incidentMarkers,
+                    ),
+                  ),
+                  Positioned(
+                    left: 18,
+                    top: 16,
+                    child: TgcgStatusPill(
+                      label: scope.label.toUpperCase(),
+                      color: TgcgColors.accent,
+                      icon: Icons.location_on_outlined,
+                      compact: true,
+                    ),
+                  ),
+                  const Positioned(
+                    right: 18,
+                    top: 16,
+                    child: Wrap(
+                      spacing: 10,
+                      children: [
+                        _MapLegend(label: 'Critical / high', color: TgcgColors.danger),
+                        _MapLegend(label: 'Medium', color: TgcgColors.warning),
+                        _MapLegend(label: 'Low / info', color: TgcgColors.info),
+                      ],
+                    ),
+                  ),
+                  if (incidents.isEmpty)
+                    const Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 40,
+                      child: IgnorePointer(
+                        child: Center(
                           child: Text(
                             'No active incident markers in this scope',
                             style: TextStyle(
@@ -499,28 +597,29 @@ class _CommandMap extends StatelessWidget {
                             ),
                           ),
                         ),
-                      const Positioned(
-                        left: 18,
-                        right: 18,
-                        bottom: 14,
-                        child: Row(
-                          children: [
-                            Icon(Icons.layers_outlined, color: Color(0xFFB8CEC6), size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Polling units  •  Incidents  •  Agent positions  •  Result progress',
-                              style: TextStyle(
-                                color: Color(0xFFB8CEC6),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
-                    ],
-                  );
-                },
+                    ),
+                  const Positioned(
+                    left: 18,
+                    bottom: 14,
+                    child: IgnorePointer(
+                      child: Row(
+                        children: [
+                          Icon(Icons.layers_outlined, color: Color(0xFFB8CEC6), size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'State boundaries  •  Incidents',
+                            style: TextStyle(
+                              color: Color(0xFFB8CEC6),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -530,7 +629,7 @@ class _CommandMap extends StatelessWidget {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '${incidents.length} active incident marker${incidents.length == 1 ? '' : 's'} in the authorized scope. Marker positions are prototype layout positions until GIS geometry is connected.',
+                    '${incidents.length} active incident marker${incidents.length == 1 ? '' : 's'} in the authorized scope. Solid pins use reported GPS coordinates; ringed pins have no GPS fix and are placed inside their reported state.',
                     style: const TextStyle(
                       color: TgcgColors.muted,
                       fontSize: 10.5,
@@ -550,60 +649,81 @@ class _MapIncidentNode extends StatelessWidget {
     required this.incident,
     required this.color,
     required this.selected,
+    required this.exact,
     required this.onTap,
   });
+
+  static const pinSize = 24.0;
 
   final FieldIncident incident;
   final Color color;
   final bool selected;
+  final bool exact;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: selected ? 142 : 42,
-          height: 42,
-          padding: EdgeInsets.symmetric(horizontal: selected ? 9 : 0),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFF173B34) : color,
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(
-              color: selected ? color : Colors.white.withValues(alpha: .3),
-              width: selected ? 2 : 1,
+  Widget build(BuildContext context) => Tooltip(
+        message: '${incident.title}\n'
+            '${incident.scope.lgaName ?? incident.scope.label}'
+            '${exact ? '' : ' (no GPS fix)'}',
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(pinSize / 2),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: selected ? 146 : pinSize,
+            height: pinSize,
+            padding: EdgeInsets.only(
+              left: selected ? 3 : 0,
+              right: selected ? 8 : 0,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: .25),
-                blurRadius: 16,
-                offset: const Offset(0, 5),
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF173B34)
+                  : exact
+                      ? color
+                      : TgcgColors.primaryDark,
+              borderRadius: BorderRadius.circular(pinSize / 2),
+              border: Border.all(
+                color: selected || !exact ? color : Colors.white,
+                width: selected || !exact ? 2.4 : 1.6,
               ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: selected
-                ? MainAxisAlignment.start
-                : MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.location_on_rounded, color: Colors.white, size: 19),
-              if (selected) ...[
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    incident.scope.lgaName ?? incident.scope.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 9.5,
-                    ),
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: .45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
                 ),
               ],
-            ],
+            ),
+            child: Row(
+              mainAxisAlignment:
+                  selected ? MainAxisAlignment.start : MainAxisAlignment.center,
+              children: [
+                Icon(
+                  exact
+                      ? Icons.location_on_rounded
+                      : Icons.location_searching_rounded,
+                  color: exact || selected ? Colors.white : color,
+                  size: 14,
+                ),
+                if (selected) ...[
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      incident.scope.lgaName ?? incident.scope.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       );
@@ -1170,33 +1290,22 @@ class _ActivityEvent {
   final String? incidentId;
 }
 
-class _CommandGridPainter extends CustomPainter {
-  const _CommandGridPainter();
+bool _hasFix(FieldIncident incident) =>
+    incident.latitude != null && incident.longitude != null;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = const Color(0xFF31584F).withValues(alpha: .34)
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 44) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-    }
-    for (double y = 0; y < size.height; y += 44) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-
-    final sweep = Paint()
-      ..color = TgcgColors.success.withValues(alpha: .055)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(
-      Offset(size.width * .52, size.height * .48),
-      size.shortestSide * .36,
-      sweep,
-    );
+List<String> _focusStateIds(
+  GeographicScope scope,
+  List<CanonicalState> states,
+) {
+  if (scope.level == GeographyLevel.country) return const [];
+  if (scope.level == GeographyLevel.geopoliticalZone) {
+    return [
+      for (final state in states)
+        if (state.zoneId == scope.zoneId) state.id,
+    ];
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  final stateId = scope.stateId;
+  return stateId == null ? const [] : [stateId];
 }
 
 int _severityRank(IncidentSeverity severity) => switch (severity) {

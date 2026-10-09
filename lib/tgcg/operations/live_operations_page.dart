@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../field/field_operations_store.dart';
 import '../geography/geography_registry.dart';
+import '../geography/nigeria_map.dart';
 import '../membership/membership_store.dart';
 import '../results/result_operations_store.dart';
 import '../security/emergency_response_store.dart';
@@ -425,40 +425,40 @@ class _NigeriaStateMap extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: 420,
+            height: 460,
             width: double.infinity,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: TgcgColors.surfaceSoft,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: TgcgColors.border),
             ),
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: 570,
-                  height: 355,
-                  child: Stack(
-                    children: [
-                      for (final cell in _stateCells)
-                        if (stateById[cell.stateId] != null)
-                          Positioned(
-                            left: 20 + cell.column * 55.0,
-                            top: 12 + cell.row * 46.0,
-                            child: _StateHexTile(
-                              state: stateById[cell.stateId]!,
-                              snapshot: snapshotById[cell.stateId],
-                              selected: selectedStateId == cell.stateId,
-                              onTap: snapshotById[cell.stateId] == null
-                                  ? null
-                                  : () => onSelect(cell.stateId),
-                            ),
-                          ),
-                    ],
-                  ),
-                ),
-              ),
+            child: NigeriaStateMapView(
+              selectedStateId: selectedStateId,
+              onStateTap: onSelect,
+              isInteractive: snapshotById.containsKey,
+              focusStateIds: snapshots.length == allStates.length
+                  ? const []
+                  : [for (final item in snapshots) item.state.id],
+              fillFor: (id) {
+                final snapshot = snapshotById[id];
+                return snapshot == null
+                    ? null
+                    : _conditionColor(snapshot.condition);
+              },
+              labelFor: (id) {
+                final open = snapshotById[id]?.openIncidents.length ?? 0;
+                return open > 0 ? '$id\n$open' : id;
+              },
+              tooltipFor: (id) {
+                final state = stateById[id];
+                final snapshot = snapshotById[id];
+                final name = state?.name ?? id;
+                if (snapshot == null) return '$name • outside current scope';
+                final open = snapshot.openIncidents.length;
+                return '$name • ${_conditionLabel(snapshot.condition)}'
+                    '${open > 0 ? ' • $open open' : ''}';
+              },
             ),
           ),
           const SizedBox(height: 14),
@@ -467,172 +467,6 @@ class _NigeriaStateMap extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StateMapCell {
-  const _StateMapCell(this.stateId, this.row, this.column);
-  final String stateId;
-  final int row;
-  final int column;
-}
-
-const _stateCells = <_StateMapCell>[
-  _StateMapCell('KE', 0, 1),
-  _StateMapCell('SO', 0, 2),
-  _StateMapCell('ZA', 0, 3),
-  _StateMapCell('KT', 0, 4),
-  _StateMapCell('KN', 0, 5),
-  _StateMapCell('JI', 0, 6),
-  _StateMapCell('YO', 0, 7),
-  _StateMapCell('BO', 0, 8),
-  _StateMapCell('NI', 1, 1),
-  _StateMapCell('KD', 1, 3),
-  _StateMapCell('BA', 1, 5),
-  _StateMapCell('GO', 1, 6),
-  _StateMapCell('AD', 1, 7),
-  _StateMapCell('KW', 2, 0),
-  _StateMapCell('FCT', 2, 2),
-  _StateMapCell('NA', 2, 3),
-  _StateMapCell('PL', 2, 4),
-  _StateMapCell('TA', 2, 6),
-  _StateMapCell('OY', 3, 0),
-  _StateMapCell('OS', 3, 1),
-  _StateMapCell('EK', 3, 2),
-  _StateMapCell('KO', 3, 3),
-  _StateMapCell('BN', 3, 4),
-  _StateMapCell('OG', 4, 0),
-  _StateMapCell('ON', 4, 1),
-  _StateMapCell('ED', 4, 2),
-  _StateMapCell('EN', 4, 3),
-  _StateMapCell('EB', 4, 4),
-  _StateMapCell('CR', 4, 5),
-  _StateMapCell('LA', 5, 0),
-  _StateMapCell('DE', 5, 1),
-  _StateMapCell('AN', 5, 2),
-  _StateMapCell('IM', 5, 3),
-  _StateMapCell('AB', 5, 4),
-  _StateMapCell('BY', 6, 1),
-  _StateMapCell('RI', 6, 2),
-  _StateMapCell('AK', 6, 3),
-];
-
-class _StateHexTile extends StatelessWidget {
-  const _StateHexTile({
-    required this.state,
-    required this.snapshot,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final CanonicalState state;
-  final _StateSnapshot? snapshot;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final condition = snapshot?.condition ?? _SituationCondition.noData;
-    final fill = _conditionColor(condition);
-    final enabled = snapshot != null;
-    final foreground = condition == _SituationCondition.noData
-        ? TgcgColors.muted
-        : Colors.white;
-    final open = snapshot?.openIncidents.length ?? 0;
-
-    return Tooltip(
-      message: enabled
-          ? '${state.name} • ${_conditionLabel(condition)}'
-          : '${state.name} • outside current scope',
-      child: GestureDetector(
-        onTap: onTap,
-        child: SizedBox(
-          width: 64,
-          height: 56,
-          child: CustomPaint(
-            painter: _HexPainter(
-              fill: fill,
-              border: selected ? TgcgColors.accent : Colors.white,
-              borderWidth: selected ? 3.2 : 1.4,
-              muted: !enabled,
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    state.id == 'FCT' ? 'FCT' : state.id,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: state.id == 'FCT' ? 10 : 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: .15,
-                    ),
-                  ),
-                  if (enabled && open > 0) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '$open OPEN',
-                      style: TextStyle(
-                        color: foreground.withValues(alpha: .88),
-                        fontSize: 6.8,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HexPainter extends CustomPainter {
-  const _HexPainter({
-    required this.fill,
-    required this.border,
-    required this.borderWidth,
-    required this.muted,
-  });
-
-  final Color fill;
-  final Color border;
-  final double borderWidth;
-  final bool muted;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * .25, 1)
-      ..lineTo(size.width * .75, 1)
-      ..lineTo(size.width - 1, size.height * .5)
-      ..lineTo(size.width * .75, size.height - 1)
-      ..lineTo(size.width * .25, size.height - 1)
-      ..lineTo(1, size.height * .5)
-      ..close();
-
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = muted ? TgcgColors.border.withValues(alpha: .72) : fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = border
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = borderWidth,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _HexPainter oldDelegate) =>
-      oldDelegate.fill != fill ||
-      oldDelegate.border != border ||
-      oldDelegate.borderWidth != borderWidth ||
-      oldDelegate.muted != muted;
 }
 
 class _MapLegend extends StatelessWidget {
