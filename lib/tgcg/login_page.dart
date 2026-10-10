@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'api/api_client.dart';
+import 'api/backend.dart';
 import 'app.dart';
 import 'membership/membership_store.dart';
 import 'session.dart';
@@ -22,6 +24,11 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
   String? selectedStateId;
   bool obscurePassword = true;
   bool rememberDevice = true;
+  bool signingIn = false;
+  String? serverError;
+
+  /// Connected to a TGCG server: the server decides role and scope.
+  bool get serverMode => TgcgBackend.of(context) != null;
 
   @override
   void dispose() {
@@ -31,7 +38,54 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
     super.dispose();
   }
 
+  Future<void> _serverSignIn() async {
+    final services = TgcgBackend.of(context)!;
+    final identifier = accessIdController.text.trim();
+    if (identifier.isEmpty || passwordController.text.isEmpty) {
+      setState(() => serverError = 'Enter your access ID or phone number and password.');
+      return;
+    }
+    setState(() {
+      signingIn = true;
+      serverError = null;
+    });
+    try {
+      final user = await services.auth.login(
+        identifier: identifier,
+        password: passwordController.text,
+      );
+      final role = user.role;
+      if (!mounted) return;
+      if (role == null) {
+        await services.auth.logout();
+        setState(() => serverError = user.isMember
+            ? 'Member accounts sign in on the TGCG member app.'
+            : 'This account type cannot use the operations app.');
+        return;
+      }
+      TgcgSession.of(context, listen: false).signInFromServer(
+        role: role,
+        fullName: user.fullName,
+        accessId: user.accessId,
+        scope: user.scope,
+        capabilities: user.capabilities,
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => serverError = error.isUnauthorized
+          ? 'Wrong access ID, phone number or password. After 5 failed attempts '
+              'the account locks for 15 minutes.'
+          : error.message);
+    } finally {
+      if (mounted) setState(() => signingIn = false);
+    }
+  }
+
   void _signIn() {
+    if (serverMode) {
+      _serverSignIn();
+      return;
+    }
     final membership = MembershipOperations.of(context, listen: false);
     var scope = GeographicScope.nigeria;
 
@@ -192,21 +246,23 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   style: TextStyle(color: TgcgApp.muted, fontSize: 13),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Operational role',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: TgcgApp.ink,
+                if (!serverMode) ...[
+                  const Text(
+                    'Operational role',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: TgcgApp.ink,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _roleGrid(),
-                if (selectedRole == TgcgRole.zonalCoordinator ||
-                    selectedRole == TgcgRole.stateCoordinator) ...[
-                  const SizedBox(height: 14),
-                  _roleScopeSelector(),
+                  const SizedBox(height: 12),
+                  _roleGrid(),
+                  if (selectedRole == TgcgRole.zonalCoordinator ||
+                      selectedRole == TgcgRole.stateCoordinator) ...[
+                    const SizedBox(height: 14),
+                    _roleScopeSelector(),
+                  ],
+                  const SizedBox(height: 22),
                 ],
-                const SizedBox(height: 22),
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final stack = constraints.maxWidth < 540;
@@ -220,12 +276,15 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     );
                     final access = TextField(
                       controller: accessIdController,
+                      autofillHints: const [AutofillHints.username],
+                      textInputAction: TextInputAction.next,
                       decoration: _decoration(
-                        'Access ID / phone',
-                        'Enter access ID',
+                        serverMode ? 'Access ID or phone number' : 'Access ID / phone',
+                        serverMode ? 'e.g. TGCG-KD-0001 or 0803 123 4567' : 'Enter access ID',
                         Icons.badge_outlined,
                       ),
                     );
+                    if (serverMode) return access;
                     if (stack) {
                       return Column(
                         children: [
@@ -249,9 +308,10 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   controller: passwordController,
                   obscureText: obscurePassword,
                   onSubmitted: (_) => _signIn(),
+                  autofillHints: const [AutofillHints.password],
                   decoration: _decoration(
-                    'Password',
-                    'Enter password',
+                    serverMode ? 'Password or PIN' : 'Password',
+                    serverMode ? 'Members use their 6-digit PIN' : 'Enter password',
                     Icons.lock_outline_rounded,
                   ).copyWith(
                     suffixIcon: IconButton(
@@ -284,14 +344,50 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     ),
                   ],
                 ),
+                if (serverError != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    key: const ValueKey('login-error'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: TgcgColors.danger.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: TgcgColors.danger.withValues(alpha: .3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.error_outline_rounded, color: TgcgColors.danger, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            serverError!,
+                            style: const TextStyle(color: TgcgColors.ink, height: 1.35),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: FilledButton.icon(
-                    onPressed: _signIn,
-                    icon: const Icon(Icons.login_rounded),
-                    label: Text('Enter as ${roleLabel(selectedRole)}'),
+                    onPressed: signingIn ? null : _signIn,
+                    icon: signingIn
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.login_rounded),
+                    label: Text(
+                      serverMode
+                          ? (signingIn ? 'Signing in…' : 'Sign in')
+                          : 'Enter as ${roleLabel(selectedRole)}',
+                    ),
                     style: FilledButton.styleFrom(
                       backgroundColor: TgcgApp.primary,
                       foregroundColor: Colors.white,

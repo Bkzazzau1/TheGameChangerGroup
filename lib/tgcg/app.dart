@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'api/api_client.dart';
+import 'api/backend.dart';
 import 'communications/bulk_communications_store.dart';
 import 'communications/communications_store.dart';
 import 'field/field_agent_shell.dart';
 import 'field/field_operations_store.dart';
 import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
+import 'login_page.dart';
 import 'membership/membership_store.dart';
 import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
@@ -20,7 +23,10 @@ import 'shell.dart';
 import 'ui/tgcg_design.dart';
 
 class TgcgApp extends StatefulWidget {
-  const TgcgApp({super.key});
+  const TgcgApp({super.key, this.backend});
+
+  /// Server connection; defaults to TGCG_API_URL when configured.
+  final BackendServices? backend;
 
   static const Color primary = TgcgColors.primary;
   static const Color accent = TgcgColors.accent;
@@ -33,6 +39,11 @@ class TgcgApp extends StatefulWidget {
 }
 
 class _TgcgAppState extends State<TgcgApp> {
+  late final BackendServices? backend = widget.backend ??
+      (tgcgApiConfigured ? BackendServices.connect(tgcgApiUrl) : null);
+
+  /// True while a saved server session is being restored at startup.
+  late bool restoringSession = backend != null;
   late TgcgSessionController sessionController;
   late OfflinePersistenceController offlinePersistenceController;
   late MembershipOperationsController membershipOperationsController;
@@ -49,10 +60,37 @@ class _TgcgAppState extends State<TgcgApp> {
     super.initState();
     _createControllers();
     unawaited(offlinePersistenceController.initialize());
+    final services = backend;
+    if (services != null) {
+      services.client.onSessionExpired = () {
+        if (sessionController.isServerSession) sessionController.signOut();
+      };
+      unawaited(_restoreSession(services));
+    }
+  }
+
+  Future<void> _restoreSession(BackendServices services) async {
+    try {
+      final user = await services.auth.restore();
+      final role = user?.role;
+      if (user != null && role != null && mounted) {
+        sessionController.signInFromServer(
+          role: role,
+          fullName: user.fullName,
+          accessId: user.accessId,
+          scope: user.scope,
+          capabilities: user.capabilities,
+        );
+      }
+    } on ApiException {
+      // Offline at startup: the user signs in again once connected.
+    } finally {
+      if (mounted) setState(() => restoringSession = false);
+    }
   }
 
   void _createControllers() {
-    sessionController = TgcgSessionController();
+    sessionController = TgcgSessionController(onSignOut: backend?.auth.logout);
     offlinePersistenceController = OfflinePersistenceController();
     membershipOperationsController = MembershipOperationsController.prototypeSeed(
       GeographyRegistry.prototypeSeed(),
@@ -133,7 +171,12 @@ class _TgcgAppState extends State<TgcgApp> {
   }
 
   @override
-  Widget build(BuildContext context) => TgcgSession(
+  Widget build(BuildContext context) => TgcgBackend(
+        services: backend,
+        child: _build(context),
+      );
+
+  Widget _build(BuildContext context) => TgcgSession(
         controller: sessionController,
         child: OfflinePersistence(
           controller: offlinePersistenceController,
@@ -158,9 +201,11 @@ class _TgcgAppState extends State<TgcgApp> {
                             debugShowCheckedModeBanner: false,
                             title: 'TGCG-EMCOP',
                             theme: _theme(),
-                            home: _AuthenticationGate(
-                              onResetPresentation: _resetPresentation,
-                            ),
+                            home: restoringSession
+                                ? const _RestoringSession()
+                                : _AuthenticationGate(
+                                    onResetPresentation: _resetPresentation,
+                                  ),
                           ),
                         ),
                       ),
@@ -377,6 +422,29 @@ class _TgcgAppState extends State<TgcgApp> {
   }
 }
 
+class _RestoringSession extends StatelessWidget {
+  const _RestoringSession();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+        backgroundColor: TgcgColors.primaryDark,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TgcgLogo(size: 88),
+              SizedBox(height: 22),
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.4),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
 class _AuthenticationGate extends StatelessWidget {
   const _AuthenticationGate({required this.onResetPresentation});
 
@@ -385,6 +453,10 @@ class _AuthenticationGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
+    if (!session.isAuthenticated && TgcgBackend.of(context) != null) {
+      // Connected to a server: real sign-in, no presentation controls.
+      return const TgcgLoginPage(key: ValueKey('server-login'));
+    }
     if (!session.isAuthenticated) {
       return PresentationAccessLogin(
         key: const ValueKey('presentation-access-login'),

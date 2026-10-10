@@ -68,3 +68,35 @@ Flutter clients
 ```
 
 The Flutter domain layer is kept backend-agnostic so development can begin with local implementations while preserving a clean path to production APIs and offline synchronization.
+
+## Connecting to the backend
+
+The app talks to the Django API in
+[tgcg_backend](https://github.com/Bkzazzau1/tgcg_backend). Set the server
+address when you run or build the app:
+
+```bash
+# Windows desktop or web, with the backend on this machine
+flutter run --dart-define=TGCG_API_URL=http://127.0.0.1:8000
+
+# Android emulator (10.0.2.2 is the host machine)
+flutter run --dart-define=TGCG_API_URL=http://10.0.2.2:8000
+
+# A phone on the same Wi-Fi: use the computer's LAN address and start Django
+# with `runserver 0.0.0.0:8000`
+flutter run --dart-define=TGCG_API_URL=http://192.168.1.20:8000
+```
+
+With `TGCG_API_URL` set, the login screen signs in against the server. Use an
+access ID or phone number with a password, or a PIN for members. The server
+decides the role and area. Tokens are kept in secure storage, the session is
+restored on the next launch, and an expired session signs the user out.
+
+Without `TGCG_API_URL`, the app runs in **presentation mode**. It shows the
+role picker and seeded demo data, and nothing is sent to a server.
+
+The connection code lives in `lib/tgcg/api/`:
+
+- `api_client.dart` handles HTTP, token refresh and error messages.
+- `auth_repository.dart` handles login, session restore and logout.
+- `backend.dart` makes the connection available to the app.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'domain/models.dart';
@@ -32,16 +34,47 @@ enum TgcgModule {
 }
 
 class TgcgSessionController extends ChangeNotifier {
+  TgcgSessionController({this.onSignOut});
+
+  /// Runs on sign-out, e.g. to revoke the server session.
+  final Future<void> Function()? onSignOut;
+
   TgcgRole? _role;
   String _operatorName = '';
   String _accessId = '';
   GeographicScope _scope = GeographicScope.nigeria;
+  Set<String> _serverCapabilities = const {};
+  bool _serverSession = false;
 
   TgcgRole? get role => _role;
   String get operatorName => _operatorName;
   String get accessId => _accessId;
   GeographicScope get scope => _scope;
   bool get isAuthenticated => _role != null;
+
+  /// True when signed in against the TGCG server (not presentation mode).
+  bool get isServerSession => _serverSession;
+
+  /// Capabilities granted by the server for this account.
+  Set<String> get serverCapabilities => _serverCapabilities;
+
+  /// Sign in with the account the server returned. The server decides the
+  /// role and operational scope.
+  void signInFromServer({
+    required TgcgRole role,
+    required String fullName,
+    required String accessId,
+    required GeographicScope scope,
+    required Set<String> capabilities,
+  }) {
+    _role = role;
+    _operatorName = fullName;
+    _accessId = accessId;
+    _scope = scope;
+    _serverCapabilities = Set.unmodifiable(capabilities);
+    _serverSession = true;
+    notifyListeners();
+  }
 
   void signIn({
     required TgcgRole role,
@@ -72,6 +105,9 @@ class TgcgSessionController extends ChangeNotifier {
   }
 
   void signOut() {
+    if (_serverSession) unawaited(onSignOut?.call());
+    _serverSession = false;
+    _serverCapabilities = const {};
     _role = null;
     _operatorName = '';
     _accessId = '';
