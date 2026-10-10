@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../communications/communications_store.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
+import '../sync/sync_controller.dart';
 import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
@@ -93,6 +94,7 @@ class FieldAgentHomePage extends StatelessWidget {
         const SizedBox(height: 14),
         _OnDutyCard(ownerId: agent.agentId),
         const SizedBox(height: 14),
+        const SyncStatusCard(),
         _ReadinessCard(
           approved: approved,
           training: training,

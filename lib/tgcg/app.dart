@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'api/api_client.dart';
 import 'api/backend.dart';
+import 'api/http_sync_transport.dart';
 import 'communications/bulk_communications_store.dart';
 import 'communications/communications_store.dart';
 import 'field/field_agent_shell.dart';
@@ -20,6 +21,7 @@ import 'results/result_operations_store.dart';
 import 'security/emergency_response_store.dart';
 import 'session.dart';
 import 'shell.dart';
+import 'sync/sync_controller.dart';
 import 'ui/tgcg_design.dart';
 
 class TgcgApp extends StatefulWidget {
@@ -46,6 +48,9 @@ class _TgcgAppState extends State<TgcgApp> {
   late bool restoringSession = backend != null;
   late TgcgSessionController sessionController;
   late OfflinePersistenceController offlinePersistenceController;
+
+  /// Uploads the offline outbox while signed in to the server.
+  SyncController? syncController;
   late MembershipOperationsController membershipOperationsController;
   late GovernanceOperationsController governanceOperationsController;
   late FieldOperationsController fieldOperationsController;
@@ -91,7 +96,16 @@ class _TgcgAppState extends State<TgcgApp> {
 
   void _createControllers() {
     sessionController = TgcgSessionController(onSignOut: backend?.auth.logout);
-    offlinePersistenceController = OfflinePersistenceController();
+    final services = backend;
+    if (services != null) {
+      final session = sessionController;
+      final sync = syncController = SyncController(
+        persistence: offlinePersistenceController = OfflinePersistenceController(),
+        transport: HttpSyncTransport(services.client, accessId: () => session.accessId),
+      );
+      session.addListener(() => sync.setEnabled(session.isServerSession));
+    }
+    if (services == null) offlinePersistenceController = OfflinePersistenceController();
     membershipOperationsController = MembershipOperationsController.prototypeSeed(
       GeographyRegistry.prototypeSeed(),
     );
@@ -156,6 +170,7 @@ class _TgcgAppState extends State<TgcgApp> {
 
   @override
   void dispose() {
+    syncController?.dispose();
     sessionController.dispose();
     fieldOperationsController.dispose();
     resultOperationsController.dispose();
@@ -173,7 +188,7 @@ class _TgcgAppState extends State<TgcgApp> {
   @override
   Widget build(BuildContext context) => TgcgBackend(
         services: backend,
-        child: _build(context),
+        child: TgcgSync(controller: syncController, child: _build(context)),
       );
 
   Widget _build(BuildContext context) => TgcgSession(

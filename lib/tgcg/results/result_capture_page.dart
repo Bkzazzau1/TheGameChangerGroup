@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/backend.dart';
 import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
 import '../location/gps_prompt.dart';
@@ -8,6 +9,7 @@ import '../offline/offline_persistence.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'result_operations_store.dart';
+import 'server_result_form.dart';
 
 class ResultCapturePage extends StatefulWidget {
   const ResultCapturePage({super.key});
@@ -80,7 +82,11 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
         ),
         if (canSubmit) ...[
           const SizedBox(height: 16),
-          const _CaptureWorkspace(),
+          // Connected to a server: real elections, parties and INEC units.
+          if (TgcgBackend.of(context) != null)
+            const ServerResultForm()
+          else
+            const _CaptureWorkspace(),
         ],
         const SizedBox(height: 16),
         _FilterBar(

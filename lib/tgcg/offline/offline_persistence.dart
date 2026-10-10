@@ -29,10 +29,18 @@ class DurableMutationReceipt {
 }
 
 class OfflinePersistenceController extends ChangeNotifier {
-  OfflinePersistenceController({OfflineCrypto? crypto})
-      : _crypto = crypto ?? OfflineCrypto();
+  OfflinePersistenceController({
+    OfflineCrypto? crypto,
+    Future<OfflineDatabaseBackend> Function()? openDatabase,
+  })  : _crypto = crypto ?? OfflineCrypto(),
+        _openDatabase = openDatabase ?? openOfflineDatabase;
 
   final OfflineCrypto _crypto;
+
+  static int _sequence = 0;
+
+  /// Opens the local database; tests pass an in-memory one.
+  final Future<OfflineDatabaseBackend> Function() _openDatabase;
   OfflineDatabaseBackend? _database;
   OfflinePersistenceState _state = OfflinePersistenceState.idle;
   String? _lastError;
@@ -75,7 +83,7 @@ class OfflinePersistenceController extends ChangeNotifier {
 
     OfflineDatabaseBackend? database;
     try {
-      database = await openOfflineDatabase();
+      database = await _openDatabase();
       await database.initialize();
       await _crypto.initialize();
       _database = database;
@@ -112,7 +120,8 @@ class OfflinePersistenceController extends ChangeNotifier {
       aad: aad,
     );
     final outbox = SyncOutboxItem(
-      id: 'OUT-L-${now.microsecondsSinceEpoch}',
+      // The sequence keeps ids unique when two mutations share a clock tick.
+      id: 'OUT-L-${now.microsecondsSinceEpoch}-${_sequence++}',
       entityType: entityType,
       entityId: entityId,
       mutationType: mutationType,

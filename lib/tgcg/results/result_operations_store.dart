@@ -224,6 +224,7 @@ class ResultOperationsController extends ChangeNotifier {
     Map<String, int>? ocrPartyVotes,
     double? ocrConfidence,
     GpsFix? gps,
+    String? electionCode,
   }) async {
     if (source == SubmissionSource.app && gps == null) {
       throw ArgumentError('Results submitted from the app need a GPS reading.');
@@ -247,6 +248,7 @@ class ResultOperationsController extends ChangeNotifier {
       registeredVoters: registeredVoters,
       resultForm: resultForm,
       gps: gps,
+      electionCode: electionCode,
       origin: RecordOrigin.localEntry,
     );
 
@@ -388,6 +390,7 @@ class ResultOperationsController extends ChangeNotifier {
         disputeReason: disputeReason,
         sourceReference: current.sourceReference,
         gps: current.gps,
+        electionCode: current.electionCode,
         origin: current.origin,
       );
 

@@ -358,6 +358,7 @@ class ElectionResultSubmission {
     this.disputeReason,
     this.sourceReference,
     this.gps,
+    this.electionCode,
     this.origin = RecordOrigin.localEntry,
   });
 
@@ -379,6 +380,9 @@ class ElectionResultSubmission {
   final String? disputeReason;
   final String? sourceReference;
   final GpsFix? gps;
+
+  /// Server election code (e.g. 2027-kd-governorship); set in server mode.
+  final String? electionCode;
   final RecordOrigin origin;
 
   int get calculatedPartyVotes =>

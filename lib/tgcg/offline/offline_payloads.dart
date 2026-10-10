@@ -88,6 +88,7 @@ Map<String, Object?> resultSubmissionToJson(
       'rejectedVotes': submission.rejectedVotes,
       'registeredVoters': submission.registeredVoters,
       'gps': submission.gps?.toJson(),
+      'electionCode': submission.electionCode,
       'resultForm': submission.resultForm == null
           ? null
           : evidenceToJson(submission.resultForm!),
