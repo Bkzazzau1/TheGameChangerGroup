@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../communications/communications_store.dart';
 import '../domain/models.dart';
+import '../location/gps_prompt.dart';
 import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
@@ -138,12 +139,15 @@ class FieldAgentDashboardPage extends StatelessWidget {
     FieldOperationsController field,
     AccreditedAgent agent,
   ) async {
+    final gps = await captureGps(context, required: true, action: 'check in');
+    if (gps == null) return;
     try {
       await field.submitFieldReport(
         category: 'Agent check-in',
         summary: 'Agent checked in for field duty.',
         scope: agent.scope,
         reporterId: agent.agentId,
+        gps: gps,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

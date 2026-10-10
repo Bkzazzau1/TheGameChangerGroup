@@ -212,6 +212,7 @@ class FieldOperationsController extends ChangeNotifier {
     String? summary,
     double? latitude,
     double? longitude,
+    GpsFix? gps,
     List<EvidenceAttachment> evidence = const [],
   }) async {
     final incident = FieldIncident(
@@ -224,8 +225,9 @@ class FieldOperationsController extends ChangeNotifier {
       reportedAt: DateTime.now().toUtc(),
       reporterId: reporterId,
       summary: summary?.trim().isEmpty == true ? null : summary?.trim(),
-      latitude: latitude,
-      longitude: longitude,
+      latitude: gps?.latitude ?? latitude,
+      longitude: gps?.longitude ?? longitude,
+      gps: gps,
       evidence: List.unmodifiable(evidence),
       origin: RecordOrigin.localEntry,
     );
@@ -248,6 +250,7 @@ class FieldOperationsController extends ChangeNotifier {
     required GeographicScope scope,
     required String reporterId,
     String? incidentId,
+    GpsFix? gps,
     List<EvidenceAttachment> evidence = const [],
   }) async {
     final report = FieldReport(
@@ -259,6 +262,7 @@ class FieldOperationsController extends ChangeNotifier {
       reportedAt: DateTime.now().toUtc(),
       status: RecordStatus.submitted,
       incidentId: incidentId,
+      gps: gps,
       evidence: List.unmodifiable(evidence),
       origin: RecordOrigin.localEntry,
     );
@@ -292,6 +296,7 @@ class FieldOperationsController extends ChangeNotifier {
       assignedTeam: incident.assignedTeam,
       latitude: incident.latitude,
       longitude: incident.longitude,
+      gps: incident.gps,
       evidence: incident.evidence,
       origin: incident.origin,
     );

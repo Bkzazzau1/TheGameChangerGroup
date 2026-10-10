@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../communications/communications_store.dart';
+import '../location/gps_prompt.dart';
+import '../location/gps_service.dart';
 import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
@@ -89,6 +91,8 @@ class FieldAgentHomePage extends StatelessWidget {
           checkedIn: checkedIn,
         ),
         const SizedBox(height: 14),
+        _OnDutyCard(ownerId: agent.agentId),
+        const SizedBox(height: 14),
         _ReadinessCard(
           approved: approved,
           training: training,
@@ -138,16 +142,19 @@ class FieldAgentHomePage extends StatelessWidget {
     AccreditedAgent agent,
     FieldOperationsController field,
   ) async {
+    final gps = await captureGps(context, required: true, action: 'check in');
+    if (gps == null) return;
     try {
       final report = await field.submitFieldReport(
         category: 'Agent check-in',
         summary: 'Agent checked in for field duty.',
         scope: agent.scope,
         reporterId: agent.agentId,
+        gps: gps,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${report.id} check-in saved successfully.')),
+        SnackBar(content: Text('${report.id} check-in saved with GPS ${gps.label}.')),
       );
     } catch (_) {
       if (!context.mounted) return;
@@ -947,4 +954,91 @@ String _label(String value) {
   return clean.isEmpty
       ? clean
       : '${clean[0].toUpperCase()}${clean.substring(1)}';
+}
+
+
+/// Switch for sharing live location while on duty on election day.
+class _OnDutyCard extends StatelessWidget {
+  const _OnDutyCard({required this.ownerId});
+  final String ownerId;
+
+  @override
+  Widget build(BuildContext context) {
+    final tracker = DutyTracker.instance;
+    return ListenableBuilder(
+      listenable: tracker,
+      builder: (context, _) {
+        final last = tracker.lastFix;
+        final since = tracker.since?.toLocal();
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+          decoration: BoxDecoration(
+            color: tracker.onDuty ? TgcgColors.primary : TgcgColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: tracker.onDuty ? TgcgColors.primary : TgcgColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                tracker.onDuty ? Icons.share_location_rounded : Icons.location_disabled_outlined,
+                color: tracker.onDuty ? TgcgColors.accentBright : TgcgColors.muted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tracker.onDuty ? 'On duty: sharing location' : 'Off duty',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: tracker.onDuty ? Colors.white : TgcgColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      tracker.onDuty
+                          ? 'Since ${_hhmm(since)}'
+                              '${last == null ? ' · waiting for GPS' : ' · last fix ±${last.accuracyMeters.round()} m'}'
+                          : 'Switch on when you start election-day duty. Your coordinator sees your position only while you are on duty.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: tracker.onDuty ? const Color(0xFFC9D4F0) : TgcgColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: tracker.onDuty,
+                onChanged: (value) => _toggle(context, tracker, value),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _toggle(BuildContext context, DutyTracker tracker, bool value) async {
+    if (!value) {
+      await tracker.stop();
+      return;
+    }
+    try {
+      await tracker.start(
+        ownerId: ownerId,
+        persistence: OfflinePersistence.of(context, listen: false),
+      );
+    } on GpsUnavailable catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  static String _hhmm(DateTime? value) => value == null
+      ? '--:--'
+      : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 }

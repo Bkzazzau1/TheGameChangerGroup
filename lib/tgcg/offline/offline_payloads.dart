@@ -54,6 +54,7 @@ Map<String, Object?> fieldIncidentToJson(FieldIncident incident) => {
       'assignedTeam': incident.assignedTeam,
       'latitude': incident.latitude,
       'longitude': incident.longitude,
+      'gps': incident.gps?.toJson(),
       'evidence': incident.evidence.map(evidenceToJson).toList(growable: false),
       'origin': incident.origin.name,
     };
@@ -67,6 +68,7 @@ Map<String, Object?> fieldReportToJson(FieldReport report) => {
       'reportedAt': report.reportedAt.toUtc().toIso8601String(),
       'status': report.status.name,
       'incidentId': report.incidentId,
+      'gps': report.gps?.toJson(),
       'evidence': report.evidence.map(evidenceToJson).toList(growable: false),
       'origin': report.origin.name,
     };
@@ -85,6 +87,7 @@ Map<String, Object?> resultSubmissionToJson(
       'accreditedVoters': submission.accreditedVoters,
       'rejectedVotes': submission.rejectedVotes,
       'registeredVoters': submission.registeredVoters,
+      'gps': submission.gps?.toJson(),
       'resultForm': submission.resultForm == null
           ? null
           : evidenceToJson(submission.resultForm!),

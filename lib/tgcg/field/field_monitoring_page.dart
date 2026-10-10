@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/permissions.dart';
+import '../location/gps_prompt.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -291,6 +292,12 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
             FilledButton.icon(
               onPressed: () async {
                 if (title.text.trim().isEmpty) return;
+                // GPS is attached when available but never blocks a report.
+                final gps = await captureGps(
+                  dialogContext,
+                  required: false,
+                  action: 'report this incident',
+                );
                 final incident = await store.createIncident(
                   title: title.text,
                   category: category,
@@ -300,6 +307,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
                       ? session.operatorName
                       : session.accessId,
                   summary: summary.text,
+                  gps: gps,
                 );
                 if (dialogContext.mounted) {
                   Navigator.pop(dialogContext, incident);
@@ -926,9 +934,11 @@ class _IncidentInspector extends StatelessWidget {
           _Detail('Response owner', current.assignedTeam ?? 'Unassigned'),
           _Detail(
             'GPS',
-            current.latitude != null && current.longitude != null
-                ? '${current.latitude}, ${current.longitude}'
-                : 'Not captured',
+            current.gps != null
+                ? '${current.gps!.label}${current.gps!.isMocked ? ' · MOCK LOCATION' : ''}'
+                : current.latitude != null && current.longitude != null
+                    ? '${current.latitude}, ${current.longitude}'
+                    : 'Not captured',
           ),
           if (current.summary != null) ...[
             const SizedBox(height: 12),

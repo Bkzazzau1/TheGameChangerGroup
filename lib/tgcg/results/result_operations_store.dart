@@ -223,7 +223,11 @@ class ResultOperationsController extends ChangeNotifier {
     EvidenceAttachment? resultForm,
     Map<String, int>? ocrPartyVotes,
     double? ocrConfidence,
+    GpsFix? gps,
   }) async {
+    if (source == SubmissionSource.app && gps == null) {
+      throw ArgumentError('Results submitted from the app need a GPS reading.');
+    }
     final duplicate = _submissions.any((existing) =>
         existing.pollingUnitScope.pollingUnitId == pollingUnitScope.pollingUnitId &&
         existing.status != RecordStatus.rejected &&
@@ -242,6 +246,7 @@ class ResultOperationsController extends ChangeNotifier {
       rejectedVotes: rejectedVotes,
       registeredVoters: registeredVoters,
       resultForm: resultForm,
+      gps: gps,
       origin: RecordOrigin.localEntry,
     );
 
@@ -382,6 +387,7 @@ class ResultOperationsController extends ChangeNotifier {
         verifiedAt: verifiedAt ?? current.verifiedAt,
         disputeReason: disputeReason,
         sourceReference: current.sourceReference,
+        gps: current.gps,
         origin: current.origin,
       );
 

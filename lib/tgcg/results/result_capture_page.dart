@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
+import '../location/gps_prompt.dart';
 import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';
 import '../session.dart';
@@ -476,6 +477,11 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
     required TgcgSessionController session,
     required GeographicScope scope,
   }) async {
+    GpsFix? gps;
+    if (source == SubmissionSource.app) {
+      gps = await captureGps(context, required: true, action: 'submit this result');
+      if (gps == null || !context.mounted) return;
+    }
     setState(() => saving = true);
     try {
       final evidence = attachForm
@@ -508,6 +514,7 @@ class _CaptureWorkspaceState extends State<_CaptureWorkspace> {
         resultForm: evidence,
         ocrPartyVotes: _ocrVotes,
         ocrConfidence: _ocrConfidence,
+        gps: gps,
       );
       if (!context.mounted) return;
       final needsReview = saved.validation?.requiresHumanReview == true;

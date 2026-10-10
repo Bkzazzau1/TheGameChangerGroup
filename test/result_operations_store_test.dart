@@ -57,10 +57,42 @@ void main() {
       registeredVoters: 500,
       ocrPartyVotes: const {'P1': 100, 'P2': 80, 'P3': 20},
       ocrConfidence: .96,
+      gps: _gps,
     );
 
     expect(submission.validation?.requiresHumanReview, isFalse);
     expect(submission.status, RecordStatus.submitted);
+    expect(submission.gps, _gps);
+  });
+
+  test('results from the app are refused without GPS', () async {
+    final store = ResultOperationsController.prototypeSeed();
+    expect(
+      () => store.submit(
+        pollingUnitScope: const GeographicScope(
+          level: GeographyLevel.pollingUnit,
+          country: 'Nigeria',
+          pollingUnitId: 'KD-DEMO-PU',
+        ),
+        submittedBy: 'AG-KD-009',
+        source: SubmissionSource.app,
+        partyVotes: const {'P1': 10},
+        totalVotesRecorded: 10,
+        accreditedVoters: 12,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('GPS fix is sent in the backend format', () {
+    expect(_gps.toJson(), {
+      'latitude': 10.523,
+      'longitude': 7.438,
+      'accuracy_m': 12.4,
+      'captured_at': '2027-02-20T10:00:00.000Z',
+      'is_mocked': false,
+    });
+    expect(_gps.label, '10.52300, 7.43800 (±12 m)');
   });
 
   test('second active submission for same polling unit is flagged duplicate', () async {
@@ -103,3 +135,10 @@ void main() {
     expect(duplicate.status, RecordStatus.underReview);
   });
 }
+
+final _gps = GpsFix(
+  latitude: 10.523,
+  longitude: 7.438,
+  accuracyMeters: 12.4,
+  capturedAt: DateTime.utc(2027, 2, 20, 10),
+);

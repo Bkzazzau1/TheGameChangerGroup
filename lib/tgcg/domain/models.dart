@@ -188,6 +188,37 @@ class AccreditedAgent {
   final RecordOrigin origin;
 }
 
+/// One reading from the phone's GPS, as sent to the backend.
+class GpsFix {
+  const GpsFix({
+    required this.latitude,
+    required this.longitude,
+    required this.accuracyMeters,
+    required this.capturedAt,
+    this.isMocked = false,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double accuracyMeters;
+  final DateTime capturedAt;
+
+  /// Android reports that a mock-location app supplied this reading.
+  final bool isMocked;
+
+  Map<String, Object?> toJson() => {
+        'latitude': double.parse(latitude.toStringAsFixed(6)),
+        'longitude': double.parse(longitude.toStringAsFixed(6)),
+        'accuracy_m': double.parse(accuracyMeters.toStringAsFixed(1)),
+        'captured_at': capturedAt.toUtc().toIso8601String(),
+        'is_mocked': isMocked,
+      };
+
+  String get label =>
+      '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)} '
+      '(±${accuracyMeters.round()} m)';
+}
+
 class EvidenceAttachment {
   const EvidenceAttachment({
     required this.id,
@@ -230,6 +261,7 @@ class FieldIncident {
     this.assignedTeam,
     this.latitude,
     this.longitude,
+    this.gps,
     this.evidence = const [],
     this.origin = RecordOrigin.localEntry,
   });
@@ -246,6 +278,7 @@ class FieldIncident {
   final String? assignedTeam;
   final double? latitude;
   final double? longitude;
+  final GpsFix? gps;
   final List<EvidenceAttachment> evidence;
   final RecordOrigin origin;
 }
@@ -260,6 +293,7 @@ class FieldReport {
     required this.reportedAt,
     required this.status,
     this.incidentId,
+    this.gps,
     this.evidence = const [],
     this.origin = RecordOrigin.localEntry,
   });
@@ -272,6 +306,7 @@ class FieldReport {
   final DateTime reportedAt;
   final RecordStatus status;
   final String? incidentId;
+  final GpsFix? gps;
   final List<EvidenceAttachment> evidence;
   final RecordOrigin origin;
 }
@@ -322,6 +357,7 @@ class ElectionResultSubmission {
     this.verifiedAt,
     this.disputeReason,
     this.sourceReference,
+    this.gps,
     this.origin = RecordOrigin.localEntry,
   });
 
@@ -342,6 +378,7 @@ class ElectionResultSubmission {
   final DateTime? verifiedAt;
   final String? disputeReason;
   final String? sourceReference;
+  final GpsFix? gps;
   final RecordOrigin origin;
 
   int get calculatedPartyVotes =>
