@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../communications/communications_store.dart';
-import '../domain/models.dart';
 import '../location/gps_prompt.dart';
 import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';

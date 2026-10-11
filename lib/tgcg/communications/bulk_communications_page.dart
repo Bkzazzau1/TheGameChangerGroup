@@ -176,7 +176,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
       actorScope: session.scope,
       scheduledFor: scheduledFor,
     );
-    if (!mounted) return;
+    if (!context.mounted) return;
     if (job == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -319,7 +319,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
       ),
     );
 
-    if (save != true || !mounted) {
+    if (save != true || !context.mounted) {
       sourceController.dispose();
       return;
     }
@@ -336,7 +336,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
       suppressed: suppressed,
     );
     sourceController.dispose();
-    if (!mounted) return;
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok

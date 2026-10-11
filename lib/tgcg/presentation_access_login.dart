@@ -113,17 +113,17 @@ class _PresentationAccessLoginState extends State<PresentationAccessLogin> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !context.mounted) return;
 
     setState(() => resetting = true);
     try {
       await widget.onResetPresentation();
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Presentation restored and ready.')),
       );
     } catch (_) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to reset presentation data.')),
       );

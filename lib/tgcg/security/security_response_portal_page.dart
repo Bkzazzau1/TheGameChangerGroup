@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
 import '../domain/permissions.dart';
 import '../field/field_operations_store.dart';
 import '../session.dart';
@@ -281,7 +280,7 @@ class _SecurityResponsePortalPageState extends State<SecurityResponsePortalPage>
       ),
     );
 
-    if (confirmed != true || !mounted) {
+    if (confirmed != true || !context.mounted) {
       instructions.dispose();
       return;
     }
@@ -307,7 +306,7 @@ class _SecurityResponsePortalPageState extends State<SecurityResponsePortalPage>
     instructions.dispose();
     setState(() => selectedDispatchId = dispatch.id);
     final agency = emergency.agencyById(agencyId);
-    if (!mounted) return;
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
