@@ -41,18 +41,67 @@ class ServerElection {
       );
 }
 
+/// Where to send someone travelling to a polling unit. The server only
+/// offers it once the unit has been pinned in the mapping exercise.
+class UnitDirections {
+  const UnitDirections({
+    required this.latitude,
+    required this.longitude,
+    required this.confirmed,
+    this.accuracyMeters,
+  });
+
+  final double latitude;
+  final double longitude;
+
+  /// False while only one coordinator has pinned the unit.
+  final bool confirmed;
+  final double? accuracyMeters;
+
+  static UnitDirections? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    return UnitDirections(
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      confirmed: json['confirmed'] as bool? ?? false,
+      accuracyMeters: (json['accuracy_m'] as num?)?.toDouble(),
+    );
+  }
+}
+
 class ServerPollingUnit {
   const ServerPollingUnit({
     required this.code,
     required this.name,
     required this.wardCode,
     this.registeredVoters,
+    this.directions,
   });
 
   final String code;
   final String name;
   final String wardCode;
   final int? registeredVoters;
+  final UnitDirections? directions;
+}
+
+/// The polling unit a PVC DELIM code points to.
+class DelimUnit {
+  const DelimUnit({
+    required this.code,
+    required this.name,
+    required this.ward,
+    required this.lga,
+    required this.state,
+  });
+
+  final String code;
+  final String name;
+  final String ward;
+  final String lga;
+  final String state;
+
+  String get label => '$name, $ward ward, $lga LGA, $state State';
 }
 
 /// Reference data the field screens need from the server.
@@ -85,10 +134,28 @@ class ReferenceRepository {
     return [for (final item in body['results'] as List<dynamic>) _unit(item as Map<String, dynamic>)];
   }
 
+  /// One polling unit, with directions when it has been mapped.
+  Future<ServerPollingUnit> pollingUnit(String code) async =>
+      _unit(await client.get('geography/polling-units/$code/') as Map<String, dynamic>);
+
+  /// Resolves the DELIM code printed on a PVC (e.g. 18/23/01/001).
+  Future<DelimUnit> pollingUnitForDelim(String delim) async {
+    final json = await client.get('register/polling-unit/', query: {'delim': delim})
+        as Map<String, dynamic>;
+    return DelimUnit(
+      code: json['code'] as String,
+      name: json['name'] as String,
+      ward: json['ward'] as String,
+      lga: json['lga'] as String,
+      state: json['state'] as String,
+    );
+  }
+
   static ServerPollingUnit _unit(Map<String, dynamic> json) => ServerPollingUnit(
         code: json['code'] as String,
         name: json['name'] as String,
         wardCode: json['ward'] as String,
         registeredVoters: json['registered_voters'] as int?,
+        directions: UnitDirections.fromJson(json['navigation']),
       );
 }

@@ -9,6 +9,7 @@ class PvcRecognitionResult {
     required this.rawText,
     this.fullName,
     this.voterId,
+    this.delim,
   });
 
   final String imagePath;
@@ -16,6 +17,9 @@ class PvcRecognitionResult {
   final String rawText;
   final String? fullName;
   final String? voterId;
+
+  /// Polling unit code from the card's DELIM line, as 18-23-01-001.
+  final String? delim;
 
   bool get hasRecognizedText => rawText.trim().isNotEmpty;
 }
@@ -65,14 +69,47 @@ class PvcRecognitionService {
         imageName: image.name,
         rawText: text,
         fullName: _extractName(text),
-        voterId: _extractVoterId(text),
+        voterId: extractVoterId(text),
+        delim: extractDelim(text),
       );
     } finally {
       await recognizer.close();
     }
   }
 
-  static String? _extractVoterId(String text) {
+  static final _delim = RegExp(
+    r'(?<![\d/-])(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{1,3})(?![\d/-])',
+  );
+
+  /// Reads the DELIM code (state/LGA/ward/unit) and normalises it to
+  /// 18-23-01-001. A line labelled DELIM wins over any other match.
+  static String? extractDelim(String text) {
+    final lines = text.split(RegExp(r'[\r\n]+')).map((l) => l.trim()).toList();
+    String? fromLine(String line) {
+      final match = _delim.firstMatch(line);
+      if (match == null) return null;
+      final parts = [for (var i = 1; i <= 4; i++) int.parse(match.group(i)!)];
+      // INEC numbers states 1-37 (FCT is 37).
+      if (parts[0] < 1 || parts[0] > 37 || parts.skip(1).any((p) => p < 1)) return null;
+      String pad(int value, int width) => '$value'.padLeft(width, '0');
+      return '${pad(parts[0], 2)}-${pad(parts[1], 2)}-${pad(parts[2], 2)}-${pad(parts[3], 3)}';
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      if (!RegExp(r'DELIM', caseSensitive: false).hasMatch(lines[i])) continue;
+      final code = fromLine(lines[i]) ?? (i + 1 < lines.length ? fromLine(lines[i + 1]) : null);
+      if (code != null) return code;
+    }
+    for (final line in lines) {
+      final code = fromLine(line);
+      if (code != null) return code;
+    }
+    return null;
+  }
+
+  /// Reads the VIN. OCR often splits it into groups ("90F5 B0E8 D029 ..."),
+  /// so spaces after the label are dropped.
+  static String? extractVoterId(String text) {
     final lines = text
         .split(RegExp(r'[\r\n]+'))
         .map((line) => line.trim())
@@ -81,10 +118,12 @@ class PvcRecognitionService {
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final direct = RegExp(
-        r'(?:VIN|VOTER\s*(?:ID|NUMBER)?)\s*[:#-]?\s*([A-Z0-9-]{8,30})',
+        r'(?:VIN|VOTER\s*(?:ID|NUMBER)?)\s*[:#-]?\s*([A-Z0-9][A-Z0-9 -]{7,30})',
         caseSensitive: false,
       ).firstMatch(line);
-      if (direct != null) return direct.group(1)?.toUpperCase();
+      if (direct != null) {
+        return direct.group(1)!.replaceAll(RegExp(r'[\s-]+'), '').toUpperCase();
+      }
       if (RegExp(r'^(VIN|VOTER\s*(ID|NUMBER)?)$', caseSensitive: false)
               .hasMatch(line) &&
           i + 1 < lines.length) {

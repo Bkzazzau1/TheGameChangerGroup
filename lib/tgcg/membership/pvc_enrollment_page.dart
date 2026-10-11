@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../api/api_client.dart';
+import '../api/backend.dart';
+import '../api/reference_repository.dart';
 import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
 import '../session.dart';
@@ -20,7 +23,11 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _voterId = TextEditingController();
+  final _delim = TextEditingController();
   PvcRecognitionResult? _scan;
+  DelimUnit? _unit;
+  String? _unitMessage;
+  bool _lookingUp = false;
   bool _reading = false;
   TgcgMember? _created;
   String? _selectedStateId;
@@ -31,6 +38,7 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
     _phone.dispose();
     _email.dispose();
     _voterId.dispose();
+    _delim.dispose();
     super.dispose();
   }
 
@@ -79,6 +87,11 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
               phone: _phone,
               email: _email,
               voterId: _voterId,
+              delim: _delim,
+              unit: _unit,
+              unitMessage: _unitMessage,
+              lookingUp: _lookingUp,
+              onLookUp: () => _lookUp(store),
               states: store.geography.states,
               selectedStateId: _selectedStateId!,
               onStateChanged: (value) =>
@@ -130,7 +143,13 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
         _scan = result;
         _name.text = result.fullName ?? '';
         _voterId.text = result.voterId ?? '';
+        _delim.text = result.delim ?? '';
+        _unit = null;
+        _unitMessage = result.delim == null
+            ? 'DELIM not found on the card; type it from the PVC.'
+            : null;
       });
+      if (result.delim != null) await _lookUp(MembershipOperations.of(context));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +157,43 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
       );
     } finally {
       if (mounted) setState(() => _reading = false);
+    }
+  }
+
+  /// Resolves the DELIM code to its polling unit on the server and selects
+  /// the matching registration state.
+  Future<void> _lookUp(MembershipOperationsController store) async {
+    final delim = _delim.text.trim();
+    if (delim.isEmpty) return;
+    final backend = TgcgBackend.of(context);
+    if (backend == null) {
+      setState(() {
+        _unit = null;
+        _unitMessage = 'Code $delim read. Connect to the TGCG server to confirm its polling unit.';
+      });
+      return;
+    }
+    setState(() {
+      _lookingUp = true;
+      _unitMessage = null;
+    });
+    try {
+      final unit = await backend.reference.pollingUnitForDelim(delim);
+      if (!mounted) return;
+      final state = matchStateByName(store.geography.states, unit.state);
+      setState(() {
+        _unit = unit;
+        _delim.text = unit.code;
+        if (state != null) _selectedStateId = state.id;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _unit = null;
+        _unitMessage = error.fieldErrors['delim']?.first ?? error.message;
+      });
+    } finally {
+      if (mounted) setState(() => _lookingUp = false);
     }
   }
 
@@ -167,6 +223,9 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
       _phone.clear();
       _email.clear();
       _voterId.clear();
+      _delim.clear();
+      _unit = null;
+      _unitMessage = null;
     });
   }
 
@@ -428,12 +487,32 @@ class _ScannerPanel extends StatelessWidget {
       );
 }
 
+/// The registry state whose name matches the server's (FCT is named
+/// differently in places).
+CanonicalState? matchStateByName(List<CanonicalState> states, String name) {
+  String norm(String value) => value
+      .toLowerCase()
+      .replaceAll('federal capital territory', 'fct')
+      .replaceAll(RegExp(r'\bstate\b'), '')
+      .replaceAll(RegExp(r'[^a-z]'), '');
+  final wanted = norm(name);
+  for (final state in states) {
+    if (norm(state.name) == wanted || norm(state.id) == wanted) return state;
+  }
+  return null;
+}
+
 class _IdentityForm extends StatelessWidget {
   const _IdentityForm({
     required this.name,
     required this.phone,
     required this.email,
     required this.voterId,
+    required this.delim,
+    required this.unit,
+    required this.unitMessage,
+    required this.lookingUp,
+    required this.onLookUp,
     required this.states,
     required this.selectedStateId,
     required this.onStateChanged,
@@ -448,6 +527,11 @@ class _IdentityForm extends StatelessWidget {
   final TextEditingController phone;
   final TextEditingController email;
   final TextEditingController voterId;
+  final TextEditingController delim;
+  final DelimUnit? unit;
+  final String? unitMessage;
+  final bool lookingUp;
+  final VoidCallback onLookUp;
   final List<CanonicalState> states;
   final String selectedStateId;
   final ValueChanged<String> onStateChanged;
@@ -475,6 +559,61 @@ class _IdentityForm extends StatelessWidget {
               enabled: enabled,
               decoration: const InputDecoration(labelText: 'PVC / Voter ID'),
             ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: delim,
+              enabled: enabled && created == null,
+              onSubmitted: (_) => onLookUp(),
+              decoration: InputDecoration(
+                labelText: 'DELIM (polling unit code on the PVC)',
+                hintText: '18/23/01/001',
+                suffixIcon: lookingUp
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        tooltip: 'Find polling unit',
+                        onPressed: enabled && created == null ? onLookUp : null,
+                        icon: const Icon(Icons.search_rounded),
+                      ),
+              ),
+            ),
+            if (unit != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: TgcgColors.primarySoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.how_to_vote_outlined, color: TgcgColors.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        unit!.label,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (unitMessage != null) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  unitMessage!,
+                  style: const TextStyle(fontSize: 12, color: TgcgColors.warning),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: selectedStateId,

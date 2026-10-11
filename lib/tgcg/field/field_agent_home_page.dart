@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../communications/communications_store.dart';
 import '../location/gps_prompt.dart';
+import '../location/directions.dart';
 import '../location/gps_service.dart';
 import '../sync/sync_controller.dart';
 import '../membership/membership_store.dart';
@@ -442,6 +443,13 @@ class _PollingUnitCard extends StatelessWidget {
           _Detail('Ward', scope.wardName ?? '—'),
           _Detail('LGA', scope.lgaName ?? '—'),
           _Detail('State', scope.stateName ?? '—'),
+          if (scope.pollingUnitId != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: NavigateToUnitButton(unitCode: scope.pollingUnitId!),
+            ),
+          ],
         ],
       ),
     );
