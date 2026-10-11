@@ -9,6 +9,7 @@ import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/api/mapping_repository.dart';
 import 'package:tgcg_emcop/tgcg/domain/models.dart';
+import 'package:tgcg_emcop/tgcg/location/directions.dart';
 import 'package:tgcg_emcop/tgcg/location/gps_service.dart';
 import 'package:tgcg_emcop/tgcg/mapping/pin_guide_page.dart';
 
@@ -49,8 +50,10 @@ const _unit = MappingUnit(
 Future<List<http.BaseRequest>> _pump(
   WidgetTester tester,
   _FakeGps gps,
-  http.Response Function(http.Request) respond,
-) async {
+  http.Response Function(http.Request) respond, {
+  MappingUnit unit = _unit,
+  LaunchDirections? launch,
+}) async {
   final requests = <http.BaseRequest>[];
   final backend = BackendServices.connect(
     'https://api.tgcg.test',
@@ -74,9 +77,10 @@ Future<List<http.BaseRequest>> _pump(
       services: backend,
       child: MaterialApp(
         home: PinGuidePage(
-          unit: _unit,
+          unit: unit,
           gps: gps,
           pickPhoto: () async => (_pixel, 'sign.png'),
+          launch: launch ?? (_) async => true,
         ),
       ),
     ),
@@ -157,6 +161,68 @@ void main() {
     expect(find.text('Waiting for a precise fix'), findsOneWidget);
     // Not awaited: done is never delivered once the page stops listening.
     unawaited(readings.close());
+  });
+
+  testWidgets("guides the coordinator to INEC's location for checking", (tester) async {
+    const inecUnit = MappingUnit(
+      code: '18-23-01-014',
+      name: 'UNG. ASKA I/ L.E.A. ANGUWAN KAHU',
+      location: '',
+      wardCode: '18-23-01',
+      wardName: 'KWARBAI "A"',
+      status: MappingStatus.pinned,
+      pins: 0,
+      latitude: 11.0539,
+      longitude: 7.712954605,
+      locationSource: 'inec',
+    );
+    final launched = <Uri>[];
+    final requests = await _pump(
+      tester,
+      _FakeGps(StreamController<GpsFix>()),
+      (_) => http.Response('{}', 500),
+      unit: inecUnit,
+      launch: (uri) async {
+        launched.add(uri);
+        return true;
+      },
+    );
+    expect(find.text('INEC LOCATION'), findsOneWidget);
+    expect(find.textContaining("INEC's polling unit locator places this unit"), findsOneWidget);
+
+    await tester.tap(find.text("Directions to INEC's location"));
+    await tester.pump();
+    expect(launched.single.queryParameters['destination'], '11.0539,7.712954605');
+    expect(requests, isEmpty);
+  });
+
+  test('progress and units read INEC locations', () {
+    final progress = MappingProgress.fromJson({
+      'total': 51,
+      'unmapped': 10,
+      'pinned': 40,
+      'confirmed': 1,
+      'conflict': 0,
+      'problem': 0,
+      'from_inec': 38,
+      'mapped_percent': 80.4,
+    });
+    expect(progress.fromInec, 38);
+    expect(progress.mapped, 41);
+    final unit = MappingUnit.fromJson({
+      'code': '18-23-01-014',
+      'name': 'UNG. ASKA I/ L.E.A. ANGUWAN KAHU',
+      'location': '',
+      'ward': '18-23-01',
+      'ward_name': 'KWARBAI "A"',
+      'mapping_status': 'pinned',
+      'latitude': '11.053900',
+      'longitude': '7.712955',
+      'location_source': 'inec',
+      'pins': 0,
+    });
+    expect(unit.locatedByInec, isTrue);
+    expect(unit.hasLocation, isTrue);
   });
 
   testWidgets('a mismatched signboard reports a problem instead of pinning', (tester) async {

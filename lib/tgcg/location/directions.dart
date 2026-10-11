@@ -8,20 +8,46 @@ import '../ui/tgcg_design.dart';
 
 /// A Google Maps directions link. On phones it opens the Maps app; elsewhere
 /// it opens in the browser.
-Uri directionsUri(UnitDirections to) => Uri.https('www.google.com', '/maps/dir/', {
+Uri directionsUri(double latitude, double longitude) =>
+    Uri.https('www.google.com', '/maps/dir/', {
       'api': '1',
-      'destination': '${to.latitude},${to.longitude}',
+      'destination': '$latitude,$longitude',
     });
 
 typedef LaunchDirections = Future<bool> Function(Uri uri);
 
-Future<bool> _launch(Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+Future<bool> launchDirections(Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+
+/// Opens directions to a point, telling the user if no maps app could open.
+Future<void> openDirections(
+  BuildContext context,
+  double latitude,
+  double longitude, {
+  LaunchDirections launch = launchDirections,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (!await launch(directionsUri(latitude, longitude))) {
+    messenger.showSnackBar(
+      const SnackBar(content: Text('No maps app could be opened on this device.')),
+    );
+  }
+}
+
+/// Explains an unconfirmed location, by where it came from.
+String unconfirmedLocationNote(String? source) => source == 'inec'
+    ? "Location from INEC's polling unit locator, not yet checked by a coordinator. "
+        'Check the signboard on arrival.'
+    : 'Location pinned by one coordinator and not yet confirmed. Check the signboard on arrival.';
 
 /// "Navigate to polling unit": fetches the unit's mapped location from the
 /// server and hands it to the maps app. Says so plainly when the unit has
 /// not been mapped yet.
 class NavigateToUnitButton extends StatefulWidget {
-  const NavigateToUnitButton({super.key, required this.unitCode, this.launch = _launch});
+  const NavigateToUnitButton({
+    super.key,
+    required this.unitCode,
+    this.launch = launchDirections,
+  });
 
   final String unitCode;
   final LaunchDirections launch;
@@ -44,14 +70,8 @@ class _NavigateToUnitButtonState extends State<NavigateToUnitButton> {
         () => _unit = TgcgBackend.of(context)!.reference.pollingUnit(widget.unitCode),
       );
 
-  Future<void> _go(UnitDirections to) async {
-    final opened = await widget.launch(directionsUri(to));
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No maps app could be opened on this device.')),
-      );
-    }
-  }
+  Future<void> _go(UnitDirections to) =>
+      openDirections(context, to.latitude, to.longitude, launch: widget.launch);
 
   @override
   Widget build(BuildContext context) {
@@ -104,9 +124,9 @@ class _NavigateToUnitButtonState extends State<NavigateToUnitButton> {
             ),
             if (!to.confirmed) ...[
               const SizedBox(height: 6),
-              const Text(
-                'Location pinned by one coordinator and not yet confirmed. Check the signboard on arrival.',
-                style: TextStyle(fontSize: 11.5, color: TgcgColors.muted),
+              Text(
+                unconfirmedLocationNote(to.source),
+                style: const TextStyle(fontSize: 11.5, color: TgcgColors.muted),
               ),
             ],
           ],

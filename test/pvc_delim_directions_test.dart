@@ -146,6 +146,19 @@ void main() {
       expect(find.textContaining('not yet confirmed'), findsOneWidget);
     });
 
+    testWidgets("says when the location comes from INEC's locator", (tester) async {
+      await pump(tester, {
+        'latitude': 11.0539,
+        'longitude': 7.712954605,
+        'confirmed': false,
+        'accuracy_m': 5.6,
+        'source': 'inec',
+      });
+      expect(find.text('Navigate to polling unit'), findsOneWidget);
+      expect(find.textContaining("from INEC's polling unit locator"), findsOneWidget);
+      expect(find.textContaining('pinned by one coordinator'), findsNothing);
+    });
+
     testWidgets('says so when the unit is not mapped', (tester) async {
       final launched = await pump(tester, null);
       expect(find.text('Navigate to polling unit'), findsNothing);

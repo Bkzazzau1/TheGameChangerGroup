@@ -8,9 +8,10 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/mapping_repository.dart';
 import '../domain/models.dart';
+import '../location/directions.dart';
 import '../location/gps_service.dart';
 import '../ui/tgcg_design.dart';
-import 'unit_mapping_page.dart' show mappingStatusLabel;
+import 'unit_mapping_page.dart' show mappingUnitLabel;
 
 /// GPS accuracy a pin must reach (matches the server's PIN_MAX_ACCURACY_M).
 const pinTargetAccuracyMeters = 30.0;
@@ -22,10 +23,14 @@ class PinGuidePage extends StatefulWidget {
     required this.unit,
     this.gps = const GpsService(),
     this.pickPhoto,
+    this.launch = launchDirections,
   });
 
   final MappingUnit unit;
   final GpsService gps;
+
+  /// Opens the maps app (replaced in tests).
+  final LaunchDirections launch;
 
   /// Replaces the camera (tests). Returns the photo bytes and file name.
   final Future<(Uint8List, String)?> Function()? pickPhoto;
@@ -211,7 +216,7 @@ class _PinGuidePageState extends State<PinGuidePage> {
   @override
   Widget build(BuildContext context) {
     final unit = widget.unit;
-    final (label, color) = mappingStatusLabel(unit.status);
+    final (label, color) = mappingUnitLabel(unit);
     return Scaffold(
       appBar: AppBar(title: Text('Pin ${unit.code}')),
       body: _outcome != null
@@ -228,11 +233,15 @@ class _PinGuidePageState extends State<PinGuidePage> {
                 const SizedBox(height: 8),
                 Align(alignment: Alignment.centerLeft, child: TgcgStatusPill(label: label, color: color, compact: true)),
                 if (unit.status == MappingStatus.pinned || unit.status == MappingStatus.confirmed)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'This unit already has a location. Pinning it again from the same spot confirms it.',
-                      style: TextStyle(fontSize: 12.5, color: TgcgColors.muted),
+                      unit.locatedByInec
+                          ? "INEC's polling unit locator places this unit on the map. Pin it from "
+                              "the entrance: a pin close to INEC's point confirms it, and one "
+                              'further away flags it for review.'
+                          : 'This unit already has a location. Pinning it again from the same spot confirms it.',
+                      style: const TextStyle(fontSize: 12.5, color: TgcgColors.muted),
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -290,6 +299,21 @@ class _PinGuidePageState extends State<PinGuidePage> {
             'Stand at its main entrance, or where voting takes place (the classroom, shed or open space).',
             'Do not pin from the road, a car or a nearby building.',
           ]),
+          if (widget.unit.hasLocation) ...[
+            OutlinedButton.icon(
+              onPressed: () => openDirections(
+                context,
+                widget.unit.latitude!,
+                widget.unit.longitude!,
+                launch: widget.launch,
+              ),
+              icon: const Icon(Icons.directions_rounded),
+              label: Text(
+                widget.unit.locatedByInec ? "Directions to INEC's location" : 'Directions to the pinned location',
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             value: _atEntrance,

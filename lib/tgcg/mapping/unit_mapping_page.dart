@@ -189,7 +189,13 @@ class _ProgressCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               TgcgStatusPill(label: '${n(MappingStatus.confirmed)} CONFIRMED', color: TgcgColors.success, compact: true),
-              TgcgStatusPill(label: '${n(MappingStatus.pinned)} PINNED ONCE', color: TgcgColors.primary, compact: true),
+              if (progress.fromInec > 0)
+                TgcgStatusPill(label: '${progress.fromInec} FROM INEC', color: TgcgColors.info, compact: true),
+              TgcgStatusPill(
+                label: '${n(MappingStatus.pinned) - progress.fromInec} PINNED ONCE',
+                color: TgcgColors.primary,
+                compact: true,
+              ),
               TgcgStatusPill(label: '${n(MappingStatus.conflict)} CONFLICTS', color: TgcgColors.danger, compact: true),
               TgcgStatusPill(label: '${n(MappingStatus.problem)} PROBLEMS', color: TgcgColors.warning, compact: true),
               TgcgStatusPill(label: '${n(MappingStatus.unmapped)} TO MAP', color: TgcgColors.muted, compact: true),
@@ -209,6 +215,10 @@ class _ProgressCard extends StatelessWidget {
       MappingStatus.problem => ('PROBLEM', TgcgColors.warning),
     };
 
+/// A unit's status label, marking locations from INEC's polling unit locator.
+(String, Color) mappingUnitLabel(MappingUnit unit) =>
+    unit.locatedByInec ? ('INEC LOCATION', TgcgColors.info) : mappingStatusLabel(unit.status);
+
 class _UnitTile extends StatelessWidget {
   const _UnitTile({required this.unit, required this.onTap});
   final MappingUnit unit;
@@ -216,7 +226,7 @@ class _UnitTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = mappingStatusLabel(unit.status);
+    final (label, color) = mappingUnitLabel(unit);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(

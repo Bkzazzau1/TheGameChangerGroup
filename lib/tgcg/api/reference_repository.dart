@@ -49,14 +49,18 @@ class UnitDirections {
     required this.longitude,
     required this.confirmed,
     this.accuracyMeters,
+    this.source,
   });
 
   final double latitude;
   final double longitude;
 
-  /// False while only one coordinator has pinned the unit.
+  /// False until a coordinator on site has confirmed the location.
   final bool confirmed;
   final double? accuracyMeters;
+
+  /// Where the location came from: inec, coordinator, checkIn or imported.
+  final String? source;
 
   static UnitDirections? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
@@ -65,6 +69,7 @@ class UnitDirections {
       longitude: (json['longitude'] as num).toDouble(),
       confirmed: json['confirmed'] as bool? ?? false,
       accuracyMeters: (json['accuracy_m'] as num?)?.toDouble(),
+      source: json['source'] as String?,
     );
   }
 }

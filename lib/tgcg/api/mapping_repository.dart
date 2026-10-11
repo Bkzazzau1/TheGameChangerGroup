@@ -27,6 +27,7 @@ class MappingUnit {
     required this.pins,
     this.latitude,
     this.longitude,
+    this.locationSource = '',
   });
 
   final String code;
@@ -39,6 +40,14 @@ class MappingUnit {
   final double? latitude;
   final double? longitude;
 
+  /// Where the current location came from: inec, coordinator, checkIn or imported.
+  final String locationSource;
+
+  bool get hasLocation => latitude != null && longitude != null;
+
+  /// Placed by INEC's polling unit locator and not yet checked on site.
+  bool get locatedByInec => locationSource == 'inec' && status == MappingStatus.pinned;
+
   factory MappingUnit.fromJson(Map<String, dynamic> json) => MappingUnit(
         code: json['code'] as String,
         name: json['name'] as String,
@@ -49,15 +58,25 @@ class MappingUnit {
         pins: (json['pins'] as int?) ?? 0,
         latitude: double.tryParse('${json['latitude']}'),
         longitude: double.tryParse('${json['longitude']}'),
+        locationSource: (json['location_source'] as String?) ?? '',
       );
 }
 
 class MappingProgress {
-  const MappingProgress({required this.total, required this.counts, required this.mappedPercent});
+  const MappingProgress({
+    required this.total,
+    required this.counts,
+    required this.mappedPercent,
+    this.fromInec = 0,
+  });
 
   final int total;
   final Map<MappingStatus, int> counts;
   final double mappedPercent;
+
+  /// Units located by INEC's locator and not yet checked on site. They are
+  /// counted under [MappingStatus.pinned] too.
+  final int fromInec;
 
   int get mapped => (counts[MappingStatus.pinned] ?? 0) + (counts[MappingStatus.confirmed] ?? 0);
 
@@ -65,6 +84,7 @@ class MappingProgress {
         total: json['total'] as int,
         counts: {for (final s in MappingStatus.values) s: (json[s.name] as int?) ?? 0},
         mappedPercent: (json['mapped_percent'] as num).toDouble(),
+        fromInec: (json['from_inec'] as int?) ?? 0,
       );
 }
 
