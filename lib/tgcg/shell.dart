@@ -26,6 +26,7 @@ import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'security/security_response_portal_page.dart';
 import 'session.dart';
+import 'mapping/unit_mapping_page.dart';
 import 'ui/tgcg_design.dart';
 
 class TgcgShell extends StatefulWidget {
@@ -161,6 +162,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.systemMonitoring => const SystemMonitoringPage(),
         TgcgModule.reports => const ReportsPage(),
         TgcgModule.governance => const GovernancePage(),
+        TgcgModule.unitMapping => const UnitMappingPage(),
       };
 }
 
@@ -185,6 +187,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.mediaIntelligence, 'Media Intelligence', Icons.insights_outlined, _NavGroup.command),
   _Destination(TgcgModule.geography, 'Geographic Operations', Icons.public_rounded, _NavGroup.command),
   _Destination(TgcgModule.accreditation, 'Member Enrolment', Icons.how_to_reg_outlined, _NavGroup.fieldOperations),
+  _Destination(TgcgModule.unitMapping, 'Polling Unit Mapping', Icons.add_location_alt_outlined, _NavGroup.fieldOperations),
   _Destination(TgcgModule.aiVerification, 'AI Verification', Icons.auto_awesome_rounded, _NavGroup.fieldOperations),
   _Destination(TgcgModule.fieldMonitoring, 'Field Monitoring', Icons.sensors_outlined, _NavGroup.fieldOperations),
   _Destination(TgcgModule.evidenceCapture, 'Evidence Capture', Icons.perm_media_outlined, _NavGroup.fieldOperations),
@@ -559,4 +562,5 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.systemMonitoring => 'System Monitoring',
       TgcgModule.reports => 'Reports & Exports',
       TgcgModule.governance => 'Data & Governance',
+      TgcgModule.unitMapping => 'Polling Unit Mapping',
     };

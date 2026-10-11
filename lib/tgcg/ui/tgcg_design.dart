@@ -401,11 +401,15 @@ class TgcgEmptyState extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
+    this.action,
   });
 
   final IconData icon;
   final String title;
   final String message;
+
+  /// Optional follow-up, e.g. a "Try again" button.
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -443,6 +447,10 @@ class TgcgEmptyState extends StatelessWidget {
                     height: 1.45,
                   ),
                 ),
+                if (action != null) ...[
+                  const SizedBox(height: 10),
+                  action!,
+                ],
               ],
             ),
           ),

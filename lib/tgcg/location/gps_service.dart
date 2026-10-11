@@ -80,6 +80,12 @@ class GpsService {
     }
   }
 
+  /// Continuous high-accuracy readings, e.g. while waiting for a precise
+  /// fix. Call [ensureAccess] first.
+  Stream<GpsFix> watch() => Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
+      ).map(_toFix);
+
   Future<bool> openLocationSettings() => Geolocator.openLocationSettings();
   Future<bool> openAppSettings() => Geolocator.openAppSettings();
 }

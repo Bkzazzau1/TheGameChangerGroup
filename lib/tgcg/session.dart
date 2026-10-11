@@ -13,6 +13,7 @@ enum TgcgModule {
   membershipNetwork,
   roleAssignment,
   geography,
+  unitMapping,
   liveOperations,
   aiVerification,
   aiAnalytics,
@@ -206,6 +207,17 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   if (role == TgcgRole.nationalAdministrator) {
     modules.add(TgcgModule.membershipNetwork);
     modules.add(TgcgModule.roleAssignment);
+  }
+  // Polling-unit mapping: coordinators who pin units (confirmAgentLocation on
+  // the server) and the administrator.
+  if (const {
+    TgcgRole.nationalAdministrator,
+    TgcgRole.zonalCoordinator,
+    TgcgRole.stateCoordinator,
+    TgcgRole.lgaCoordinator,
+    TgcgRole.wardCoordinator,
+  }.contains(role)) {
+    modules.add(TgcgModule.unitMapping);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewGeography)) {
     modules.add(TgcgModule.geography);
