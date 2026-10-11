@@ -70,9 +70,6 @@ class _NavigateToUnitButtonState extends State<NavigateToUnitButton> {
         () => _unit = TgcgBackend.of(context)!.reference.pollingUnit(widget.unitCode),
       );
 
-  Future<void> _go(UnitDirections to) =>
-      openDirections(context, to.latitude, to.longitude, launch: widget.launch);
-
   @override
   Widget build(BuildContext context) {
     if (_unit == null) {
@@ -106,32 +103,46 @@ class _NavigateToUnitButtonState extends State<NavigateToUnitButton> {
             child: Text('Finding polling unit location...'),
           );
         }
-        final to = snapshot.data!.directions;
-        if (to == null) {
-          return const _Note(
-            icon: Icons.location_off_outlined,
-            text: 'This polling unit has not been mapped yet, so directions are not available. '
-                'Coordinators pin each unit before election day.',
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            FilledButton.icon(
-              onPressed: () => _go(to),
-              icon: const Icon(Icons.directions_rounded),
-              label: const Text('Navigate to polling unit'),
-            ),
-            if (!to.confirmed) ...[
-              const SizedBox(height: 6),
-              Text(
-                unconfirmedLocationNote(to.source),
-                style: const TextStyle(fontSize: 11.5, color: TgcgColors.muted),
-              ),
-            ],
-          ],
-        );
+        return UnitDirectionsView(directions: snapshot.data!.directions, launch: widget.launch);
       },
+    );
+  }
+}
+
+/// The "Navigate to polling unit" button for directions already in hand, or a
+/// plain note when the unit has not been mapped yet.
+class UnitDirectionsView extends StatelessWidget {
+  const UnitDirectionsView({super.key, required this.directions, this.launch = launchDirections});
+
+  final UnitDirections? directions;
+  final LaunchDirections launch;
+
+  @override
+  Widget build(BuildContext context) {
+    final to = directions;
+    if (to == null) {
+      return const _Note(
+        icon: Icons.location_off_outlined,
+        text: 'This polling unit has not been mapped yet, so directions are not available. '
+            'Coordinators pin each unit before election day.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: () => openDirections(context, to.latitude, to.longitude, launch: launch),
+          icon: const Icon(Icons.directions_rounded),
+          label: const Text('Navigate to polling unit'),
+        ),
+        if (!to.confirmed) ...[
+          const SizedBox(height: 6),
+          Text(
+            unconfirmedLocationNote(to.source),
+            style: const TextStyle(fontSize: 11.5, color: TgcgColors.muted),
+          ),
+        ],
+      ],
     );
   }
 }

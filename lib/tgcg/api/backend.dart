@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'api_client.dart';
 import 'auth_repository.dart';
 import 'mapping_repository.dart';
+import 'member_repository.dart';
 import 'reference_repository.dart';
 
 /// Everything that talks to the TGCG server.
@@ -11,7 +12,8 @@ class BackendServices {
   BackendServices({required this.client})
       : auth = AuthRepository(client),
         reference = ReferenceRepository(client),
-        mapping = MappingRepository(client);
+        mapping = MappingRepository(client),
+        member = MemberRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -30,6 +32,9 @@ class BackendServices {
   final AuthRepository auth;
   final ReferenceRepository reference;
   final MappingRepository mapping;
+
+  /// Member registration and the member app.
+  final MemberRepository member;
 }
 
 /// Makes [BackendServices] available below it. `services` is null in

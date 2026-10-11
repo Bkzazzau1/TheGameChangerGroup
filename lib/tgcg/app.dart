@@ -12,6 +12,7 @@ import 'field/field_operations_store.dart';
 import 'geography/geography_registry.dart';
 import 'governance/governance_store.dart';
 import 'login_page.dart';
+import 'member/member_shell.dart';
 import 'membership/membership_store.dart';
 import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
@@ -78,7 +79,12 @@ class _TgcgAppState extends State<TgcgApp> {
     try {
       final user = await services.auth.restore();
       final role = user?.role;
-      if (user != null && role != null && mounted) {
+      if (user != null && user.isMember && mounted) {
+        sessionController.signInMember(
+          fullName: user.fullName,
+          membershipNumber: user.accessId,
+        );
+      } else if (user != null && role != null && mounted) {
         sessionController.signInFromServer(
           role: role,
           fullName: user.fullName,
@@ -103,7 +109,8 @@ class _TgcgAppState extends State<TgcgApp> {
         persistence: offlinePersistenceController = OfflinePersistenceController(),
         transport: HttpSyncTransport(services.client, accessId: () => session.accessId),
       );
-      session.addListener(() => sync.setEnabled(session.isServerSession));
+      // Members have no field records to upload.
+      session.addListener(() => sync.setEnabled(session.isServerSession && !session.isMember));
     }
     if (services == null) offlinePersistenceController = OfflinePersistenceController();
     membershipOperationsController = MembershipOperationsController.prototypeSeed(
@@ -477,6 +484,9 @@ class _AuthenticationGate extends StatelessWidget {
         key: const ValueKey('presentation-access-login'),
         onResetPresentation: onResetPresentation,
       );
+    }
+    if (session.isMember) {
+      return const MemberShell(key: ValueKey('member-shell'));
     }
     if (session.role == TgcgRole.pollingUnitAgent) {
       return const FieldAgentShell(key: ValueKey('field-agent-shell'));

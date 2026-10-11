@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'api/api_client.dart';
 import 'api/backend.dart';
 import 'app.dart';
+import 'member/forgot_pin_page.dart';
+import 'member/member_registration_page.dart';
 import 'membership/membership_store.dart';
 import 'session.dart';
 import 'ui/tgcg_design.dart';
@@ -56,11 +58,16 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
       );
       final role = user.role;
       if (!mounted) return;
+      if (user.isMember) {
+        TgcgSession.of(context, listen: false).signInMember(
+          fullName: user.fullName,
+          membershipNumber: user.accessId,
+        );
+        return;
+      }
       if (role == null) {
         await services.auth.logout();
-        setState(() => serverError = user.isMember
-            ? 'Member accounts sign in on the TGCG member app.'
-            : 'This account type cannot use the operations app.');
+        setState(() => serverError = 'This account type cannot use the operations app.');
         return;
       }
       TgcgSession.of(context, listen: false).signInFromServer(
@@ -122,7 +129,8 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
               return ListView(
                 padding: const EdgeInsets.all(18),
                 children: [
-                  SizedBox(height: 300, child: _brandPanel(compact: true)),
+                  // Sized to its content: a fixed height overflows on small phones.
+                  _brandPanel(compact: true),
                   const SizedBox(height: 18),
                   _formPanel(compact: true),
                 ],
@@ -191,7 +199,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                 ),
               ],
             ),
-            const Spacer(),
+            if (compact) const SizedBox(height: 26) else const Spacer(),
             const Text(
               'National Election Operations',
               style: TextStyle(
@@ -333,14 +341,19 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                       onChanged: (value) =>
                           setState(() => rememberDevice = value ?? false),
                     ),
-                    const Text(
-                      'Remember this device',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                    const Expanded(
+                      child: Text(
+                        'Remember this device',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
-                    const Spacer(),
                     TextButton(
-                      onPressed: () {},
-                      child: const Text('Access support'),
+                      onPressed: serverMode
+                          ? () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const ForgotPinPage()),
+                              )
+                          : () {},
+                      child: Text(serverMode ? 'Forgot PIN?' : 'Access support'),
                     ),
                   ],
                 ),
@@ -398,6 +411,21 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     ),
                   ),
                 ),
+                if (serverMode) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: signingIn
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const MemberRegistrationPage()),
+                              ),
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: const Text('New member? Register with your PVC'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

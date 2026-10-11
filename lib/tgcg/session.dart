@@ -46,12 +46,16 @@ class TgcgSessionController extends ChangeNotifier {
   GeographicScope _scope = GeographicScope.nigeria;
   Set<String> _serverCapabilities = const {};
   bool _serverSession = false;
+  bool _member = false;
 
   TgcgRole? get role => _role;
   String get operatorName => _operatorName;
   String get accessId => _accessId;
   GeographicScope get scope => _scope;
-  bool get isAuthenticated => _role != null;
+  bool get isAuthenticated => _role != null || _member;
+
+  /// Signed in to the member app. Members have no operations role.
+  bool get isMember => _member;
 
   /// True when signed in against the TGCG server (not presentation mode).
   bool get isServerSession => _serverSession;
@@ -73,6 +77,18 @@ class TgcgSessionController extends ChangeNotifier {
     _accessId = accessId;
     _scope = scope;
     _serverCapabilities = Set.unmodifiable(capabilities);
+    _serverSession = true;
+    notifyListeners();
+  }
+
+  /// Sign a member in to the member app (server accounts only).
+  void signInMember({required String fullName, required String membershipNumber}) {
+    _member = true;
+    _role = null;
+    _operatorName = fullName;
+    _accessId = membershipNumber;
+    _scope = GeographicScope.nigeria;
+    _serverCapabilities = const {};
     _serverSession = true;
     notifyListeners();
   }
@@ -109,6 +125,7 @@ class TgcgSessionController extends ChangeNotifier {
     if (_serverSession) unawaited(onSignOut?.call());
     _serverSession = false;
     _serverCapabilities = const {};
+    _member = false;
     _role = null;
     _operatorName = '';
     _accessId = '';

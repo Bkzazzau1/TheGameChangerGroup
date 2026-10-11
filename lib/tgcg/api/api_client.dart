@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -150,6 +151,24 @@ class ApiClient {
       _send('POST', path, body: body, authenticated: authenticated);
 
   Future<dynamic> patch(String path, {Object? body}) => _send('PATCH', path, body: body);
+
+  /// The raw body of an authenticated GET, such as a photo.
+  Future<Uint8List> getBytes(String path) async {
+    Future<http.Response> send() async {
+      final request = http.Request('GET', uri(path));
+      await _authorize(request, true);
+      return http.Response.fromStream(await _http.send(request).timeout(timeout));
+    }
+
+    var response = await _guard(send);
+    if (response.statusCode == 401 && await tokens.read() != null) {
+      await _refreshTokens();
+      response = await _guard(send);
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) return response.bodyBytes;
+    if (response.statusCode == 401) onSessionExpired?.call();
+    throw ApiException.fromResponse(response.statusCode, _json(response));
+  }
 
   /// Multipart upload. [fields] values are sent as strings; maps and lists
   /// are JSON-encoded (the backend accepts JSON text for nested fields).
