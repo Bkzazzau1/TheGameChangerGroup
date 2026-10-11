@@ -144,7 +144,7 @@ class _DelegationTile extends StatelessWidget {
               context: context,
               builder: (_) => DelegationDialog(grant: grant),
             );
-            if (changed == true) onChanged();
+            if (changed != false) onChanged();
           },
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -608,7 +608,19 @@ class _DelegateDialogState extends State<DelegateDialog> {
                           lastDate: DateTime(now.year + 5),
                           initialDate: _endsAt ?? now.add(const Duration(days: 90)),
                         );
-                        if (picked != null) setState(() => _endsAt = picked);
+                        if (picked != null) {
+                          // The grant runs to the end of the chosen day.
+                          setState(
+                            () => _endsAt = DateTime(
+                              picked.year,
+                              picked.month,
+                              picked.day,
+                              23,
+                              59,
+                              59,
+                            ),
+                          );
+                        }
                       },
                       icon: const Icon(Icons.event_busy_outlined),
                       label: Text(_endsAt == null ? 'No end date' : 'Ends ${formatDay(_endsAt!)}'),

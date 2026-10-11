@@ -13,6 +13,7 @@ class ServerUser {
     required this.capabilities,
     this.access = const [],
     this.membershipNumber,
+    this.supervises = false,
     this.phoneNumber,
     this.email,
   });
@@ -32,6 +33,10 @@ class ServerUser {
 
   /// The member behind this account, when there is one.
   final String? membershipNumber;
+
+  /// Holds a role others report to: may see, suspend and reinstate their
+  /// appointments.
+  final bool supervises;
   final String? phoneNumber;
   final String? email;
 
@@ -39,7 +44,15 @@ class ServerUser {
   bool get isMember => roleName == 'member';
 
   /// A member account without any operational access: the member app.
-  bool get usesMemberApp => isMember && capabilities.isEmpty;
+  bool get usesMemberApp => isMember && capabilities.isEmpty && !supervises;
+
+  /// Where the operator works: a former fixed role's own scope, or the
+  /// smallest area containing every area their appointments cover (a member's
+  /// own scope is only where they registered).
+  GeographicScope get workingScope {
+    final areas = [for (final grant in access) ...grant.areas];
+    return role != null || areas.isEmpty ? scope : commonScope(areas);
+  }
 
   factory ServerUser.fromJson(Map<String, dynamic> json) {
     final roleName = json['role'] as String;
@@ -55,6 +68,7 @@ class ServerUser {
           AccessGrant.fromJson(grant as Map<String, dynamic>),
       ],
       membershipNumber: json['membership_number'] as String?,
+      supervises: json['supervises'] as bool? ?? false,
       phoneNumber: json['phone_number'] as String?,
       email: json['email'] as String?,
     );
@@ -128,4 +142,77 @@ class AuthRepository {
       await client.tokens.clear();
     }
   }
+}
+
+
+/// The smallest area that contains all of [areas]; Nigeria when they share
+/// no zone.
+GeographicScope commonScope(List<GeographicScope> areas) {
+  if (areas.isEmpty || areas.any((area) => area.level == GeographyLevel.country)) {
+    return GeographicScope.nigeria;
+  }
+  final first = areas.first;
+  bool shared(String? Function(GeographicScope area) id) {
+    final value = id(first);
+    return value != null && areas.every((area) => id(area) == value);
+  }
+
+  if (!shared((area) => area.zoneId)) return GeographicScope.nigeria;
+  final zone = GeographicScope(
+    level: GeographyLevel.geopoliticalZone,
+    country: first.country,
+    zoneId: first.zoneId,
+    zoneName: first.zoneName,
+  );
+  if (!shared((area) => area.stateId)) return zone;
+  final state = GeographicScope(
+    level: GeographyLevel.state,
+    country: first.country,
+    zoneId: first.zoneId,
+    zoneName: first.zoneName,
+    stateId: first.stateId,
+    stateName: first.stateName,
+  );
+  if (!shared((area) => area.lgaId)) {
+    if (!shared((area) => area.senatorialDistrictId)) return state;
+    return GeographicScope(
+      level: GeographyLevel.senatorialDistrict,
+      country: first.country,
+      zoneId: first.zoneId,
+      zoneName: first.zoneName,
+      stateId: first.stateId,
+      stateName: first.stateName,
+      senatorialDistrictId: first.senatorialDistrictId,
+      senatorialDistrictName: first.senatorialDistrictName,
+    );
+  }
+  final lga = GeographicScope(
+    level: GeographyLevel.lga,
+    country: first.country,
+    zoneId: first.zoneId,
+    zoneName: first.zoneName,
+    stateId: first.stateId,
+    stateName: first.stateName,
+    senatorialDistrictId: first.senatorialDistrictId,
+    senatorialDistrictName: first.senatorialDistrictName,
+    lgaId: first.lgaId,
+    lgaName: first.lgaName,
+  );
+  if (!shared((area) => area.wardId)) return lga;
+  final ward = GeographicScope(
+    level: GeographyLevel.ward,
+    country: first.country,
+    zoneId: first.zoneId,
+    zoneName: first.zoneName,
+    stateId: first.stateId,
+    stateName: first.stateName,
+    senatorialDistrictId: first.senatorialDistrictId,
+    senatorialDistrictName: first.senatorialDistrictName,
+    lgaId: first.lgaId,
+    lgaName: first.lgaName,
+    wardId: first.wardId,
+    wardName: first.wardName,
+  );
+  if (!shared((area) => area.pollingUnitId)) return ward;
+  return first;
 }

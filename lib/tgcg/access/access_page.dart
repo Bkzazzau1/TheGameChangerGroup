@@ -39,7 +39,9 @@ class AccessControlPage extends StatelessWidget {
         ('Roles', Icons.badge_outlined, const RolesTab()),
         ('Appointments', Icons.assignment_ind_outlined, const AppointmentsTab()),
         ('Delegations', Icons.call_split_rounded, const DelegationsTab()),
-      ],
+      ] else if (session.supervises)
+        // Supervisors see the appointments they supervise, nothing more.
+        ('Appointments', Icons.assignment_ind_outlined, const AppointmentsTab()),
       if (session.can(TgcgCapability.appointNationalAdministrator))
         ('Administrators', Icons.admin_panel_settings_outlined, const AdministratorsTab()),
       if (session.can(TgcgCapability.viewAudit))
@@ -59,9 +61,9 @@ class AccessControlPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
-            child: TgcgPageHeader(
+          _ModuleHeader(
+            title: 'Roles & Access',
+            full: TgcgPageHeader(
               eyebrow: 'ACCESS CONTROL',
               title: 'Roles & Access',
               subtitle:
@@ -82,4 +84,23 @@ class AccessControlPage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The page header on wide screens; a one-line title on phones, so the tabs
+/// and their content keep the room.
+class _ModuleHeader extends StatelessWidget {
+  const _ModuleHeader({required this.title, required this.full});
+
+  final String title;
+  final Widget full;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => constraints.maxWidth < 600
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          )
+        : Padding(padding: const EdgeInsets.fromLTRB(24, 24, 24, 8), child: full),
+  );
 }

@@ -50,6 +50,7 @@ class TgcgSessionController extends ChangeNotifier {
   Set<String> _serverCapabilities = const {};
   List<AccessGrant> _grants = const [];
   String? _membershipNumber;
+  bool _supervises = false;
   bool _serverSession = false;
   bool _operator = false;
   bool _member = false;
@@ -81,6 +82,10 @@ class TgcgSessionController extends ChangeNotifier {
   /// The member behind this account, when there is one.
   String? get membershipNumber => _membershipNumber;
 
+  /// Holds a role others report to (the server says so): may see, suspend
+  /// and reinstate the appointments they supervise.
+  bool get supervises => _supervises;
+
   /// Who is acting: the server's grants in a server session, the role's
   /// built-in permissions in presentation mode.
   TgcgActor get actor => _serverSession
@@ -94,7 +99,8 @@ class TgcgSessionController extends ChangeNotifier {
   bool canAny(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
 
   /// The modules this session may open.
-  Set<TgcgModule> get modules => _operator ? allowedModulesFor(can) : const {};
+  Set<TgcgModule> get modules =>
+      _operator ? allowedModulesFor(can, supervises: _supervises) : const {};
 
   /// The fixed role's name, or the appointments the access comes from.
   String get roleTitle {
@@ -119,6 +125,7 @@ class TgcgSessionController extends ChangeNotifier {
     required Set<String> capabilities,
     List<AccessGrant> grants = const [],
     String? membershipNumber,
+    bool supervises = false,
   }) {
     _role = role;
     _operatorName = fullName;
@@ -127,6 +134,7 @@ class TgcgSessionController extends ChangeNotifier {
     _serverCapabilities = Set.unmodifiable(capabilities);
     _grants = List.unmodifiable(grants);
     _membershipNumber = membershipNumber;
+    _supervises = supervises;
     _serverSession = true;
     _operator = true;
     _member = false;
@@ -134,9 +142,16 @@ class TgcgSessionController extends ChangeNotifier {
   }
 
   /// Take in what the server grants now (after an appointment changed).
-  void updateAccess({required Set<String> capabilities, required List<AccessGrant> grants}) {
+  void updateAccess({
+    required Set<String> capabilities,
+    required List<AccessGrant> grants,
+    bool supervises = false,
+    GeographicScope? scope,
+  }) {
     _serverCapabilities = Set.unmodifiable(capabilities);
     _grants = List.unmodifiable(grants);
+    _supervises = supervises;
+    if (scope != null) _scope = scope;
     notifyListeners();
   }
 
@@ -190,6 +205,7 @@ class TgcgSessionController extends ChangeNotifier {
     _serverCapabilities = const {};
     _grants = const [];
     _membershipNumber = null;
+    _supervises = false;
     _operator = false;
     _member = false;
     _role = null;
@@ -283,7 +299,11 @@ IconData roleIcon(TgcgRole role) => switch (role) {
 Set<TgcgModule> allowedModules(TgcgRole role) => allowedModulesFor(role.can);
 
 /// The modules whoever holds the capabilities [can] allows may open.
-Set<TgcgModule> allowedModulesFor(bool Function(TgcgCapability capability) can) {
+/// Supervisors also see the appointments they supervise.
+Set<TgcgModule> allowedModulesFor(
+  bool Function(TgcgCapability capability) can, {
+  bool supervises = false,
+}) {
   bool any(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
   final modules = <TgcgModule>{TgcgModule.overview};
 
@@ -303,7 +323,7 @@ Set<TgcgModule> allowedModulesFor(bool Function(TgcgCapability capability) can) 
     TgcgCapability.assignRoles,
     TgcgCapability.manageAssignments,
     TgcgCapability.delegateAuthority,
-  ])) {
+  ]) || supervises) {
     modules.add(TgcgModule.roleAssignment);
   }
   if (any(const [

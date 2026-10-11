@@ -8,6 +8,7 @@ import 'package:tgcg_emcop/tgcg/access/access_page.dart';
 import 'package:tgcg_emcop/tgcg/access/my_access_page.dart';
 import 'package:tgcg_emcop/tgcg/api/access_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
+import 'package:tgcg_emcop/tgcg/api/auth_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/domain/permissions.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_review_page.dart';
@@ -317,5 +318,198 @@ void main() {
       'notes': 'Compared the PVC with Bala in person.',
     });
     expect(find.text('Verified'), findsWidgets);
+  });
+
+  group('the working area', () {
+    const kadunaNorth = GeographicScope(
+      level: GeographyLevel.lga,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KD',
+      stateName: 'Kaduna',
+      senatorialDistrictId: 'SD/033/KD',
+      senatorialDistrictName: 'Kaduna Central',
+      lgaId: 'KD-KADUNA-NORTH',
+      lgaName: 'Kaduna North',
+    );
+    const zaria = GeographicScope(
+      level: GeographyLevel.lga,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KD',
+      stateName: 'Kaduna',
+      senatorialDistrictId: 'SD/032/KD',
+      senatorialDistrictName: 'Kaduna North',
+      lgaId: 'KD-ZARIA',
+      lgaName: 'Zaria',
+    );
+    const kano = GeographicScope(
+      level: GeographyLevel.state,
+      country: 'Nigeria',
+      zoneId: 'NW',
+      zoneName: 'North West',
+      stateId: 'KN',
+      stateName: 'Kano',
+    );
+    const lagos = GeographicScope(
+      level: GeographyLevel.state,
+      country: 'Nigeria',
+      zoneId: 'SW',
+      zoneName: 'South West',
+      stateId: 'LA',
+      stateName: 'Lagos',
+    );
+
+    test('is the smallest area holding every appointment', () {
+      expect(commonScope([kadunaNorth]).lgaId, 'KD-KADUNA-NORTH');
+      final kaduna = commonScope([kadunaNorth, zaria]);
+      expect(kaduna.level, GeographyLevel.state);
+      expect(kaduna.stateId, 'KD');
+      expect(kaduna.lgaId, isNull);
+      expect(commonScope([kadunaNorth, kano]).level, GeographyLevel.geopoliticalZone);
+      expect(commonScope([kano, lagos]).level, GeographyLevel.country);
+      expect(commonScope([kano, GeographicScope.nigeria]).level, GeographyLevel.country);
+    });
+
+    test('comes from appointments, not where a member registered', () {
+      final appointed = ServerUser.fromJson({
+        'access_id': 'TGCG-000200',
+        'full_name': 'Ada Obi',
+        'role': 'member',
+        'scope': {'level': 'pollingUnit', 'country': 'Nigeria', 'pollingUnitId': 'KN-001'},
+        'capabilities': ['sendBroadcast'],
+        'access': [
+          {
+            'source': 'assignment',
+            'assignment': 'a1',
+            'role': 'lga-coordinator',
+            'role_name': 'LGA Coordinator',
+            'areas': [
+              {'level': 'lga', 'country': 'Nigeria', 'zoneId': 'NW', 'stateId': 'KD', 'lgaId': 'KD-KADUNA-NORTH', 'lgaName': 'Kaduna North'},
+            ],
+            'permissions': ['sendBroadcast'],
+          },
+        ],
+      });
+      expect(appointed.workingScope.lgaId, 'KD-KADUNA-NORTH');
+      expect(appointed.usesMemberApp, isFalse);
+    });
+  });
+
+  test('supervisors get the appointments they supervise, and nothing else', () {
+    final session = TgcgSessionController()
+      ..signInFromServer(
+        role: TgcgRole.lgaCoordinator,
+        fullName: 'LGA Coordinator',
+        accessId: 'LC-KD',
+        scope: GeographicScope.nigeria,
+        capabilities: {'viewSituationRoom'},
+        supervises: true,
+      );
+    expect(session.modules, contains(TgcgModule.roleAssignment));
+    expect(session.can(TgcgCapability.manageAssignments), isFalse);
+  });
+
+  testWidgets('supervisors see only the appointments tab', (tester) async {
+    final server = _Server((request) => switch (_path(request)) {
+          'access/permissions/' => _json(_permissions),
+          'access/assignments/' => _json({'count': 0, 'next': null, 'results': <Object>[]}),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      const AccessControlPage(),
+      (session) => session.signInFromServer(
+        role: TgcgRole.lgaCoordinator,
+        fullName: 'LGA Coordinator',
+        accessId: 'LC-KD',
+        scope: GeographicScope.nigeria,
+        capabilities: {'viewSituationRoom'},
+        supervises: true,
+      ),
+    );
+    expect(find.text('Appointments'), findsOneWidget);
+    expect(find.text('Roles'), findsNothing);
+    expect(find.text('Delegations'), findsNothing);
+    expect(find.text('Appoint a member'), findsNothing);
+  });
+
+  testWidgets('the audit log asks for the next events by offset', (tester) async {
+    final offsets = <String?>[];
+    final server = _Server((request) {
+      if (_path(request) != 'access/audit/') return null;
+      final offset = request.url.queryParameters['offset'];
+      offsets.add(offset);
+      final start = int.parse(offset ?? '0');
+      return _json({
+        'count': 150,
+        'next': start == 0 ? 'https://api.tgcg.test/api/v1/access/audit/?limit=100&offset=100' : null,
+        'results': [
+          for (var i = start; i < (start == 0 ? 100 : 150); i++)
+            {
+              'id': 150 - i,
+              'created_at': '2026-10-11T08:00:00Z',
+              'actor': 'NA-1',
+              'action': 'role.created',
+              'target_type': 'role',
+              'target_id': 'r$i',
+              'target_label': 'Role $i',
+              'reason': '',
+            },
+        ],
+      });
+    });
+    await _pump(
+      tester,
+      server.connect(),
+      const AccessControlPage(),
+      (session) => session.signInFromServer(
+        fullName: 'Auditor',
+        accessId: 'TGCG-000100',
+        scope: GeographicScope.nigeria,
+        capabilities: {'viewAudit'},
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('Load more'), 600, scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+    expect(offsets, [null, '100']);
+    expect(find.text('Load more'), findsNothing);
+  });
+
+  testWidgets('a list reloads when its dialog is dismissed by tapping outside', (tester) async {
+    var loads = 0;
+    final server = _Server((request) => switch (_path(request)) {
+          'access/permissions/' => _json(_permissions),
+          'access/roles/' => _json({'count': 0, 'next': null, 'results': <Object>[]}),
+          'access/assignments/' => () {
+              loads++;
+              return _json({'count': 1, 'next': null, 'results': [_appointment()]});
+            }(),
+          'access/assignments/a1/history/' => _json(<Object>[]),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      const AccessControlPage(),
+      (session) => session.signInFromServer(
+        fullName: 'State Lead',
+        accessId: 'TGCG-000100',
+        scope: GeographicScope.nigeria,
+        capabilities: {'viewRoles', 'manageAssignments'},
+      ),
+    );
+    await tester.tap(find.text('Appointments'));
+    await tester.pumpAndSettle();
+    expect(loads, 1);
+    await tester.tap(find.text('Ada Obi · Kaduna Media Officer'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(5, 5)); // outside the dialog
+    await tester.pumpAndSettle();
+    expect(loads, 2);
   });
 }

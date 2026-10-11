@@ -560,13 +560,19 @@ Future<void> refreshOwnAccess(BuildContext context) async {
         role: user.role,
         fullName: user.fullName,
         accessId: user.accessId,
-        scope: user.scope,
+        scope: user.workingScope,
         capabilities: user.capabilities,
         grants: user.access,
+        supervises: user.supervises,
         membershipNumber: user.membershipNumber ?? (user.isMember ? user.accessId : null),
       );
     } else {
-      session.updateAccess(capabilities: user.capabilities, grants: user.access);
+      session.updateAccess(
+        capabilities: user.capabilities,
+        grants: user.access,
+        supervises: user.supervises,
+        scope: user.workingScope,
+      );
     }
   } on ApiException {
     // Offline: the next sign-in or refresh picks it up.

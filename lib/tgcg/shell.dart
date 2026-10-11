@@ -19,6 +19,7 @@ import 'governance/governance_page.dart';
 import 'governance/role_assignment_page.dart';
 import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
+import 'member/member_shell.dart';
 import 'membership/member_review_page.dart';
 import 'membership/national_membership_page.dart';
 import 'membership/pvc_enrollment_page.dart';
@@ -373,6 +374,17 @@ class _OperatorCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (session.membershipNumber != null)
+                  IconButton(
+                    tooltip: 'My membership',
+                    onPressed: () => openMyMembership(context),
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.card_membership_outlined,
+                      color: Color(0xFFA4AAB9),
+                      size: 18,
+                    ),
+                  ),
                 if (session.isServerSession)
                   IconButton(
                     tooltip: 'My access',
@@ -594,10 +606,46 @@ String _moduleLabel(TgcgModule module) => switch (module) {
 /// Where the signed-in user's access comes from, and their own appointments.
 void openMyAccess(BuildContext context) => Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
-          backgroundColor: TgcgColors.canvas,
-          appBar: AppBar(title: const Text('My access')),
-          body: const MyAccessPage(showHeader: false),
+        builder: (_) => const _WhileOperator(
+          child: Scaffold(
+            backgroundColor: TgcgColors.canvas,
+            appBar: _MyAccessBar(),
+            body: MyAccessPage(showHeader: false),
+          ),
         ),
       ),
     );
+
+/// A member who holds appointments keeps their card, polling unit, news and
+/// volunteering.
+void openMyMembership(BuildContext context) => Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const _WhileOperator(child: MemberShell())),
+    );
+
+class _MyAccessBar extends StatelessWidget implements PreferredSizeWidget {
+  const _MyAccessBar();
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) => AppBar(title: const Text('My access'));
+}
+
+/// Closes a page opened from the operations app once the account no longer
+/// uses it (for example after resigning the last appointment).
+class _WhileOperator extends StatelessWidget {
+  const _WhileOperator({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!TgcgSession.of(context).isOperator) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+    }
+    return child;
+  }
+}

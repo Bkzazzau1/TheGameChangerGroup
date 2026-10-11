@@ -182,7 +182,7 @@ class AppointmentTile extends StatelessWidget {
             context: context,
             builder: (_) => AppointmentDialog(appointment: appointment),
           );
-          if (changed == true) onChanged();
+          if (changed != false) onChanged();
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -643,7 +643,9 @@ class _AppointDialogState extends State<AppointDialog> {
       initialDate: (start ? _startsAt : _endsAt) ?? now,
     );
     if (picked != null) {
-      setState(() => start ? _startsAt = picked : _endsAt = picked);
+      // Access runs to the end of the chosen day.
+      final endOfDay = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+      setState(() => start ? _startsAt = picked : _endsAt = endOfDay);
     }
   }
 

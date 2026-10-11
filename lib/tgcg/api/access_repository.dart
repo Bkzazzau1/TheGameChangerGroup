@@ -560,7 +560,7 @@ class AccessRepository {
     String search = '',
     RoleCategory? category,
     bool? archived,
-    int page = 1,
+    int offset = 0,
   }) async => ApiPage.fromJson(
     await client.get(
       'access/roles/',
@@ -569,7 +569,7 @@ class AccessRepository {
         if (category != null) 'category': category.name,
         if (archived != null) 'status': archived ? 'archived' : 'active',
         'ordering': 'name',
-        'page': '$page',
+        if (offset > 0) 'offset': '$offset',
       },
     ),
     RoleDefinition.fromJson,
@@ -603,7 +603,7 @@ class AccessRepository {
     String? status,
     String? role,
     String? member,
-    int page = 1,
+    int offset = 0,
   }) async => ApiPage.fromJson(
     await client.get(
       'access/assignments/',
@@ -612,7 +612,7 @@ class AccessRepository {
         if (status != null) 'status': status,
         if (role != null) 'role__code': role,
         if (member != null) 'member__membership_number': member,
-        'page': '$page',
+        if (offset > 0) 'offset': '$offset',
       },
     ),
     Appointment.fromJson,
@@ -693,13 +693,14 @@ class AccessRepository {
             as Map<String, dynamic>,
       );
 
-  Future<ApiPage<Delegation>> delegations({String? status, int page = 1}) async => ApiPage.fromJson(
-    await client.get(
-      'access/delegations/',
-      query: {if (status != null) 'status': status, 'page': '$page'},
-    ),
-    Delegation.fromJson,
-  );
+  Future<ApiPage<Delegation>> delegations({String? status, int offset = 0}) async =>
+      ApiPage.fromJson(
+        await client.get(
+          'access/delegations/',
+          query: {if (status != null) 'status': status, if (offset > 0) 'offset': '$offset'},
+        ),
+        Delegation.fromJson,
+      );
 
   Future<Delegation> delegate(DelegationDraft draft) async => Delegation.fromJson(
     await client.post('access/delegations/', body: draft.toJson()) as Map<String, dynamic>,
@@ -763,10 +764,13 @@ class AccessRepository {
     return body['intact'] == true ? null : body['first_broken_event'] as int?;
   }
 
-  Future<ApiPage<AuditEntry>> audit({String? action, int page = 1}) async => ApiPage.fromJson(
+  Future<ApiPage<AuditEntry>> audit({String? action, int offset = 0}) async => ApiPage.fromJson(
     await client.get(
       'access/audit/',
-      query: {if (action != null) 'action__startswith': action, 'page': '$page'},
+      query: {
+        if (action != null) 'action__startswith': action,
+        if (offset > 0) 'offset': '$offset',
+      },
     ),
     AuditEntry.fromJson,
   );

@@ -185,7 +185,7 @@ class _RoleCard extends StatelessWidget {
             context: context,
             builder: (_) => RoleDetailDialog(role: role),
           );
-          if (changed == true) onChanged();
+          if (changed != false) onChanged();
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -218,29 +218,33 @@ class _RoleCard extends StatelessWidget {
                       '${role.permissions.length} permissions',
                       style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
                     ),
+                    const SizedBox(height: 8),
+                    // Under the text, so a phone keeps the name readable.
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (role.archived)
+                          const TgcgStatusPill(
+                            label: 'Archived',
+                            color: TgcgColors.muted,
+                            compact: true,
+                          ),
+                        if (role.isSystem)
+                          const TgcgStatusPill(
+                            label: 'System',
+                            color: TgcgColors.primaryMid,
+                            compact: true,
+                          ),
+                        TgcgStatusPill(
+                          label: '${role.activeAssignments} active',
+                          color: TgcgColors.success,
+                          compact: true,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                alignment: WrapAlignment.end,
-                children: [
-                  if (role.archived)
-                    const TgcgStatusPill(label: 'Archived', color: TgcgColors.muted, compact: true),
-                  if (role.isSystem)
-                    const TgcgStatusPill(
-                      label: 'System',
-                      color: TgcgColors.primaryMid,
-                      compact: true,
-                    ),
-                  TgcgStatusPill(
-                    label: '${role.activeAssignments} active',
-                    color: TgcgColors.success,
-                    compact: true,
-                  ),
-                ],
               ),
             ],
           ),

@@ -219,7 +219,7 @@ class MemberAdminRepository {
     String? verificationStatus,
     String? membershipState,
     String? phone,
-    int page = 1,
+    int offset = 0,
   }) async => ApiPage.fromJson(
     await client.get(
       'members/',
@@ -228,7 +228,7 @@ class MemberAdminRepository {
         if (verificationStatus != null) 'verification_status': verificationStatus,
         if (membershipState != null) 'membership_state': membershipState,
         if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
-        'page': '$page',
+        if (offset > 0) 'offset': '$offset',
       },
     ),
     StaffMember.fromJson,
@@ -278,11 +278,11 @@ class MemberAdminRepository {
 
   Future<Uint8List> photo(String number) => client.getBytes('members/$number/photo/');
 
-  Future<ApiPage<PollingUnitChange>> pollingUnitChanges({String? status, int page = 1}) async =>
+  Future<ApiPage<PollingUnitChange>> pollingUnitChanges({String? status, int offset = 0}) async =>
       ApiPage.fromJson(
         await client.get(
           'polling-unit-changes/',
-          query: {if (status != null) 'status': status, 'page': '$page'},
+          query: {if (status != null) 'status': status, if (offset > 0) 'offset': '$offset'},
         ),
         PollingUnitChange.fromJson,
       );

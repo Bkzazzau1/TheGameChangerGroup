@@ -88,9 +88,10 @@ class _TgcgAppState extends State<TgcgApp> {
           role: user.role,
           fullName: user.fullName,
           accessId: user.accessId,
-          scope: user.scope,
+          scope: user.workingScope,
           capabilities: user.capabilities,
           grants: user.access,
+          supervises: user.supervises,
           membershipNumber: user.membershipNumber ?? (user.isMember ? user.accessId : null),
         );
       }

@@ -259,7 +259,6 @@ class AuditTab extends StatefulWidget {
 class _AuditTabState extends State<AuditTab> {
   String? _action;
   final _entries = <AuditEntry>[];
-  int _page = 0;
   bool _more = true;
   bool _loading = false;
   Object? _error;
@@ -267,7 +266,7 @@ class _AuditTabState extends State<AuditTab> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_page == 0 && !_loading) _next();
+    if (_entries.isEmpty && _more && !_loading && _error == null) _next();
   }
 
   Future<void> _next() async {
@@ -276,11 +275,12 @@ class _AuditTabState extends State<AuditTab> {
       _error = null;
     });
     try {
-      final page = await TgcgBackend.of(context)!.access.audit(action: _action, page: _page + 1);
+      final page = await TgcgBackend.of(
+        context,
+      )!.access.audit(action: _action, offset: _entries.length);
       if (!mounted) return;
       setState(() {
         _entries.addAll(page.items);
-        _page += 1;
         _more = page.hasMore;
       });
     } catch (error) {
@@ -294,7 +294,6 @@ class _AuditTabState extends State<AuditTab> {
     setState(() {
       _action = action;
       _entries.clear();
-      _page = 0;
       _more = true;
     });
     _next();

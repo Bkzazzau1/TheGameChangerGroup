@@ -534,5 +534,7 @@ void main() {
     expect(find.text('Roles & Access'), findsNothing);
     expect(find.text('Your access'), findsOneWidget);
     expect(find.text('Kaduna Media Director'), findsWidgets);
+    // Still a member: the card and the rest of the member app are one tap away.
+    expect(find.byTooltip('My membership'), findsOneWidget);
   });
 }

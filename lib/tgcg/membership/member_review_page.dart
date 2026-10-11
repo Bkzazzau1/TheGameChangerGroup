@@ -50,9 +50,9 @@ class MemberReviewPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
-            child: TgcgPageHeader(
+          _ModuleHeader(
+            title: 'Member Review',
+            full: TgcgPageHeader(
               eyebrow: 'MEMBERSHIP',
               title: 'Member Review',
               subtitle:
@@ -219,21 +219,29 @@ class _MemberListState extends State<_MemberList> {
                       member.fullName,
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text(
-                      '${member.membershipNumber} · ${areaLabel(member.scope)}'
-                      '${member.roles.isEmpty ? '' : ' · ${member.roles.join(', ')}'}',
-                    ),
-                    trailing: Wrap(
-                      spacing: 6,
+                    // Pills under the details, so the text keeps the row's width on phones.
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        verificationPill(member.verificationStatus),
-                        if (member.membershipState != 'active')
-                          standingPill(member.membershipState),
+                        Text(
+                          '${member.membershipNumber} · ${areaLabel(member.scope)}'
+                          '${member.roles.isEmpty ? '' : ' · ${member.roles.join(', ')}'}',
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            verificationPill(member.verificationStatus),
+                            if (member.membershipState != 'active')
+                              standingPill(member.membershipState),
+                          ],
+                        ),
                       ],
                     ),
                     onTap: () async {
                       final changed = await widget.onOpen(member);
-                      if (changed == true) _reload();
+                      if (changed != false) _reload();
                     },
                   ),
                 ),
@@ -576,7 +584,7 @@ class _PollingUnitChangesTabState extends State<_PollingUnitChangesTab> {
                         context: context,
                         builder: (_) => PollingUnitChangeDialog(change: change),
                       );
-                      if (changed == true) _reload();
+                      if (changed != false) _reload();
                     },
                   ),
                 ),
@@ -852,5 +860,24 @@ class _StandingDialogState extends State<StandingDialog> {
         ),
       FilledButton(onPressed: () => Navigator.pop(context, _changed), child: const Text('Close')),
     ],
+  );
+}
+
+/// The page header on wide screens; a one-line title on phones, so the tabs
+/// and their content keep the room.
+class _ModuleHeader extends StatelessWidget {
+  const _ModuleHeader({required this.title, required this.full});
+
+  final String title;
+  final Widget full;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => constraints.maxWidth < 600
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          )
+        : Padding(padding: const EdgeInsets.fromLTRB(24, 24, 24, 8), child: full),
   );
 }
