@@ -132,17 +132,6 @@ class MembershipCardView extends StatelessWidget {
                         card.hasPvc ? 'PVC on record' : 'No PVC on record',
                         style: const TextStyle(color: Color(0xFFC9D3EC), fontSize: 11.5),
                       ),
-                      if (card.agentId != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Agent ${card.agentId}',
-                          style: const TextStyle(
-                            color: TgcgColors.accentBright,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
                       const SizedBox(height: 8),
                       const Text(
                         'TGCG staff scan the code to check this card.',

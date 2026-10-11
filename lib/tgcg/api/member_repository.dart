@@ -56,7 +56,6 @@ class MemberCard {
     this.status = '',
     this.pollingUnit,
     this.hasPhoto = false,
-    this.agentId,
   });
 
   final String membershipNumber;
@@ -77,12 +76,8 @@ class MemberCard {
   /// Signed value printed as the card's QR code; staff scan it to verify.
   final String qrToken;
 
-  /// Set when the member is an accredited polling-unit agent.
-  final String? agentId;
-
   factory MemberCard.fromJson(Map<String, dynamic> json) {
     final unit = json['polling_unit'];
-    final accreditation = json['active_accreditation'];
     return MemberCard(
       membershipNumber: json['membership_number'] as String,
       fullName: json['full_name'] as String,
@@ -97,7 +92,6 @@ class MemberCard {
       memberSince: DateTime.parse(json['member_since'] as String),
       hasPhoto: json['photo_url'] != null,
       qrToken: json['qr_token'] as String,
-      agentId: accreditation is Map<String, dynamic> ? accreditation['agent_id'] as String? : null,
     );
   }
 }
@@ -144,32 +138,45 @@ class MemberAnnouncement {
       );
 }
 
-/// An offer to serve as a polling-unit agent, and what became of it.
-class VolunteerApplication {
-  const VolunteerApplication({
+/// Kinds of party work a member can offer (matches the server's choices).
+/// Volunteering is not a route to becoming an agent: coordinators accredit
+/// agents separately.
+const volunteerInterests = {
+  'mobilisation': 'Mobilisation and door-to-door',
+  'campaign': 'Campaign events and rallies',
+  'logistics': 'Logistics and transport',
+  'publicity': 'Publicity and social media',
+  'electionDay': 'Election-day support',
+};
+
+/// A member's offer of party work, and what their coordinators said.
+class VolunteerOffer {
+  const VolunteerOffer({
     required this.id,
+    required this.interests,
     required this.status,
     required this.createdAt,
     this.message = '',
     this.decisionReason = '',
-    this.agentId,
   });
 
   final String id;
+  final List<String> interests;
 
   /// pending, accepted, declined or withdrawn.
   final String status;
   final String message;
   final String decisionReason;
-  final String? agentId;
   final DateTime createdAt;
 
-  factory VolunteerApplication.fromJson(Map<String, dynamic> json) => VolunteerApplication(
+  bool get isOpen => status == 'pending';
+
+  factory VolunteerOffer.fromJson(Map<String, dynamic> json) => VolunteerOffer(
         id: json['id'] as String,
+        interests: [...(json['interests'] as List<dynamic>? ?? const []).cast<String>()],
         status: json['status'] as String,
         message: (json['message'] as String?) ?? '',
         decisionReason: (json['decision_reason'] as String?) ?? '',
-        agentId: json['agent_id'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 }
@@ -302,13 +309,20 @@ class MemberRepository {
     return [for (final item in items) MemberAnnouncement.fromJson(item as Map<String, dynamic>)];
   }
 
-  Future<List<VolunteerApplication>> volunteering() async {
+  Future<List<VolunteerOffer>> volunteering() async {
     final body = await client.get('me/volunteer/') as List<dynamic>;
-    return [for (final item in body) VolunteerApplication.fromJson(item as Map<String, dynamic>)];
+    return [for (final item in body) VolunteerOffer.fromJson(item as Map<String, dynamic>)];
   }
 
-  Future<VolunteerApplication> volunteer({String message = ''}) async =>
-      VolunteerApplication.fromJson(
-        await client.post('me/volunteer/', body: {'message': message}) as Map<String, dynamic>,
+  /// Offers help with the given kinds of party work ([volunteerInterests] keys).
+  Future<VolunteerOffer> volunteer({required List<String> interests, String message = ''}) async =>
+      VolunteerOffer.fromJson(
+        await client.post('me/volunteer/', body: {'interests': interests, 'message': message})
+            as Map<String, dynamic>,
+      );
+
+  /// Takes back an offer the coordinators have not answered yet.
+  Future<VolunteerOffer> withdrawVolunteering(String id) async => VolunteerOffer.fromJson(
+        await client.post('me/volunteer/$id/withdraw/') as Map<String, dynamic>,
       );
 }

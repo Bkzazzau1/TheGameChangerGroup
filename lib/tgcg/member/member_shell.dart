@@ -27,7 +27,7 @@ class _MemberShellState extends State<MemberShell> {
   Future<(MemberCard, Uint8List?)>? _card;
   Future<MyPollingUnit>? _unit;
   Future<List<MemberAnnouncement>>? _news;
-  Future<List<VolunteerApplication>>? _volunteering;
+  Future<List<VolunteerOffer>>? _volunteering;
 
   @override
   void didChangeDependencies() {
@@ -87,9 +87,8 @@ class _MemberShellState extends State<MemberShell> {
           1 => _UnitTab(unit: _unit!, launch: widget.launch),
           2 => _NewsTab(news: _news!),
           _ => _VolunteerTab(
-              applications: _volunteering!,
-              card: _card!,
-              onApplied: () => setState(() {
+              offers: _volunteering!,
+              onChanged: () => setState(() {
                 _volunteering = _members.volunteering();
               }),
             ),
@@ -295,126 +294,204 @@ class _NewsTab extends StatelessWidget {
       );
 }
 
+/// Volunteering for party work. It is not a route to becoming an agent:
+/// coordinators accredit agents separately.
 class _VolunteerTab extends StatelessWidget {
-  const _VolunteerTab({required this.applications, required this.card, required this.onApplied});
-  final Future<List<VolunteerApplication>> applications;
-  final Future<(MemberCard, Uint8List?)> card;
-  final VoidCallback onApplied;
+  const _VolunteerTab({required this.offers, required this.onChanged});
+  final Future<List<VolunteerOffer>> offers;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) => _Loaded(
-        future: card,
-        builder: (data) => _Loaded(
-          future: applications,
-          builder: (items) => _build(context, data.$1, items),
-        ),
-      );
-
-  Widget _build(BuildContext context, MemberCard card, List<VolunteerApplication> items) {
-          final open = items.any((a) => a.status == 'pending' || a.status == 'accepted');
-          final canApply = !open && card.agentId == null && card.pollingUnit != null;
+        future: offers,
+        builder: (items) {
+          final open = items.where((offer) => offer.isOpen).firstOrNull;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               TgcgSectionCard(
-                title: 'Serve as a polling unit agent',
-                subtitle: 'Agents watch the vote at their own polling unit on election day '
-                    'and report results and incidents through the TGCG app.',
+                title: 'Volunteer for party work',
+                subtitle: 'Tell your coordinators how you can help. They will contact you.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (card.agentId != null)
-                      Text(
-                        'You are accredited as agent ${card.agentId}.',
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: TgcgColors.success),
-                      )
-                    else if (card.pollingUnit == null)
-                      const Text(
-                        'Your polling unit must be on record before you can volunteer.',
-                        style: TextStyle(color: TgcgColors.muted),
-                      )
-                    else if (open)
-                      const Text(
-                        'Your application is with your coordinators.',
-                        style: TextStyle(color: TgcgColors.muted),
-                      ),
-                    if (canApply)
+                    if (open == null)
                       FilledButton.icon(
-                        onPressed: () => _apply(context),
+                        onPressed: () => _offer(context),
                         icon: const Icon(Icons.volunteer_activism_rounded),
-                        label: const Text('Volunteer as an agent'),
+                        label: const Text('Offer to help'),
+                      )
+                    else
+                      const Text(
+                        'Your offer is with your coordinators. Withdraw it below to send a '
+                        'different one.',
+                        style: TextStyle(color: TgcgColors.muted),
                       ),
                   ],
                 ),
               ),
               for (final item in items) ...[
                 const SizedBox(height: 12),
-                _ApplicationTile(application: item),
+                _OfferTile(
+                  offer: item,
+                  onWithdraw: item.isOpen ? () => _withdraw(context, item) : null,
+                ),
               ],
             ],
           );
-  }
+        },
+      );
 
-  Future<void> _apply(BuildContext context) async {
+  Future<void> _offer(BuildContext context) async {
     final members = TgcgBackend.of(context)!.member;
     final messenger = ScaffoldMessenger.of(context);
-    final message = await showDialog<String>(
+    final offer = await showDialog<(List<String>, String)>(
       context: context,
-      builder: (_) => const _TextPrompt(
-        title: 'Volunteer as an agent',
-        label: 'Message to your coordinator (optional)',
-        hint: 'e.g. I am free all day and have a smartphone.',
-        action: 'Send',
-        maxLines: 3,
-        maxLength: 500,
-      ),
+      builder: (_) => const _OfferDialog(),
     );
-    if (message == null) return;
+    if (offer == null) return;
     try {
-      await members.volunteer(message: message);
-      messenger.showSnackBar(const SnackBar(content: Text('Thank you. Your coordinators will review it.')));
-      onApplied();
+      await members.volunteer(interests: offer.$1, message: offer.$2);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Thank you. Your coordinators will contact you.')),
+      );
+      onChanged();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.fieldError('interests') ?? error.message)));
+    }
+  }
+
+  Future<void> _withdraw(BuildContext context, VolunteerOffer offer) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await members.withdrawVolunteering(offer.id);
+      onChanged();
     } on ApiException catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 }
 
-class _ApplicationTile extends StatelessWidget {
-  const _ApplicationTile({required this.application});
-  final VolunteerApplication application;
+class _OfferTile extends StatelessWidget {
+  const _OfferTile({required this.offer, this.onWithdraw});
+  final VolunteerOffer offer;
+  final VoidCallback? onWithdraw;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (application.status) {
+    final (label, color) = switch (offer.status) {
       'pending' => ('WITH COORDINATORS', TgcgColors.warning),
       'accepted' => ('ACCEPTED', TgcgColors.success),
       'declined' => ('DECLINED', TgcgColors.danger),
       _ => ('WITHDRAWN', TgcgColors.muted),
     };
     return TgcgSectionCard(
-      title: 'Agent application',
-      subtitle: 'Sent ${_date(application.createdAt)}',
+      title: 'Your offer',
+      subtitle: 'Sent ${_date(offer.createdAt)}',
       trailing: TgcgStatusPill(label: label, color: color, compact: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (application.message.isNotEmpty) Text(application.message),
-          if (application.decisionReason.isNotEmpty) ...[
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final interest in offer.interests)
+                Chip(
+                  label: Text(volunteerInterests[interest] ?? interest),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          if (offer.message.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(offer.message),
+          ],
+          if (offer.decisionReason.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
-              application.decisionReason,
+              offer.decisionReason,
               style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
             ),
           ],
-          if (application.agentId != null) ...[
-            const SizedBox(height: 6),
-            Text('Agent ID: ${application.agentId}', style: const TextStyle(fontWeight: FontWeight.w800)),
-          ],
+          if (onWithdraw != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: onWithdraw, child: const Text('Withdraw')),
+            ),
         ],
       ),
     );
   }
+}
+
+/// Choose the kinds of party work to offer, with an optional message.
+class _OfferDialog extends StatefulWidget {
+  const _OfferDialog();
+
+  @override
+  State<_OfferDialog> createState() => _OfferDialogState();
+}
+
+class _OfferDialogState extends State<_OfferDialog> {
+  final _chosen = <String>{};
+  final _message = TextEditingController();
+
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('How can you help?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in volunteerInterests.entries)
+                    FilterChip(
+                      label: Text(entry.value),
+                      selected: _chosen.contains(entry.key),
+                      onSelected: (on) => setState(
+                        () => on ? _chosen.add(entry.key) : _chosen.remove(entry.key),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _message,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  labelText: 'Message to your coordinator (optional)',
+                  hintText: 'e.g. I have a car and am free on weekends.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: _chosen.isEmpty
+                ? null
+                : () => Navigator.pop(context, (
+                      [for (final key in volunteerInterests.keys) if (_chosen.contains(key)) key],
+                      _message.text.trim(),
+                    )),
+            child: const Text('Send'),
+          ),
+        ],
+      );
 }
 
 /// A dialog with one text field. Returns the trimmed text, or null if cancelled.
@@ -425,9 +502,6 @@ class _TextPrompt extends StatefulWidget {
     required this.label,
     required this.action,
     this.initial = '',
-    this.hint,
-    this.maxLines = 1,
-    this.maxLength,
     this.keyboardType,
   });
 
@@ -435,9 +509,6 @@ class _TextPrompt extends StatefulWidget {
   final String label;
   final String action;
   final String initial;
-  final String? hint;
-  final int maxLines;
-  final int? maxLength;
   final TextInputType? keyboardType;
 
   @override
@@ -459,10 +530,8 @@ class _TextPromptState extends State<_TextPrompt> {
         content: TextField(
           controller: _controller,
           autofocus: true,
-          maxLines: widget.maxLines,
-          maxLength: widget.maxLength,
           keyboardType: widget.keyboardType,
-          decoration: InputDecoration(labelText: widget.label, hintText: widget.hint),
+          decoration: InputDecoration(labelText: widget.label),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),

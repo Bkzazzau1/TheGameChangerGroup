@@ -49,7 +49,6 @@ Map<String, dynamic> _card() => {
       'member_since': '2026-10-11T08:00:00Z',
       'photo_url': null,
       'qr_token': 'TGCG-000123:signed-token',
-      'active_accreditation': null,
     };
 
 Map<String, dynamic> _session() => {'access': 'A', 'refresh': 'R', 'member': _card()};
@@ -293,7 +292,7 @@ void main() {
   });
 
   testWidgets('the member home shows the card, directions, news and volunteering', (tester) async {
-    var applications = <Map<String, dynamic>>[];
+    var offers = <Map<String, dynamic>>[];
     final server = _Server((request) => switch (_path(request)) {
           'me/member/' => _json(_card()),
           'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 12, 'members_in_ward': 140}),
@@ -310,19 +309,26 @@ void main() {
               ],
             }),
           'me/volunteer/' when request.method == 'POST' => () {
-              applications = [
+              final body = jsonDecode(request.body) as Map<String, dynamic>;
+              offers = [
                 {
                   'id': 'v1',
+                  'interests': body['interests'],
                   'status': 'pending',
-                  'message': jsonDecode(request.body)['message'],
+                  'message': body['message'],
                   'decision_reason': '',
-                  'agent_id': null,
                   'created_at': '2026-10-11T09:00:00Z',
                 },
               ];
-              return _json(applications.first, 201);
+              return _json(offers.first, 201);
             }(),
-          'me/volunteer/' => _json(applications),
+          'me/volunteer/' => _json(offers),
+          'me/volunteer/v1/withdraw/' => () {
+              offers = [
+                {...offers.first, 'status': 'withdrawn'},
+              ];
+              return _json(offers.first);
+            }(),
           _ => null,
         });
     final launched = <Uri>[];
@@ -358,17 +364,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ward meeting on Saturday'), findsOneWidget);
 
-    // Volunteer.
+    // Volunteering is for party work; nothing here is about becoming an agent.
     await tester.tap(find.text('Volunteer'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Volunteer as an agent'));
+    expect(find.textContaining('agent'), findsNothing);
+    await tester.tap(find.text('Offer to help'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'I am free all day.');
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Send')).onPressed, isNull);
+    await tester.tap(find.text('Mobilisation and door-to-door'));
+    await tester.tap(find.text('Election-day support'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Free on weekends.');
     await tester.tap(find.text('Send'));
     await tester.pumpAndSettle();
-    expect(jsonDecode(server.bodies['POST /api/v1/me/volunteer/']!), {'message': 'I am free all day.'});
+    expect(jsonDecode(server.bodies['POST /api/v1/me/volunteer/']!), {
+      'interests': ['mobilisation', 'electionDay'],
+      'message': 'Free on weekends.',
+    });
     expect(find.text('WITH COORDINATORS'), findsOneWidget);
-    expect(find.text('Volunteer as an agent'), findsNothing);
+    expect(find.text('Offer to help'), findsNothing);
+
+    // An unanswered offer can be withdrawn, and a new one sent.
+    await tester.tap(find.text('Withdraw'));
+    await tester.pumpAndSettle();
+    expect(server.bodies.containsKey('POST /api/v1/me/volunteer/v1/withdraw/'), isTrue);
+    expect(find.text('WITHDRAWN'), findsOneWidget);
+    expect(find.text('Offer to help'), findsOneWidget);
   });
 
   testWidgets('a member signing in on the server opens the member app', (tester) async {
