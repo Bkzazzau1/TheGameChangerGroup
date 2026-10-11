@@ -10,6 +10,8 @@ const nigeriaStatesAsset = 'assets/geo/nigeria_states.json';
 
 String nigeriaLgaAsset(String stateId) => 'assets/geo/lga/$stateId.json';
 
+String nigeriaWardAsset(String lgaCode) => 'assets/geo/ward/$lgaCode.json';
+
 /// One boundary (state or LGA) in geographic space. Offsets are (lng, lat).
 class GeoShape {
   const GeoShape({
@@ -86,14 +88,24 @@ class GeoShapeSet {
 
   static GeoShapeSet parse(String source, String key) {
     final json = jsonDecode(source) as Map<String, dynamic>;
-    final raw = json[key] as Map<String, dynamic>;
+    return fromJsonMap(
+      json[key] as Map<String, dynamic>,
+      attribution: json['attribution'] as String? ?? '',
+    )!;
+  }
+
+  /// Builds a set from `{id: {"name", "label", "rings"}}`. Entries without
+  /// `rings` (no published boundary) are skipped; returns null if none remain.
+  static GeoShapeSet? fromJsonMap(Map<String, dynamic> raw, {String attribution = ''}) {
     final shapes = <String, GeoShape>{};
     Rect? all;
     for (final entry in raw.entries) {
       final item = entry.value as Map<String, dynamic>;
+      final flatRings = item['rings'] as List<dynamic>?;
+      if (flatRings == null || flatRings.isEmpty) continue;
       final rings = <List<Offset>>[];
       Rect? shapeBounds;
-      for (final flat in item['rings'] as List<dynamic>) {
+      for (final flat in flatRings) {
         final values = (flat as List<dynamic>).cast<num>();
         final ring = <Offset>[
           for (var i = 0; i + 1 < values.length; i += 2)
@@ -113,11 +125,8 @@ class GeoShapeSet {
       );
       all = all?.expandToInclude(shapeBounds) ?? shapeBounds;
     }
-    return GeoShapeSet(
-      shapes: shapes,
-      bounds: all!,
-      attribution: json['attribution'] as String? ?? '',
-    );
+    if (all == null) return null;
+    return GeoShapeSet(shapes: shapes, bounds: all, attribution: attribution);
   }
 
   /// Id of the shape containing the point, or null.

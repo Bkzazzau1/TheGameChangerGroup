@@ -35,3 +35,4 @@ flutter:
     - assets/brand/
     - assets/geo/
     - assets/geo/lga/
+    - assets/geo/ward/

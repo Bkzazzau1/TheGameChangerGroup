@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../domain/models.dart';
 import '../ui/tgcg_design.dart';
 import 'geography_registry.dart';
+import 'lga_ward_map_dialog.dart';
 import 'nigeria_map.dart';
 
 /// Opens a state's LGA map in a large dialog.
@@ -526,6 +527,12 @@ class _LgaDetail extends StatelessWidget {
             _Fact(label: 'State', value: lga.stateName),
             _Fact(label: 'Geopolitical zone', value: lga.zoneName),
             _Fact(label: 'LGA code', value: lga.id),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: () => showLgaWardMap(context, lga: lga),
+              icon: const Icon(Icons.grid_view_rounded, size: 18),
+              label: const Text('Wards & polling units'),
+            ),
             const SizedBox(height: 12),
             Text(
               'OPEN INCIDENTS (${incidents.length})',
