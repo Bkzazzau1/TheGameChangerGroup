@@ -14,6 +14,7 @@ enum TgcgModule {
   roleAssignment,
   geography,
   unitMapping,
+  agentTracking,
   liveOperations,
   aiVerification,
   aiAnalytics,
@@ -254,6 +255,8 @@ Set<TgcgModule> allowedModules(TgcgRole role) {
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom)) {
     modules.add(TgcgModule.situationRoom);
+    // Live agent positions and check-in coverage (server tracking/live and coverage).
+    modules.add(TgcgModule.agentTracking);
   }
   if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom) &&
       TgcgPermissionPolicy.allows(role, TgcgCapability.assignIncident)) {

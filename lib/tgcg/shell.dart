@@ -27,6 +27,7 @@ import 'results/result_capture_page.dart';
 import 'security/security_response_portal_page.dart';
 import 'session.dart';
 import 'mapping/unit_mapping_page.dart';
+import 'tracking/agents_on_ground_page.dart';
 import 'ui/tgcg_design.dart';
 
 class TgcgShell extends StatefulWidget {
@@ -163,6 +164,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.reports => const ReportsPage(),
         TgcgModule.governance => const GovernancePage(),
         TgcgModule.unitMapping => const UnitMappingPage(),
+        TgcgModule.agentTracking => const AgentsOnGroundPage(),
       };
 }
 
@@ -183,6 +185,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
   _Destination(TgcgModule.membershipNetwork, 'Registered Members', Icons.groups_2_outlined, _NavGroup.command),
   _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
+  _Destination(TgcgModule.agentTracking, 'Agents on the Ground', Icons.share_location_rounded, _NavGroup.command),
   _Destination(TgcgModule.securityResponse, 'Security Response', Icons.emergency_share_outlined, _NavGroup.command),
   _Destination(TgcgModule.mediaIntelligence, 'Media Intelligence', Icons.insights_outlined, _NavGroup.command),
   _Destination(TgcgModule.geography, 'Geographic Operations', Icons.public_rounded, _NavGroup.command),
@@ -563,4 +566,5 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.reports => 'Reports & Exports',
       TgcgModule.governance => 'Data & Governance',
       TgcgModule.unitMapping => 'Polling Unit Mapping',
+      TgcgModule.agentTracking => 'Agents on the Ground',
     };

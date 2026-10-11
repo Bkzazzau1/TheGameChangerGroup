@@ -6,6 +6,7 @@ import 'auth_repository.dart';
 import 'mapping_repository.dart';
 import 'member_repository.dart';
 import 'reference_repository.dart';
+import 'tracking_repository.dart';
 
 /// Everything that talks to the TGCG server.
 class BackendServices {
@@ -13,7 +14,8 @@ class BackendServices {
       : auth = AuthRepository(client),
         reference = ReferenceRepository(client),
         mapping = MappingRepository(client),
-        member = MemberRepository(client);
+        member = MemberRepository(client),
+        tracking = TrackingRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -35,6 +37,9 @@ class BackendServices {
 
   /// Member registration and the member app.
   final MemberRepository member;
+
+  /// Live agent positions and check-in coverage.
+  final TrackingRepository tracking;
 }
 
 /// Makes [BackendServices] available below it. `services` is null in
