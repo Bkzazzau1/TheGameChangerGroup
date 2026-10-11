@@ -427,4 +427,112 @@ void main() {
     expect(find.text('TGCG Member'), findsOneWidget);
     expect(find.text('TGCG-000123'), findsOneWidget);
   });
+
+  testWidgets('a member asks to move polling unit with their updated card', (tester) async {
+    var changes = <Map<String, dynamic>>[];
+    final server = _Server((request) => switch (_path(request)) {
+          'me/member/' => _json(_card()),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 12, 'members_in_ward': 140}),
+          'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
+          'me/volunteer/' => _json(<Object>[]),
+          'me/polling-unit/changes/' when request.method == 'POST' => () {
+              changes = [
+                {
+                  'id': 'c1',
+                  'member': 'TGCG-000123',
+                  'member_name': 'Musa Bello',
+                  'from_polling_unit': '18-23-01-014',
+                  'to_polling_unit': '18-23-01-020',
+                  'to_polling_unit_name': 'KOFAR DOKA',
+                  'status': 'pending',
+                  'reason': '',
+                  'decided_by': null,
+                  'decided_at': null,
+                  'decision_reason': '',
+                  'created_at': '2026-10-11T09:00:00Z',
+                },
+              ];
+              return _json(changes.first, 201);
+            }(),
+          'me/polling-unit/changes/' => _json(changes),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      MemberShell(
+        launch: (_) async => true,
+        scanPvc: ({required bool camera}) async => PvcScan(
+          photo: (bytes: _pixel, name: 'card.png'),
+          delim: '18/23/01/020',
+        ),
+      ),
+      member: true,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My unit'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Ask to change my polling unit'), 200);
+    await tester.tap(find.text('Ask to change my polling unit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scan card'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '18/23/01/020'), findsOneWidget);
+    await tester.tap(find.text('Send'));
+    await tester.pumpAndSettle();
+
+    final sent = server.bodies['POST /api/v1/me/polling-unit/changes/']!;
+    expect(sent, contains('name="delim"'));
+    expect(sent, contains('18/23/01/020'));
+    expect(sent, contains('name="pvc_image"'));
+    expect(find.textContaining('Waiting for review: move to 18-23-01-020'), findsOneWidget);
+  });
+
+  testWidgets('a member holding appointments signs in to the operations app', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _Server((request) => switch (_path(request)) {
+          'auth/login/' => _json({
+              'access': 'A',
+              'refresh': 'R',
+              'user': {
+                'access_id': 'TGCG-000123',
+                'full_name': 'Musa Bello',
+                'role': 'member',
+                'scope': {'level': 'pollingUnit', 'country': 'Nigeria', 'pollingUnitId': '18-23-01-014'},
+                'capabilities': ['sendBroadcast', 'viewCommunications'],
+                'membership_number': 'TGCG-000123',
+                'access': [
+                  {
+                    'source': 'assignment',
+                    'assignment': 'a1',
+                    'role': 'kaduna-media-director',
+                    'role_name': 'Kaduna Media Director',
+                    'protected': false,
+                    'areas': [
+                      {'level': 'state', 'country': 'Nigeria', 'stateId': 'KD', 'stateName': 'Kaduna'},
+                    ],
+                    'permissions': ['sendBroadcast', 'viewCommunications'],
+                  },
+                ],
+              },
+            }),
+          _ => null,
+        });
+    await tester.pumpWidget(TgcgApp(backend: server.connect()));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), '0803 123 4567');
+    await tester.enterText(find.byType(TextField).at(1), '482915');
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+
+    // The operations app, with what the appointment allows and nothing else.
+    expect(find.text('TGCG Member'), findsNothing);
+    expect(find.text('Bulk Communications'), findsWidgets);
+    expect(find.text('Roles & Access'), findsNothing);
+    expect(find.text('Your access'), findsOneWidget);
+    expect(find.text('Kaduna Media Director'), findsWidgets);
+  });
 }

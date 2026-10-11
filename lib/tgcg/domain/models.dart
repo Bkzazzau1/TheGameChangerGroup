@@ -1,5 +1,7 @@
 library;
 
+import 'permissions.dart';
+
 enum GeographyLevel {
   country,
   geopoliticalZone,
@@ -10,7 +12,9 @@ enum GeographyLevel {
   pollingUnit,
 }
 
-enum TgcgRole {
+/// The former fixed roles. In presentation mode a role is also the actor,
+/// allowed what the built-in matrix gives it.
+enum TgcgRole implements TgcgActor {
   nationalAdministrator,
   nationalCollationOfficer,
   situationRoomDirector,
@@ -22,7 +26,13 @@ enum TgcgRole {
   observer,
   legalOfficer,
   technicalSupport,
-  readOnlyExecutive,
+  readOnlyExecutive;
+
+  @override
+  bool can(TgcgCapability capability) => TgcgPermissionPolicy.allows(this, capability);
+
+  @override
+  TgcgRole get legacyRole => this;
 }
 
 enum RecordStatus {

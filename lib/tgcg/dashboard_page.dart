@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'access/access_widgets.dart';
+import 'api/access_repository.dart';
 import 'collation/collation_engine.dart';
 import 'field/field_operations_store.dart';
 import 'membership/membership_store.dart';
 import 'results/result_operations_store.dart';
 import 'session.dart';
+import 'shell.dart' show openMyAccess;
 import 'ui/tgcg_design.dart';
 
 class TgcgDashboardPage extends StatelessWidget {
@@ -18,7 +21,7 @@ class TgcgDashboardPage extends StatelessWidget {
     final field = FieldOperations.of(context);
     final results = ResultOperations.of(context);
     final membership = MembershipOperations.of(context);
-    final modules = allowedModules(session.role!);
+    final modules = session.modules;
     final scope = session.scope;
 
     final incidents = field.incidentsForScope(scope);
@@ -93,7 +96,7 @@ class TgcgDashboardPage extends StatelessWidget {
                   : 'AUTHORIZED OPERATIONAL SCOPE',
               title: 'Operations Command',
               subtitle:
-                  '${roleLabel(session.role!)} • ${scope.label}. Membership, field operations, incidents, agents and verified-result activity in one command view.',
+                  '${session.roleTitle} • ${scope.label}. Membership, field operations, incidents, agents and verified-result activity in one command view.',
               trailing: compact
                   ? null
                   : const TgcgStatusPill(
@@ -103,6 +106,10 @@ class TgcgDashboardPage extends StatelessWidget {
                     ),
             ),
             const SizedBox(height: 20),
+            if (session.isServerSession && session.grants.isNotEmpty) ...[
+              _AccessSummary(grants: session.grants),
+              const SizedBox(height: 16),
+            ],
             _MetricGrid(
               openIncidents: openIncidents.length,
               highPriority: highPriority,
@@ -932,4 +939,70 @@ String _label(String value) {
   return spaced.isEmpty
       ? spaced
       : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
+}
+
+
+/// Every appointment the signed-in user holds, each with its own areas: the
+/// modules above are what they allow together.
+class _AccessSummary extends StatelessWidget {
+  const _AccessSummary({required this.grants});
+
+  final List<AccessGrant> grants;
+
+  @override
+  Widget build(BuildContext context) => TgcgSectionCard(
+        title: 'Your access',
+        subtitle: 'What you can open comes from these appointments together; each keeps to its '
+            'own areas.',
+        trailing: TextButton(
+          onPressed: () => openMyAccess(context),
+          child: const Text('Details'),
+        ),
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final grant in grants)
+              Container(
+                constraints: const BoxConstraints(maxWidth: 360),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: TgcgColors.surfaceSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: TgcgColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      grant.protected
+                          ? Icons.admin_panel_settings_rounded
+                          : grant.source == 'delegation'
+                              ? Icons.call_split_rounded
+                              : Icons.badge_outlined,
+                      color: TgcgColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            grant.roleName,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          Text(
+                            grant.areas.map(areaLabel).join('; '),
+                            style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
 }

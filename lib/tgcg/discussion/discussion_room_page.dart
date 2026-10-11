@@ -154,14 +154,8 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final canPost = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.createDiscussionThread,
-    );
-    final canComment = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.postDiscussionReply,
-    );
+    final canPost = session.can(TgcgCapability.createDiscussionThread);
+    final canComment = session.can(TgcgCapability.postDiscussionReply);
 
     final visible = selectedFeed == 'All'
         ? posts
@@ -199,7 +193,7 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
                   _PostComposer(
                     controller: postController,
                     operatorName: session.operatorName,
-                    role: roleLabel(session.role!),
+                    role: session.roleTitle,
                     onPost: () => _publishPost(session),
                   ),
                   const SizedBox(height: 14),
@@ -264,7 +258,7 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
       final post = _SocialPost(
         id: 'POST-${1000 + posts.length + 1}',
         author: session.operatorName,
-        role: roleLabel(session.role!),
+        role: session.roleTitle,
         scope: session.scope.label,
         body: text,
         time: _timeNow(),
@@ -285,7 +279,7 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
       post.comments.add(
         _SocialComment(
           author: session.operatorName,
-          role: roleLabel(session.role!),
+          role: session.roleTitle,
           body: text,
           time: _timeNow(),
         ),
@@ -751,7 +745,7 @@ class _ProfileCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    roleLabel(session.role!),
+                    session.roleTitle,
                     style: const TextStyle(color: TgcgColors.muted, fontSize: 10),
                   ),
                   const SizedBox(height: 4),

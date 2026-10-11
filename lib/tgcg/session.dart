@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'api/access_repository.dart' show AccessGrant;
 import 'domain/models.dart';
 import 'domain/permissions.dart';
 
@@ -33,6 +34,7 @@ enum TgcgModule {
   systemMonitoring,
   reports,
   governance,
+  memberReview,
 }
 
 class TgcgSessionController extends ChangeNotifier {
@@ -46,14 +48,22 @@ class TgcgSessionController extends ChangeNotifier {
   String _accessId = '';
   GeographicScope _scope = GeographicScope.nigeria;
   Set<String> _serverCapabilities = const {};
+  List<AccessGrant> _grants = const [];
+  String? _membershipNumber;
   bool _serverSession = false;
+  bool _operator = false;
   bool _member = false;
 
+  /// The former fixed role, if the account has one. Accounts whose access
+  /// comes from appointments have none.
   TgcgRole? get role => _role;
   String get operatorName => _operatorName;
   String get accessId => _accessId;
   GeographicScope get scope => _scope;
-  bool get isAuthenticated => _role != null || _member;
+  bool get isAuthenticated => _operator || _member;
+
+  /// Signed in to the operations app (a fixed role, or appointments).
+  bool get isOperator => _operator;
 
   /// Signed in to the member app. Members have no operations role.
   bool get isMember => _member;
@@ -64,32 +74,83 @@ class TgcgSessionController extends ChangeNotifier {
   /// Capabilities granted by the server for this account.
   Set<String> get serverCapabilities => _serverCapabilities;
 
+  /// Where the server says this account's access comes from: each
+  /// appointment, delegation or legacy role, with its own areas.
+  List<AccessGrant> get grants => _grants;
+
+  /// The member behind this account, when there is one.
+  String? get membershipNumber => _membershipNumber;
+
+  /// Who is acting: the server's grants in a server session, the role's
+  /// built-in permissions in presentation mode.
+  TgcgActor get actor => _serverSession
+      ? TgcgServerActor(_serverCapabilities, legacyRole: _role)
+      : _role ?? const TgcgServerActor({});
+
+  /// Whether to offer [capability]. The server still checks every request,
+  /// area by area; this only decides what the app shows.
+  bool can(TgcgCapability capability) => isAuthenticated && actor.can(capability);
+
+  bool canAny(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
+
+  /// The modules this session may open.
+  Set<TgcgModule> get modules => _operator ? allowedModulesFor(can) : const {};
+
+  /// The fixed role's name, or the appointments the access comes from.
+  String get roleTitle {
+    final role = _role;
+    if (role != null) return roleLabel(role);
+    final names = <String>{
+      for (final grant in _grants)
+        if (grant.roleName.isNotEmpty) grant.roleName,
+    };
+    if (names.isEmpty) return 'Member';
+    if (names.length == 1) return names.first;
+    return '${names.first} and ${names.length - 1} more';
+  }
+
   /// Sign in with the account the server returned. The server decides the
-  /// role and operational scope.
+  /// role (if any), the permissions and the operational scope.
   void signInFromServer({
-    required TgcgRole role,
+    TgcgRole? role,
     required String fullName,
     required String accessId,
     required GeographicScope scope,
     required Set<String> capabilities,
+    List<AccessGrant> grants = const [],
+    String? membershipNumber,
   }) {
     _role = role;
     _operatorName = fullName;
     _accessId = accessId;
     _scope = scope;
     _serverCapabilities = Set.unmodifiable(capabilities);
+    _grants = List.unmodifiable(grants);
+    _membershipNumber = membershipNumber;
     _serverSession = true;
+    _operator = true;
+    _member = false;
+    notifyListeners();
+  }
+
+  /// Take in what the server grants now (after an appointment changed).
+  void updateAccess({required Set<String> capabilities, required List<AccessGrant> grants}) {
+    _serverCapabilities = Set.unmodifiable(capabilities);
+    _grants = List.unmodifiable(grants);
     notifyListeners();
   }
 
   /// Sign a member in to the member app (server accounts only).
   void signInMember({required String fullName, required String membershipNumber}) {
     _member = true;
+    _operator = false;
     _role = null;
     _operatorName = fullName;
     _accessId = membershipNumber;
+    _membershipNumber = membershipNumber;
     _scope = GeographicScope.nigeria;
     _serverCapabilities = const {};
+    _grants = const [];
     _serverSession = true;
     notifyListeners();
   }
@@ -101,6 +162,7 @@ class TgcgSessionController extends ChangeNotifier {
     GeographicScope scope = GeographicScope.nigeria,
   }) {
     _role = role;
+    _operator = true;
     _operatorName =
         operatorName.trim().isEmpty ? roleLabel(role) : operatorName.trim();
     _accessId = accessId.trim();
@@ -126,6 +188,9 @@ class TgcgSessionController extends ChangeNotifier {
     if (_serverSession) unawaited(onSignOut?.call());
     _serverSession = false;
     _serverCapabilities = const {};
+    _grants = const [];
+    _membershipNumber = null;
+    _operator = false;
     _member = false;
     _role = null;
     _operatorName = '';
@@ -214,93 +279,118 @@ IconData roleIcon(TgcgRole role) => switch (role) {
       TgcgRole.readOnlyExecutive => Icons.dashboard_customize_rounded,
     };
 
-Set<TgcgModule> allowedModules(TgcgRole role) {
+/// The modules a fixed role opens in presentation mode.
+Set<TgcgModule> allowedModules(TgcgRole role) => allowedModulesFor(role.can);
+
+/// The modules whoever holds the capabilities [can] allows may open.
+Set<TgcgModule> allowedModulesFor(bool Function(TgcgCapability capability) can) {
+  bool any(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
   final modules = <TgcgModule>{TgcgModule.overview};
 
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.manageMembership) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.accreditAgents) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.manageAgentAssignments)) {
+  if (any(const [
+    TgcgCapability.manageMembership,
+    TgcgCapability.accreditAgents,
+    TgcgCapability.manageAgentAssignments,
+  ])) {
     modules.add(TgcgModule.accreditation);
   }
-  if (role == TgcgRole.nationalAdministrator) {
+  if (can(TgcgCapability.manageMembership)) {
     modules.add(TgcgModule.membershipNetwork);
+  }
+  if (any(const [
+    TgcgCapability.viewRoles,
+    TgcgCapability.manageRoles,
+    TgcgCapability.assignRoles,
+    TgcgCapability.manageAssignments,
+    TgcgCapability.delegateAuthority,
+  ])) {
     modules.add(TgcgModule.roleAssignment);
   }
-  // Polling-unit mapping: coordinators who pin units (confirmAgentLocation on
-  // the server) and the administrator.
-  if (const {
-    TgcgRole.nationalAdministrator,
-    TgcgRole.zonalCoordinator,
-    TgcgRole.stateCoordinator,
-    TgcgRole.lgaCoordinator,
-    TgcgRole.wardCoordinator,
-  }.contains(role)) {
+  if (any(const [
+    TgcgCapability.verifyMemberIdentity,
+    TgcgCapability.reviewPollingUnitChanges,
+    TgcgCapability.suspendMembers,
+  ])) {
+    modules.add(TgcgModule.memberReview);
+  }
+  // Polling-unit mapping: whoever pins units and confirms agents' locations.
+  if (can(TgcgCapability.confirmAgentLocation)) {
     modules.add(TgcgModule.unitMapping);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewGeography)) {
+  if (can(TgcgCapability.viewGeography)) {
     modules.add(TgcgModule.geography);
-    if (role != TgcgRole.pollingUnitAgent && role != TgcgRole.observer) {
+    // Operational views; agents and observers (who see no incidents) go without.
+    if (can(TgcgCapability.viewIncidents)) {
       modules.add(TgcgModule.liveOperations);
       modules.add(TgcgModule.aiAnalytics);
       modules.add(TgcgModule.alertCenter);
     }
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewIncidents) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.createIncident) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.submitFieldReport)) {
+  if (any(const [
+    TgcgCapability.viewIncidents,
+    TgcgCapability.createIncident,
+    TgcgCapability.submitFieldReport,
+  ])) {
     modules.add(TgcgModule.fieldMonitoring);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewEvidence)) {
+  if (can(TgcgCapability.viewEvidence)) {
     modules.add(TgcgModule.evidenceCapture);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom)) {
+  if (can(TgcgCapability.viewSituationRoom)) {
     modules.add(TgcgModule.situationRoom);
     // Live agent positions and check-in coverage (server tracking/live and coverage).
     modules.add(TgcgModule.agentTracking);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom) &&
-      TgcgPermissionPolicy.allows(role, TgcgCapability.assignIncident)) {
+  if (can(TgcgCapability.viewSituationRoom) && can(TgcgCapability.assignIncident)) {
     modules.add(TgcgModule.securityResponse);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.submitElectionResult) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.verifyElectionResult) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.disputeElectionResult)) {
+  if (any(const [
+    TgcgCapability.submitElectionResult,
+    TgcgCapability.verifyElectionResult,
+    TgcgCapability.disputeElectionResult,
+  ])) {
     modules.add(TgcgModule.resultCapture);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.verifyElectionResult) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.manageMembership) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.manageEvidence)) {
+  if (any(const [
+    TgcgCapability.verifyElectionResult,
+    TgcgCapability.manageMembership,
+    TgcgCapability.manageEvidence,
+  ])) {
     modules.add(TgcgModule.aiVerification);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewCollation)) {
+  if (can(TgcgCapability.viewCollation)) {
     modules.add(TgcgModule.collation);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewMediaIntelligence)) {
+  if (can(TgcgCapability.viewMediaIntelligence)) {
     modules.add(TgcgModule.mediaIntelligence);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewCommunications)) {
+  if (can(TgcgCapability.viewCommunications)) {
     modules.add(TgcgModule.communications);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.sendBroadcast)) {
+  if (can(TgcgCapability.sendBroadcast)) {
     modules.add(TgcgModule.bulkCommunications);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewDiscussionRoom)) {
+  if (can(TgcgCapability.viewDiscussionRoom)) {
     modules.add(TgcgModule.discussionRoom);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewMeetingRoom)) {
+  if (can(TgcgCapability.viewMeetingRoom)) {
     modules.add(TgcgModule.meetingRoom);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewAudit) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.manageSystemSettings) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.viewSituationRoom)) {
+  if (any(const [
+    TgcgCapability.viewAudit,
+    TgcgCapability.manageSystemSettings,
+    TgcgCapability.viewSituationRoom,
+  ])) {
     modules.add(TgcgModule.systemMonitoring);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.exportReports)) {
+  if (can(TgcgCapability.exportReports)) {
     modules.add(TgcgModule.reports);
   }
-  if (TgcgPermissionPolicy.allows(role, TgcgCapability.viewAudit) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.manageUsers) ||
-      TgcgPermissionPolicy.allows(role, TgcgCapability.manageSystemSettings)) {
+  if (any(const [
+    TgcgCapability.viewAudit,
+    TgcgCapability.manageUsers,
+    TgcgCapability.manageSystemSettings,
+  ])) {
     modules.add(TgcgModule.governance);
   }
 

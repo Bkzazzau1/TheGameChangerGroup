@@ -62,7 +62,7 @@ class _SecurityResponsePortalPageState extends State<SecurityResponsePortalPage>
     }
 
     final canAssign = TgcgPermissionPolicy.may(
-      session.role!,
+      session.actor,
       session.scope,
       TgcgCapability.assignIncident,
     );

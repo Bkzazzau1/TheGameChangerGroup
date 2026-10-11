@@ -42,10 +42,7 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
     }
 
     final review = store.reviewQueueForScope(session.scope);
-    final canSubmit = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.submitElectionResult,
-    );
+    final canSubmit = session.can(TgcgCapability.submitElectionResult);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
@@ -1252,14 +1249,8 @@ class _ReviewQueue extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final canVerify = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.verifyElectionResult,
-    );
-    final canDispute = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.disputeElectionResult,
-    );
+    final canVerify = session.can(TgcgCapability.verifyElectionResult);
+    final canDispute = session.can(TgcgCapability.disputeElectionResult);
 
     return TgcgSectionCard(
       title: 'Human review queue',
@@ -1390,7 +1381,7 @@ class _ReviewTileState extends State<_ReviewTile> {
       final ok = await ResultOperations.of(context, listen: false).verify(
         submissionId: widget.item.id,
         verifierId: session.accessId.isEmpty ? session.operatorName : session.accessId,
-        role: session.role!,
+        role: session.actor,
         userScope: session.scope,
       );
       if (!mounted) return;
@@ -1436,7 +1427,7 @@ class _ReviewTileState extends State<_ReviewTile> {
         submissionId: widget.item.id,
         reviewerId: session.accessId.isEmpty ? session.operatorName : session.accessId,
         reason: reason,
-        role: session.role!,
+        role: session.actor,
         userScope: session.scope,
       );
       if (!mounted) return;

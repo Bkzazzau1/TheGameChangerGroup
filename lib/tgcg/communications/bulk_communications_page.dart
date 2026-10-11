@@ -38,14 +38,8 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
     final store = BulkCommunications.of(context);
     final contacts = store.contactsForScope(session.scope);
     final jobs = store.jobsForScope(session.scope);
-    final canSend = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.sendBroadcast,
-    );
-    final canManagePreferences = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.manageMembership,
-    );
+    final canSend = session.can(TgcgCapability.sendBroadcast);
+    final canManagePreferences = session.can(TgcgCapability.manageMembership);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
@@ -172,7 +166,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
       targetScope: session.scope,
       channels: selectedChannels,
       actorId: session.accessId.isEmpty ? session.operatorName : session.accessId,
-      actorRole: session.role!,
+      actorRole: session.actor,
       actorScope: session.scope,
       scheduledFor: scheduledFor,
     );
@@ -326,7 +320,7 @@ class _BulkCommunicationsPageState extends State<BulkCommunicationsPage> {
     final ok = await store.recordPreference(
       memberId: contact.memberId,
       actorId: session.accessId.isEmpty ? session.operatorName : session.accessId,
-      actorRole: session.role!,
+      actorRole: session.actor,
       actorScope: session.scope,
       source: sourceController.text,
       smsOptIn: sms,

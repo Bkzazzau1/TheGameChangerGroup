@@ -1,0 +1,321 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:tgcg_emcop/tgcg/access/access_page.dart';
+import 'package:tgcg_emcop/tgcg/access/my_access_page.dart';
+import 'package:tgcg_emcop/tgcg/api/access_repository.dart';
+import 'package:tgcg_emcop/tgcg/api/api_client.dart';
+import 'package:tgcg_emcop/tgcg/api/backend.dart';
+import 'package:tgcg_emcop/tgcg/domain/permissions.dart';
+import 'package:tgcg_emcop/tgcg/membership/member_review_page.dart';
+import 'package:tgcg_emcop/tgcg/session.dart';
+
+http.Response _json(Object body, [int status = 200]) =>
+    http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+
+String _path(http.Request request) => request.url.path.replaceFirst('/api/v1/', '');
+
+/// A fake TGCG server that records the body of every request by method and path.
+class _Server {
+  _Server(this.respond);
+  final http.Response? Function(http.Request request) respond;
+  final bodies = <String, String>{};
+
+  BackendServices connect() => BackendServices.connect(
+        'https://api.tgcg.test',
+        tokens: MemoryTokenStore(),
+        httpClient: MockClient((request) async {
+          bodies['${request.method} ${_path(request)}'] = request.body;
+          return respond(request) ?? _json({'detail': 'Not found.'}, 404);
+        }),
+      );
+}
+
+const _kaduna = {'level': 'state', 'country': 'Nigeria', 'stateId': 'KD', 'stateName': 'Kaduna'};
+
+final _permissions = [
+  {'code': 'sendBroadcast', 'module': 'communications', 'action': 'publish', 'label': 'Publish announcements and broadcasts', 'protected': false, 'sensitive': false},
+  {'code': 'viewRoles', 'module': 'roleManagement', 'action': 'view', 'label': 'View roles and appointments', 'protected': false, 'sensitive': false},
+];
+
+Map<String, dynamic> _appointment({String state = 'active', String? acceptedAt}) => {
+      'id': 'a1',
+      'member': 'TGCG-000200',
+      'member_name': 'Ada Obi',
+      'role': 'kaduna-media-officer',
+      'role_name': 'Kaduna Media Officer',
+      'supervising_role': null,
+      'areas': [_kaduna],
+      'restricted_permissions': null,
+      'permissions': ['sendBroadcast'],
+      'starts_at': '2026-10-11T08:00:00Z',
+      'ends_at': null,
+      'state': state,
+      'status': state == 'scheduled' ? 'active' : state,
+      'status_reason': '',
+      'status_changed_at': null,
+      'accepted_at': acceptedAt,
+      'granted_by': 'NA-1',
+      'authority': 'nationalAdministrator',
+      'created_at': '2026-10-11T08:00:00Z',
+    };
+
+Future<TgcgSessionController> _pump(
+  WidgetTester tester,
+  BackendServices backend,
+  Widget page,
+  void Function(TgcgSessionController session) signIn,
+) async {
+  tester.view.physicalSize = const Size(1200, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final session = TgcgSessionController();
+  signIn(session);
+  addTearDown(session.dispose);
+  await tester.pumpWidget(
+    TgcgBackend(
+      services: backend,
+      child: TgcgSession(
+        controller: session,
+        child: MaterialApp(home: Scaffold(body: page)),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return session;
+}
+
+void main() {
+  group('server-driven access', () {
+    test('a server session can do exactly what the server granted', () {
+      final session = TgcgSessionController()
+        ..signInFromServer(
+          role: TgcgRole.stateCoordinator,
+          fullName: 'Kaduna Coordinator',
+          accessId: 'SC-KD',
+          scope: GeographicScope.nigeria,
+          capabilities: {'viewSituationRoom'},
+        );
+      // The built-in matrix would allow accreditation; the server did not.
+      expect(TgcgPermissionPolicy.allows(TgcgRole.stateCoordinator, TgcgCapability.accreditAgents),
+          isTrue);
+      expect(session.can(TgcgCapability.accreditAgents), isFalse);
+      expect(session.can(TgcgCapability.viewSituationRoom), isTrue);
+      expect(session.modules, contains(TgcgModule.situationRoom));
+      expect(session.modules, isNot(contains(TgcgModule.accreditation)));
+    });
+
+    test('a member with appointments gets the modules their appointments allow', () {
+      final session = TgcgSessionController()
+        ..signInFromServer(
+          fullName: 'Ada Obi',
+          accessId: 'TGCG-000200',
+          scope: GeographicScope.nigeria,
+          capabilities: {'sendBroadcast', 'viewRoles', 'verifyMemberIdentity'},
+          grants: [
+            AccessGrant.fromJson({
+              'source': 'assignment',
+              'assignment': 'a1',
+              'role': 'kaduna-media-director',
+              'role_name': 'Kaduna Media Director',
+              'areas': [_kaduna],
+              'permissions': ['sendBroadcast', 'viewRoles', 'verifyMemberIdentity'],
+            }),
+          ],
+          membershipNumber: 'TGCG-000200',
+        );
+      expect(session.role, isNull);
+      expect(session.isOperator, isTrue);
+      expect(session.roleTitle, 'Kaduna Media Director');
+      expect(
+        session.modules,
+        containsAll([
+          TgcgModule.overview,
+          TgcgModule.bulkCommunications,
+          TgcgModule.roleAssignment,
+          TgcgModule.memberReview,
+        ]),
+      );
+      expect(session.modules, isNot(contains(TgcgModule.governance)));
+      expect(session.modules, isNot(contains(TgcgModule.collation)));
+    });
+
+    test('signing out forgets the grants', () {
+      final session = TgcgSessionController()
+        ..signInFromServer(
+          fullName: 'Ada Obi',
+          accessId: 'TGCG-000200',
+          scope: GeographicScope.nigeria,
+          capabilities: {'sendBroadcast'},
+          membershipNumber: 'TGCG-000200',
+        )
+        ..signOut();
+      expect(session.can(TgcgCapability.sendBroadcast), isFalse);
+      expect(session.grants, isEmpty);
+      expect(session.membershipNumber, isNull);
+    });
+  });
+
+  testWidgets('a manager suspends an appointment with a reason', (tester) async {
+    var appointment = _appointment();
+    final server = _Server((request) => switch (_path(request)) {
+          'access/permissions/' => _json(_permissions),
+          'access/roles/' => _json({'count': 0, 'next': null, 'results': <Object>[]}),
+          'access/assignments/' => _json({'count': 1, 'next': null, 'results': [appointment]}),
+          'access/assignments/a1/history/' => _json(<Object>[]),
+          'access/assignments/a1/suspend/' => () {
+              appointment = {...appointment, 'state': 'suspended', 'status': 'suspended'};
+              return _json(appointment);
+            }(),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      const AccessControlPage(),
+      (session) => session.signInFromServer(
+        fullName: 'State Lead',
+        accessId: 'TGCG-000100',
+        scope: GeographicScope.nigeria,
+        capabilities: {'viewRoles', 'manageAssignments'},
+        membershipNumber: 'TGCG-000100',
+      ),
+    );
+
+    expect(find.text('Roles & Access'), findsOneWidget);
+    expect(find.text('New role'), findsNothing); // no manageRoles
+    await tester.tap(find.text('Appointments'));
+    await tester.pumpAndSettle();
+    expect(find.text('Appoint a member'), findsNothing); // no assignRoles
+    await tester.tap(find.text('Ada Obi · Kaduna Media Officer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Publish announcements and broadcasts'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Suspend'));
+    await tester.pumpAndSettle();
+    final confirm = find.widgetWithText(FilledButton, 'Suspend');
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull); // a reason is required
+    await tester.enterText(find.byType(TextField).last, 'Absent on election day');
+    await tester.pump();
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    expect(jsonDecode(server.bodies['POST access/assignments/a1/suspend/']!), {
+      'reason': 'Absent on election day',
+    });
+    expect(find.text('Suspended'), findsWidgets);
+    expect(find.widgetWithText(TextButton, 'Reactivate'), findsOneWidget);
+  });
+
+  testWidgets('a member accepts an appointment of their own', (tester) async {
+    var mine = _appointment(state: 'scheduled');
+    final server = _Server((request) => switch (_path(request)) {
+          'me/assignments/' => _json([mine]),
+          'me/assignments/a1/accept/' => () {
+              mine = {...mine, 'accepted_at': '2026-10-11T09:00:00Z'};
+              return _json(mine);
+            }(),
+          'auth/me/' => _json({
+              'access_id': 'TGCG-000200',
+              'full_name': 'Ada Obi',
+              'role': 'member',
+              'scope': {'level': 'country', 'country': 'Nigeria'},
+              'capabilities': <String>[],
+              'access': <Object>[],
+              'membership_number': 'TGCG-000200',
+            }),
+          _ => null,
+        });
+    final session = await _pump(
+      tester,
+      server.connect(),
+      const MyAccessPage(),
+      (session) => session.signInMember(fullName: 'Ada Obi', membershipNumber: 'TGCG-000200'),
+    );
+
+    expect(find.text('Kaduna Media Officer'), findsOneWidget);
+    expect(find.text('Scheduled'), findsOneWidget);
+    await tester.tap(find.text('Accept'));
+    await tester.pumpAndSettle();
+
+    expect(server.bodies.containsKey('POST me/assignments/a1/accept/'), isTrue);
+    expect(find.text('Accept'), findsNothing);
+    expect(find.text('Resign'), findsOneWidget);
+    // Not active yet, so the member stays in the member app.
+    expect(session.isMember, isTrue);
+  });
+
+  testWidgets('a reviewer confirms an identity after seeing what was not checked', (tester) async {
+    var status = 'pendingReview';
+    Map<String, dynamic> verification() => {
+          'membership_number': 'TGCG-000300',
+          'verification_status': status,
+          'verified_at': null,
+          'reviewed_by': status == 'verified' ? 'TGCG-000100' : null,
+          'checks': [
+            {'kind': 'pvcCaptured', 'result': 'passed', 'detail': 'VIN and polling unit code read from the card.', 'checked_at': null, 'checked_by': null},
+            {'kind': 'pvcValidated', 'result': 'unsupported', 'detail': 'No authoritative INEC source is connected.', 'checked_at': null, 'checked_by': null},
+            {'kind': 'liveness', 'result': 'unsupported', 'detail': 'Liveness detection is not available.', 'checked_at': null, 'checked_by': null},
+          ],
+        };
+    final server = _Server((request) => switch (_path(request)) {
+          'members/' => _json({
+              'count': 1,
+              'next': null,
+              'results': [
+                {
+                  'membership_number': 'TGCG-000300',
+                  'full_name': 'Bala Musa',
+                  'verification_status': status,
+                  'membership_state': 'active',
+                  'scope': _kaduna,
+                  'phone_number': null,
+                  'sensitive_visible': false,
+                  'roles': <Object>[],
+                },
+              ],
+            }),
+          'members/TGCG-000300/verification/' => _json(verification()),
+          'members/TGCG-000300/verification/approve/' => () {
+              status = 'verified';
+              return _json(verification());
+            }(),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      const MemberReviewPage(),
+      (session) => session.signInFromServer(
+        fullName: 'Kaduna Reviewer',
+        accessId: 'TGCG-000100',
+        scope: GeographicScope.nigeria,
+        capabilities: {'verifyMemberIdentity'},
+        membershipNumber: 'TGCG-000100',
+      ),
+    );
+
+    expect(find.text('Identity review'), findsOneWidget);
+    expect(find.text('Polling unit changes'), findsNothing);
+    await tester.tap(find.text('Bala Musa'));
+    await tester.pumpAndSettle();
+    expect(find.text('PVC confirmed with INEC'), findsOneWidget);
+    expect(find.text('No authoritative INEC source is connected.'), findsOneWidget);
+    expect(find.byIcon(Icons.help_outline_rounded), findsNWidgets(2)); // not available
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm identity'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Compared the PVC with Bala in person.');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm identity').last);
+    await tester.pumpAndSettle();
+
+    expect(jsonDecode(server.bodies['POST members/TGCG-000300/verification/approve/']!), {
+      'notes': 'Compared the PVC with Bala in person.',
+    });
+    expect(find.text('Verified'), findsWidgets);
+  });
+}

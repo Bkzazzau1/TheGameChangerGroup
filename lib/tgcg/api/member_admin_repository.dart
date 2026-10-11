@@ -1,0 +1,333 @@
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+
+import '../domain/models.dart';
+import 'access_repository.dart';
+import 'api_client.dart';
+import 'auth_repository.dart';
+
+DateTime? _date(Object? value) => value == null ? null : DateTime.tryParse('$value')?.toLocal();
+
+/// A member as staff see them (`/members/`). Personal details are null unless
+/// the server allows this account to see them for the member's area.
+class StaffMember {
+  const StaffMember({
+    required this.membershipNumber,
+    required this.fullName,
+    required this.verificationStatus,
+    required this.membershipState,
+    required this.scope,
+    this.phoneNumber,
+    this.email,
+    this.vin,
+    this.photoUrl,
+    this.sensitiveVisible = false,
+    this.hasPvc = false,
+    this.roles = const [],
+    this.createdAt,
+  });
+
+  final String membershipNumber;
+  final String fullName;
+
+  /// unverified, pendingReview, verified or rejected.
+  final String verificationStatus;
+
+  /// active, suspended or deactivated.
+  final String membershipState;
+  final GeographicScope scope;
+  final String? phoneNumber;
+  final String? email;
+
+  /// Masked: only the last four characters.
+  final String? vin;
+  final String? photoUrl;
+
+  /// False when the server withheld personal details.
+  final bool sensitiveVisible;
+  final bool hasPvc;
+
+  /// Current appointments: role names.
+  final List<String> roles;
+  final DateTime? createdAt;
+
+  bool get isVerified => verificationStatus == 'verified';
+
+  factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
+    membershipNumber: json['membership_number'] as String,
+    fullName: json['full_name'] as String,
+    verificationStatus: json['verification_status'] as String? ?? 'unverified',
+    membershipState: json['membership_state'] as String? ?? 'active',
+    scope: json['scope'] is Map<String, dynamic>
+        ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
+        : GeographicScope.nigeria,
+    phoneNumber: json['phone_number'] as String?,
+    email: json['email'] as String?,
+    vin: json['vin'] as String?,
+    photoUrl: json['photo_url'] as String?,
+    sensitiveVisible: json['sensitive_visible'] as bool? ?? false,
+    hasPvc: json['has_pvc'] as bool? ?? false,
+    roles: [
+      for (final role in (json['roles'] as List<dynamic>? ?? const []))
+        ((role as Map<String, dynamic>)['role_name'] as String?) ?? '',
+    ],
+    createdAt: _date(json['created_at']),
+  );
+}
+
+String verificationLabel(String status) => switch (status) {
+  'verified' => 'Verified',
+  'pendingReview' => 'Awaiting review',
+  'rejected' => 'Rejected',
+  _ => 'Not verified',
+};
+
+String membershipStateLabel(String state) => switch (state) {
+  'suspended' => 'Suspended',
+  'deactivated' => 'Deactivated',
+  _ => 'Active',
+};
+
+/// One identity check and what it found.
+class VerificationCheckResult {
+  const VerificationCheckResult({
+    required this.kind,
+    required this.result,
+    required this.detail,
+    this.checkedAt,
+    this.checkedBy,
+  });
+
+  final String kind;
+
+  /// passed, failed, pending or unsupported.
+  final String result;
+  final String detail;
+  final DateTime? checkedAt;
+  final String? checkedBy;
+
+  factory VerificationCheckResult.fromJson(Map<String, dynamic> json) => VerificationCheckResult(
+    kind: json['kind'] as String,
+    result: json['result'] as String,
+    detail: json['detail'] as String? ?? '',
+    checkedAt: _date(json['checked_at']),
+    checkedBy: json['checked_by'] as String?,
+  );
+}
+
+String checkLabel(String kind) => switch (kind) {
+  'pvcCaptured' => 'PVC details captured',
+  'pvcValidated' => 'PVC confirmed with INEC',
+  'duplicates' => 'No duplicate registration',
+  'phoneVerified' => 'Phone confirmed by SMS',
+  'selfieCaptured' => 'Selfie captured',
+  'liveness' => 'Liveness detection',
+  'faceMatch' => 'Face matches a trusted photo',
+  _ => kind,
+};
+
+/// The identity decision and every check behind it.
+class MemberVerification {
+  const MemberVerification({
+    required this.membershipNumber,
+    required this.status,
+    required this.checks,
+    this.verifiedAt,
+    this.reviewedBy,
+  });
+
+  final String membershipNumber;
+  final String status;
+  final List<VerificationCheckResult> checks;
+  final DateTime? verifiedAt;
+  final String? reviewedBy;
+
+  bool get hasFailedCheck => checks.any((check) => check.result == 'failed');
+
+  factory MemberVerification.fromJson(Map<String, dynamic> json) => MemberVerification(
+    membershipNumber: json['membership_number'] as String,
+    status: json['verification_status'] as String,
+    checks: [
+      for (final check in (json['checks'] as List<dynamic>? ?? const []))
+        VerificationCheckResult.fromJson(check as Map<String, dynamic>),
+    ],
+    verifiedAt: _date(json['verified_at']),
+    reviewedBy: json['reviewed_by'] as String?,
+  );
+}
+
+/// A member's request to move their registered polling unit.
+class PollingUnitChange {
+  const PollingUnitChange({
+    required this.id,
+    required this.member,
+    required this.memberName,
+    required this.toPollingUnit,
+    required this.toPollingUnitName,
+    required this.status,
+    required this.createdAt,
+    this.fromPollingUnit,
+    this.reason = '',
+    this.decidedBy,
+    this.decidedAt,
+    this.decisionReason = '',
+  });
+
+  final String id;
+  final String member;
+  final String memberName;
+  final String? fromPollingUnit;
+  final String toPollingUnit;
+  final String toPollingUnitName;
+
+  /// pending, approved, rejected or withdrawn.
+  final String status;
+  final String reason;
+  final String? decidedBy;
+  final DateTime? decidedAt;
+  final String decisionReason;
+  final DateTime createdAt;
+
+  bool get isPending => status == 'pending';
+
+  factory PollingUnitChange.fromJson(Map<String, dynamic> json) => PollingUnitChange(
+    id: json['id'] as String,
+    member: json['member'] as String,
+    memberName: json['member_name'] as String? ?? '',
+    fromPollingUnit: json['from_polling_unit'] as String?,
+    toPollingUnit: json['to_polling_unit'] as String,
+    toPollingUnitName: json['to_polling_unit_name'] as String? ?? '',
+    status: json['status'] as String,
+    reason: json['reason'] as String? ?? '',
+    decidedBy: json['decided_by'] as String?,
+    decidedAt: _date(json['decided_at']),
+    decisionReason: json['decision_reason'] as String? ?? '',
+    createdAt: _date(json['created_at']) ?? DateTime.now(),
+  );
+}
+
+/// Staff work on members: finding them, identity review, standing and
+/// polling unit changes. The server enforces every area and permission.
+class MemberAdminRepository {
+  MemberAdminRepository(this.client);
+
+  final ApiClient client;
+
+  Future<ApiPage<StaffMember>> members({
+    String search = '',
+    String? verificationStatus,
+    String? membershipState,
+    String? phone,
+    int page = 1,
+  }) async => ApiPage.fromJson(
+    await client.get(
+      'members/',
+      query: {
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+        if (verificationStatus != null) 'verification_status': verificationStatus,
+        if (membershipState != null) 'membership_state': membershipState,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        'page': '$page',
+      },
+    ),
+    StaffMember.fromJson,
+  );
+
+  Future<StaffMember> member(String number) async =>
+      StaffMember.fromJson(await client.get('members/$number/') as Map<String, dynamic>);
+
+  Future<MemberVerification> verification(String number) async => MemberVerification.fromJson(
+    await client.get('members/$number/verification/') as Map<String, dynamic>,
+  );
+
+  Future<MemberVerification> runChecks(String number) async => MemberVerification.fromJson(
+    await client.post('members/$number/verification/check/') as Map<String, dynamic>,
+  );
+
+  Future<MemberVerification> approveIdentity(String number, String notes) async =>
+      MemberVerification.fromJson(
+        await client.post('members/$number/verification/approve/', body: {'notes': notes.trim()})
+            as Map<String, dynamic>,
+      );
+
+  Future<MemberVerification> rejectIdentity(String number, String reason) async =>
+      MemberVerification.fromJson(
+        await client.post('members/$number/verification/reject/', body: {'reason': reason.trim()})
+            as Map<String, dynamic>,
+      );
+
+  Future<StaffMember> _standing(String number, String action, String reason) async =>
+      StaffMember.fromJson(
+        await client.post('members/$number/$action/', body: {'reason': reason.trim()})
+            as Map<String, dynamic>,
+      );
+
+  Future<StaffMember> suspend(String number, String reason) => _standing(number, 'suspend', reason);
+
+  Future<StaffMember> deactivate(String number, String reason) =>
+      _standing(number, 'deactivate', reason);
+
+  Future<StaffMember> restore(String number, {String reason = ''}) =>
+      _standing(number, 'restore', reason);
+
+  Future<List<AuditEntry>> history(String number) async => [
+    for (final item in await client.get('members/$number/history/') as List<dynamic>)
+      AuditEntry.fromJson(item as Map<String, dynamic>),
+  ];
+
+  Future<Uint8List> photo(String number) => client.getBytes('members/$number/photo/');
+
+  Future<ApiPage<PollingUnitChange>> pollingUnitChanges({String? status, int page = 1}) async =>
+      ApiPage.fromJson(
+        await client.get(
+          'polling-unit-changes/',
+          query: {if (status != null) 'status': status, 'page': '$page'},
+        ),
+        PollingUnitChange.fromJson,
+      );
+
+  Future<PollingUnitChange> approvePollingUnitChange(String id, {String reason = ''}) async =>
+      PollingUnitChange.fromJson(
+        await client.post('polling-unit-changes/$id/approve/', body: {'reason': reason.trim()})
+            as Map<String, dynamic>,
+      );
+
+  Future<PollingUnitChange> rejectPollingUnitChange(String id, String reason) async =>
+      PollingUnitChange.fromJson(
+        await client.post('polling-unit-changes/$id/reject/', body: {'reason': reason.trim()})
+            as Map<String, dynamic>,
+      );
+
+  /// The photo of the updated voter card behind a change request.
+  Future<Uint8List> pollingUnitChangeCard(String id) =>
+      client.getBytes('polling-unit-changes/$id/card/');
+}
+
+/// The member's own polling unit change requests.
+extension MemberPollingUnitChanges on ApiClient {
+  Future<List<PollingUnitChange>> myPollingUnitChanges() async => [
+    for (final item in await get('me/polling-unit/changes/') as List<dynamic>)
+      PollingUnitChange.fromJson(item as Map<String, dynamic>),
+  ];
+
+  Future<PollingUnitChange> requestPollingUnitChange({
+    required String delim,
+    required Uint8List cardImage,
+    String reason = '',
+  }) async => PollingUnitChange.fromJson(
+    await postMultipart(
+          'me/polling-unit/changes/',
+          fields: {'delim': delim.trim(), 'reason': reason.trim()},
+          files: () async => [
+            http.MultipartFile.fromBytes('pvc_image', cardImage, filename: 'voter-card.jpg'),
+          ],
+        )
+        as Map<String, dynamic>,
+  );
+
+  Future<PollingUnitChange> withdrawPollingUnitChange(String id) async =>
+      PollingUnitChange.fromJson(
+        await post('me/polling-unit/changes/$id/withdraw/') as Map<String, dynamic>,
+      );
+}

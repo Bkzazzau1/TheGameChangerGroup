@@ -29,20 +29,9 @@ class _GovernancePageState extends State<GovernancePage> {
     final membership = MembershipOperations.of(context);
     final results = ResultOperations.of(context);
     final field = FieldOperations.of(context);
-    final role = session.role!;
-
-    final canManage = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.manageSystemSettings,
-    );
-    final canAudit = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.viewAudit,
-    );
-    final canEvidence = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.viewEvidence,
-    );
+    final canManage = session.can(TgcgCapability.manageSystemSettings);
+    final canAudit = session.can(TgcgCapability.viewAudit);
+    final canEvidence = session.can(TgcgCapability.viewEvidence);
 
     final agents = membership.agentsForScope(session.scope);
     final submissions = results.submissionsForScope(session.scope);

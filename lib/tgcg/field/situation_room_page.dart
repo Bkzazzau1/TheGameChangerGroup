@@ -128,7 +128,7 @@ class _SituationRoomPageState extends State<SituationRoomPage> {
             );
             final inspector = _IncidentInspector(
               incident: selected,
-              role: session.role!,
+              role: session.actor,
             );
 
             // The map takes the full width; queue and inspector sit below it.
@@ -768,7 +768,7 @@ class _IncidentInspector extends StatelessWidget {
   const _IncidentInspector({required this.incident, required this.role});
 
   final FieldIncident? incident;
-  final TgcgRole role;
+  final TgcgActor role;
 
   @override
   Widget build(BuildContext context) {
@@ -786,18 +786,9 @@ class _IncidentInspector extends StatelessWidget {
     }
 
     final color = _severityColor(item.severity);
-    final canAcknowledge = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.acknowledgeIncident,
-    );
-    final canAssign = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.assignIncident,
-    );
-    final canClose = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.closeIncident,
-    );
+    final canAcknowledge = role.can(TgcgCapability.acknowledgeIncident);
+    final canAssign = role.can(TgcgCapability.assignIncident);
+    final canClose = role.can(TgcgCapability.closeIncident);
 
     return TgcgSectionCard(
       title: 'Incident inspector',

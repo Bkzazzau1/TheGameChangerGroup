@@ -56,26 +56,28 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         identifier: identifier,
         password: passwordController.text,
       );
-      final role = user.role;
       if (!mounted) return;
-      if (user.isMember) {
+      if (user.usesMemberApp) {
         TgcgSession.of(context, listen: false).signInMember(
           fullName: user.fullName,
           membershipNumber: user.accessId,
         );
         return;
       }
-      if (role == null) {
+      if (user.role == null && user.capabilities.isEmpty) {
         await services.auth.logout();
         setState(() => serverError = 'This account type cannot use the operations app.');
         return;
       }
+      // A fixed role, or a member's appointments: the server says what it may do.
       TgcgSession.of(context, listen: false).signInFromServer(
-        role: role,
+        role: user.role,
         fullName: user.fullName,
         accessId: user.accessId,
         scope: user.scope,
         capabilities: user.capabilities,
+        grants: user.access,
+        membershipNumber: user.membershipNumber ?? (user.isMember ? user.accessId : null),
       );
     } on ApiException catch (error) {
       if (!mounted) return;

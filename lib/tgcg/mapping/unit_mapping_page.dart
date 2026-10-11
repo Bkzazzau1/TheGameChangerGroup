@@ -48,7 +48,9 @@ class _UnitMappingPageState extends State<UnitMappingPage> {
     );
   }
 
-  void _reload() => setState(() => _loading = _load());
+  void _reload() => setState(() {
+        _loading = _load();
+      });
 
   Future<void> _open(MappingUnit unit) async {
     final changed = await Navigator.of(context).push<bool>(

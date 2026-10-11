@@ -92,7 +92,7 @@ class _FieldAgentCommunicationsPageState
       roomId: room.id,
       senderId: session.accessId.isEmpty ? session.operatorName : session.accessId,
       body: text,
-      role: session.role!,
+      role: session.actor,
       userScope: session.scope,
     );
     if (!ok) {

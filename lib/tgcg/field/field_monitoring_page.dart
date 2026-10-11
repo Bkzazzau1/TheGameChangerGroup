@@ -25,27 +25,11 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
     final store = FieldOperations.of(context);
     var incidents = store.incidentsForScope(session.scope);
     final reports = store.reportsForScope(session.scope);
-    final permissions = session.role!;
-    final canCreateIncident = TgcgPermissionPolicy.allows(
-      permissions,
-      TgcgCapability.createIncident,
-    );
-    final canSubmitFieldReport = TgcgPermissionPolicy.allows(
-      permissions,
-      TgcgCapability.submitFieldReport,
-    );
-    final canAcknowledge = TgcgPermissionPolicy.allows(
-      permissions,
-      TgcgCapability.acknowledgeIncident,
-    );
-    final canAssign = TgcgPermissionPolicy.allows(
-      permissions,
-      TgcgCapability.assignIncident,
-    );
-    final canClose = TgcgPermissionPolicy.allows(
-      permissions,
-      TgcgCapability.closeIncident,
-    );
+    final canCreateIncident = session.can(TgcgCapability.createIncident);
+    final canSubmitFieldReport = session.can(TgcgCapability.submitFieldReport);
+    final canAcknowledge = session.can(TgcgCapability.acknowledgeIncident);
+    final canAssign = session.can(TgcgCapability.assignIncident);
+    final canClose = session.can(TgcgCapability.closeIncident);
 
     if (statusFilter != null) {
       incidents = incidents

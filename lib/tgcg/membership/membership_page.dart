@@ -23,15 +23,8 @@ class _MembershipPageState extends State<MembershipPage> {
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     final store = MembershipOperations.of(context);
-    final role = session.role!;
-    final canCreateMember = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.manageMembership,
-    );
-    final canAccredit = TgcgPermissionPolicy.allows(
-      role,
-      TgcgCapability.accreditAgents,
-    );
+    final canCreateMember = session.can(TgcgCapability.manageMembership);
+    final canAccredit = session.can(TgcgCapability.accreditAgents);
 
     final memberNeedle = memberQuery.trim().toLowerCase();
     final members = store.members

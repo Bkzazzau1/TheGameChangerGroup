@@ -28,7 +28,8 @@ class PvcScan {
 typedef ScanPvc = Future<PvcScan?> Function({required bool camera});
 typedef TakeSelfie = Future<PhotoBytes?> Function();
 
-Future<PvcScan?> _scanWithDevice({required bool camera}) async {
+/// Scans a PVC with the device camera or gallery and reads it.
+Future<PvcScan?> scanPvcWithDevice({required bool camera}) async {
   final service = PvcRecognitionService();
   final result = camera ? await service.captureAndRecognize() : await service.pickAndRecognize();
   if (result == null) return null;
@@ -69,7 +70,7 @@ enum _Step { pvc, details, phone, selfie, pin }
 class MemberRegistrationPage extends StatefulWidget {
   const MemberRegistrationPage({
     super.key,
-    this.scanPvc = _scanWithDevice,
+    this.scanPvc = scanPvcWithDevice,
     this.takeSelfie = _selfieWithDevice,
   });
 

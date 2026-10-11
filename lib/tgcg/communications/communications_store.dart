@@ -305,17 +305,17 @@ class CommunicationsController extends ChangeNotifier {
     required String roomId,
     required String senderId,
     required String body,
-    required TgcgRole role,
+    required TgcgActor role,
     required GeographicScope userScope,
   }) {
     final roomIndex = _rooms.indexWhere((room) => room.id == roomId);
     if (roomIndex < 0 || body.trim().isEmpty) return false;
     final room = _rooms[roomIndex];
-    if (!TgcgPermissionPolicy.allows(role, TgcgCapability.sendOperationalMessage)) {
+    if (!role.can(TgcgCapability.sendOperationalMessage)) {
       return false;
     }
 
-    if (role == TgcgRole.pollingUnitAgent) {
+    if (role.legacyRole == TgcgRole.pollingUnitAgent) {
       if (!_isLocalFieldRoom(userScope, room)) return false;
     } else if (!_overlaps(userScope, room.scope)) {
       return false;
@@ -347,11 +347,11 @@ class CommunicationsController extends ChangeNotifier {
     required String body,
     required GeographicScope targetScope,
     required String senderId,
-    required TgcgRole role,
+    required TgcgActor role,
     required GeographicScope userScope,
   }) {
     if (title.trim().isEmpty || body.trim().isEmpty) return false;
-    if (!TgcgPermissionPolicy.allows(role, TgcgCapability.sendBroadcast)) {
+    if (!role.can(TgcgCapability.sendBroadcast)) {
       return false;
     }
     if (!_within(userScope, targetScope)) return false;

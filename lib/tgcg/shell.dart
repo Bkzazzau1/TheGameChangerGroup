@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'access/access_page.dart';
+import 'access/my_access_page.dart';
 import 'ai/ai_verification_page.dart';
+import 'api/backend.dart';
 import 'alerts/alert_center_page.dart';
 import 'analytics/ai_data_analytics_page.dart';
 import 'collation/collation_page.dart';
@@ -16,6 +19,7 @@ import 'governance/governance_page.dart';
 import 'governance/role_assignment_page.dart';
 import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
+import 'membership/member_review_page.dart';
 import 'membership/national_membership_page.dart';
 import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
@@ -53,7 +57,7 @@ class _TgcgShellState extends State<TgcgShell> {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final allowed = allowedModules(session.role!);
+    final allowed = session.modules;
     if (!allowed.contains(selectedModule)) {
       selectedModule = TgcgModule.overview;
     }
@@ -143,7 +147,11 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
         TgcgModule.accreditation => const PvcEnrollmentPage(),
         TgcgModule.membershipNetwork => const NationalMembershipPage(),
-        TgcgModule.roleAssignment => const RoleAssignmentPage(),
+        // Server accounts manage real roles; presentation mode keeps the demo.
+        TgcgModule.roleAssignment => TgcgBackend.of(context) != null
+            ? const AccessControlPage()
+            : const RoleAssignmentPage(),
+        TgcgModule.memberReview => const MemberReviewPage(),
         TgcgModule.geography => const GeographyPage(),
         TgcgModule.liveOperations => const LiveOperationsPage(),
         TgcgModule.aiVerification => const AiVerificationPage(),
@@ -200,7 +208,8 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.bulkCommunications, 'Bulk Communications', Icons.send_to_mobile_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.discussionRoom, 'Discussion Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
-  _Destination(TgcgModule.roleAssignment, 'Role Assignment', Icons.manage_accounts_outlined, _NavGroup.control),
+  _Destination(TgcgModule.roleAssignment, 'Roles & Access', Icons.manage_accounts_outlined, _NavGroup.control),
+  _Destination(TgcgModule.memberReview, 'Member Review', Icons.verified_user_outlined, _NavGroup.control),
   _Destination(TgcgModule.systemMonitoring, 'System Monitoring', Icons.monitor_heart_outlined, _NavGroup.control),
   _Destination(TgcgModule.reports, 'Reports & Exports', Icons.description_outlined, _NavGroup.control),
   _Destination(TgcgModule.governance, 'Data & Governance', Icons.shield_outlined, _NavGroup.control),
@@ -356,7 +365,7 @@ class _OperatorCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        roleLabel(session.role!),
+                        session.roleTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Color(0xFFA4AAB9), fontSize: 9.5),
@@ -364,6 +373,13 @@ class _OperatorCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (session.isServerSession)
+                  IconButton(
+                    tooltip: 'My access',
+                    onPressed: () => openMyAccess(context),
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.badge_outlined, color: Color(0xFFA4AAB9), size: 18),
+                  ),
                 IconButton(
                   tooltip: 'Sign out',
                   onPressed: session.signOut,
@@ -466,12 +482,16 @@ class _CommandBar extends StatelessWidget {
           ],
           const SizedBox(width: 4),
           Tooltip(
-            message: '${roleLabel(session.role!)} • ${session.scope.label}',
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(color: TgcgColors.primarySoft, borderRadius: BorderRadius.circular(11)),
-              child: const Icon(Icons.person_outline_rounded, color: TgcgColors.primary, size: 19),
+            message: '${session.roleTitle} • ${session.scope.label}',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(11),
+              onTap: session.isServerSession ? () => openMyAccess(context) : null,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: TgcgColors.primarySoft, borderRadius: BorderRadius.circular(11)),
+                child: const Icon(Icons.person_outline_rounded, color: TgcgColors.primary, size: 19),
+              ),
             ),
           ),
         ],
@@ -545,7 +565,8 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.overview => 'Command Overview',
       TgcgModule.accreditation => 'Member Enrolment',
       TgcgModule.membershipNetwork => 'Registered Members',
-      TgcgModule.roleAssignment => 'Role Assignment',
+      TgcgModule.roleAssignment => 'Roles & Access',
+      TgcgModule.memberReview => 'Member Review',
       TgcgModule.geography => 'Geographic Operations',
       TgcgModule.liveOperations => 'Live Operations',
       TgcgModule.aiVerification => 'AI Verification Centre',
@@ -568,3 +589,15 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.unitMapping => 'Polling Unit Mapping',
       TgcgModule.agentTracking => 'Agents on the Ground',
     };
+
+
+/// Where the signed-in user's access comes from, and their own appointments.
+void openMyAccess(BuildContext context) => Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          backgroundColor: TgcgColors.canvas,
+          appBar: AppBar(title: const Text('My access')),
+          body: const MyAccessPage(showHeader: false),
+        ),
+      ),
+    );

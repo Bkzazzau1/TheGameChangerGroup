@@ -197,7 +197,9 @@ class _ServerResultFormState extends State<ServerResultForm> {
                     ? error.message
                     : 'Elections could not be loaded.',
                 action: TextButton(
-                  onPressed: () => setState(() => _loading = _load()),
+                  onPressed: () => setState(() {
+                    _loading = _load();
+                  }),
                   child: const Text('Try again'),
                 ),
               );

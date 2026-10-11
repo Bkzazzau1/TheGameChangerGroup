@@ -110,7 +110,7 @@ class ReportOperationsController extends ChangeNotifier {
 
   List<ReportExportJob> jobsForScope(
     GeographicScope scope, {
-    TgcgRole? role,
+    TgcgActor? role,
   }) {
     final jobs = _jobs.where((job) {
       if (!GeographyRegistry.scopeContains(scope, job.scope)) return false;
@@ -128,7 +128,7 @@ class ReportOperationsController extends ChangeNotifier {
 
   bool canExportKind({
     required ReportKind kind,
-    required TgcgRole role,
+    required TgcgActor role,
     required GeographicScope userScope,
     required GeographicScope targetScope,
   }) {
@@ -143,7 +143,7 @@ class ReportOperationsController extends ChangeNotifier {
     if (!GeographyRegistry.scopeContains(userScope, targetScope)) return false;
 
     bool allows(TgcgCapability capability) =>
-        TgcgPermissionPolicy.allows(role, capability);
+        role.can(capability);
 
     return switch (kind) {
       ReportKind.incidentSummary => allows(TgcgCapability.viewIncidents),
@@ -166,7 +166,7 @@ class ReportOperationsController extends ChangeNotifier {
     required ExportFormat format,
     required GeographicScope targetScope,
     required String actorId,
-    required TgcgRole role,
+    required TgcgActor role,
     required GeographicScope userScope,
     int? recordCount,
   }) {

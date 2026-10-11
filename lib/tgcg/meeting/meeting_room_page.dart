@@ -119,14 +119,8 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    final canStart = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.startMeeting,
-    );
-    final canJoin = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.joinMeeting,
-    );
+    final canStart = session.can(TgcgCapability.startMeeting);
+    final canJoin = session.can(TgcgCapability.joinMeeting);
 
     if (activeMeeting != null) {
       return _LiveMeetingStage(
@@ -297,7 +291,7 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
       kind: kind,
       status: _MeetingStatus.live,
       participants: [
-        _Participant(name: session.operatorName, role: roleLabel(session.role!)),
+        _Participant(name: session.operatorName, role: session.roleTitle),
         const _Participant(name: 'National Operations Desk', role: 'Operations'),
         if (kind == _MeetingKind.conference)
           const _Participant(name: 'Technical Support', role: 'Support Desk'),
@@ -326,7 +320,7 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
       kind: video ? _MeetingKind.video : _MeetingKind.audio,
       status: _MeetingStatus.live,
       participants: [
-        _Participant(name: session.operatorName, role: roleLabel(session.role!)),
+        _Participant(name: session.operatorName, role: session.roleTitle),
         person,
       ],
     );
@@ -449,7 +443,7 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
             participants: [
               _Participant(
                 name: session.operatorName,
-                role: roleLabel(session.role!),
+                role: session.roleTitle,
               ),
             ],
           ),

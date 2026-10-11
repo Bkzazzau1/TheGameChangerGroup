@@ -291,7 +291,7 @@ class BulkCommunicationsController extends ChangeNotifier {
   Future<bool> recordPreference({
     required String memberId,
     required String actorId,
-    required TgcgRole actorRole,
+    required TgcgActor actorRole,
     required GeographicScope actorScope,
     required String source,
     required bool smsOptIn,
@@ -300,10 +300,7 @@ class BulkCommunicationsController extends ChangeNotifier {
     required bool voiceOptIn,
     bool suppressed = false,
   }) async {
-    if (!TgcgPermissionPolicy.allows(
-      actorRole,
-      TgcgCapability.manageMembership,
-    )) {
+    if (!actorRole.can(TgcgCapability.manageMembership)) {
       return false;
     }
     final member = _membership.memberById(memberId);
@@ -355,11 +352,11 @@ class BulkCommunicationsController extends ChangeNotifier {
     required GeographicScope targetScope,
     required List<BulkCommunicationChannel> channels,
     required String actorId,
-    required TgcgRole actorRole,
+    required TgcgActor actorRole,
     required GeographicScope actorScope,
     DateTime? scheduledFor,
   }) async {
-    if (!TgcgPermissionPolicy.allows(actorRole, TgcgCapability.sendBroadcast)) {
+    if (!actorRole.can(TgcgCapability.sendBroadcast)) {
       return null;
     }
     if (!TgcgPermissionPolicy.scopeAllows(actorScope, targetScope)) return null;

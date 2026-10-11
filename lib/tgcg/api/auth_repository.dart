@@ -1,4 +1,5 @@
 import '../domain/models.dart';
+import 'access_repository.dart';
 import 'api_client.dart';
 
 /// The signed-in account as the server describes it (`/auth/me/`).
@@ -10,6 +11,8 @@ class ServerUser {
     required this.role,
     required this.scope,
     required this.capabilities,
+    this.access = const [],
+    this.membershipNumber,
     this.phoneNumber,
     this.email,
   });
@@ -23,10 +26,20 @@ class ServerUser {
   final TgcgRole? role;
   final GeographicScope scope;
   final Set<String> capabilities;
+
+  /// Where the access comes from: each appointment, delegation or legacy role.
+  final List<AccessGrant> access;
+
+  /// The member behind this account, when there is one.
+  final String? membershipNumber;
   final String? phoneNumber;
   final String? email;
 
+  /// A member's own account (no former fixed role).
   bool get isMember => roleName == 'member';
+
+  /// A member account without any operational access: the member app.
+  bool get usesMemberApp => isMember && capabilities.isEmpty;
 
   factory ServerUser.fromJson(Map<String, dynamic> json) {
     final roleName = json['role'] as String;
@@ -37,6 +50,11 @@ class ServerUser {
       role: TgcgRole.values.asNameMap()[roleName],
       scope: geographicScopeFromJson(json['scope'] as Map<String, dynamic>),
       capabilities: {...(json['capabilities'] as List<dynamic>? ?? const []).cast<String>()},
+      access: [
+        for (final grant in (json['access'] as List<dynamic>? ?? const []))
+          AccessGrant.fromJson(grant as Map<String, dynamic>),
+      ],
+      membershipNumber: json['membership_number'] as String?,
       phoneNumber: json['phone_number'] as String?,
       email: json['email'] as String?,
     );

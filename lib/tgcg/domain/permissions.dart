@@ -1,5 +1,30 @@
 import 'models.dart';
 
+/// Who is acting, for the app's own checks of what to offer. The server
+/// still decides every request; these checks never authorize anything.
+abstract interface class TgcgActor {
+  /// Whether the actor may use [capability] somewhere.
+  bool can(TgcgCapability capability);
+
+  /// The former fixed role, when the actor has one.
+  TgcgRole? get legacyRole;
+}
+
+/// A server session: exactly what the server granted, from every appointment,
+/// delegation or legacy role the account holds.
+class TgcgServerActor implements TgcgActor {
+  const TgcgServerActor(this.capabilities, {this.legacyRole});
+
+  /// Server permission codes (the [TgcgCapability] names).
+  final Set<String> capabilities;
+
+  @override
+  final TgcgRole? legacyRole;
+
+  @override
+  bool can(TgcgCapability capability) => capabilities.contains(capability.name);
+}
+
 enum TgcgCapability {
   viewNationalDashboard,
   viewSituationRoom,
@@ -35,6 +60,20 @@ enum TgcgCapability {
   exportReports,
   manageUsers,
   manageSystemSettings,
+  // Members, roles and delegation (the server's codes of the same names).
+  registerMembers,
+  confirmAgentLocation,
+  viewRoles,
+  manageRoles,
+  assignRoles,
+  manageAssignments,
+  delegateAuthority,
+  viewMemberSensitiveData,
+  verifyMemberIdentity,
+  suspendMembers,
+  reviewPollingUnitChanges,
+  appointNationalAdministrator,
+  approveAdministratorRemoval,
 }
 
 class TgcgPermissionPolicy {
@@ -95,6 +134,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.zonalCoordinator: {
+      // As on the server: register members, pin units, see members' contacts.
+      TgcgCapability.registerMembers,
+      TgcgCapability.confirmAgentLocation,
+      TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewGeography,
       TgcgCapability.viewIncidents,
@@ -119,6 +162,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.stateCoordinator: {
+      // As on the server: register members, pin units, see members' contacts.
+      TgcgCapability.registerMembers,
+      TgcgCapability.confirmAgentLocation,
+      TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewGeography,
       TgcgCapability.accreditAgents,
@@ -146,6 +193,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.lgaCoordinator: {
+      // As on the server: register members, pin units, see members' contacts.
+      TgcgCapability.registerMembers,
+      TgcgCapability.confirmAgentLocation,
+      TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewGeography,
       TgcgCapability.manageAgentAssignments,
@@ -170,6 +221,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.viewEvidence,
     },
     TgcgRole.wardCoordinator: {
+      // As on the server: register members, pin units, see members' contacts.
+      TgcgCapability.registerMembers,
+      TgcgCapability.confirmAgentLocation,
+      TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewGeography,
       TgcgCapability.viewIncidents,
@@ -300,12 +355,12 @@ class TgcgPermissionPolicy {
   }
 
   static bool may(
-    TgcgRole role,
+    TgcgActor actor,
     GeographicScope userScope,
     TgcgCapability capability, {
     GeographicScope? targetScope,
   }) {
-    if (!allows(role, capability)) return false;
+    if (!actor.can(capability)) return false;
     if (targetScope == null) return true;
     return scopeAllows(userScope, targetScope);
   }

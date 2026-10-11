@@ -278,7 +278,7 @@ class ResultOperationsController extends ChangeNotifier {
   Future<bool> verify({
     required String submissionId,
     required String verifierId,
-    required TgcgRole role,
+    required TgcgActor role,
     required GeographicScope userScope,
   }) async {
     final index = _submissions.indexWhere((item) => item.id == submissionId);
@@ -317,7 +317,7 @@ class ResultOperationsController extends ChangeNotifier {
     required String submissionId,
     required String reviewerId,
     required String reason,
-    required TgcgRole role,
+    required TgcgActor role,
     required GeographicScope userScope,
   }) async {
     final index = _submissions.indexWhere((item) => item.id == submissionId);

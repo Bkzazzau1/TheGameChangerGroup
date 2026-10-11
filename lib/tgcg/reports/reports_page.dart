@@ -30,7 +30,7 @@ class _ReportsPageState extends State<ReportsPage> {
     final governance = GovernanceOperations.of(context);
     final reportStore = ReportOperations.of(context);
     final scope = session.scope;
-    final role = session.role!;
+    final role = session.actor;
 
     bool canExport(ReportKind kind) => reportStore.canExportKind(
           kind: kind,
@@ -337,7 +337,7 @@ class _ReportsPageState extends State<ReportsPage> {
       targetScope: session.scope,
       actorId:
           session.accessId.isEmpty ? session.operatorName : session.accessId,
-      role: session.role!,
+      role: session.actor,
       userScope: session.scope,
       recordCount: descriptor.recordCount,
     );

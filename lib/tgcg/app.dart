@@ -78,19 +78,20 @@ class _TgcgAppState extends State<TgcgApp> {
   Future<void> _restoreSession(BackendServices services) async {
     try {
       final user = await services.auth.restore();
-      final role = user?.role;
-      if (user != null && user.isMember && mounted) {
+      if (user != null && user.usesMemberApp && mounted) {
         sessionController.signInMember(
           fullName: user.fullName,
           membershipNumber: user.accessId,
         );
-      } else if (user != null && role != null && mounted) {
+      } else if (user != null && (user.role != null || user.capabilities.isNotEmpty) && mounted) {
         sessionController.signInFromServer(
-          role: role,
+          role: user.role,
           fullName: user.fullName,
           accessId: user.accessId,
           scope: user.scope,
           capabilities: user.capabilities,
+          grants: user.access,
+          membershipNumber: user.membershipNumber ?? (user.isMember ? user.accessId : null),
         );
       }
     } on ApiException {

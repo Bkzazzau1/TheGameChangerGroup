@@ -56,14 +56,8 @@ class _CommunicationsPageState extends State<CommunicationsPage> {
     final messages = selectedRoom == null
         ? const <OperationalMessage>[]
         : store.messagesForRoom(selectedRoom.id);
-    final canSend = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.sendOperationalMessage,
-    );
-    final canBroadcast = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.sendBroadcast,
-    );
+    final canSend = session.can(TgcgCapability.sendOperationalMessage);
+    final canBroadcast = session.can(TgcgCapability.sendBroadcast);
     final queuedMessages = visibleMessages
         .where((item) => item.deliveryState == MessageDeliveryState.localQueued)
         .length;
@@ -152,7 +146,7 @@ class _CommunicationsPageState extends State<CommunicationsPage> {
           ? session.operatorName
           : session.accessId,
       body: messageController.text,
-      role: session.role!,
+      role: session.actor,
       userScope: session.scope,
     );
     if (!ok) return;
@@ -176,7 +170,7 @@ class _CommunicationsPageState extends State<CommunicationsPage> {
       senderId: session.accessId.isEmpty
           ? session.operatorName
           : session.accessId,
-      role: session.role!,
+      role: session.actor,
       userScope: session.scope,
     );
     if (!ok) return;

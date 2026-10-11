@@ -2,20 +2,28 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../access/access_widgets.dart';
+import '../access/my_access_page.dart';
 import '../api/api_client.dart';
 import '../api/backend.dart';
+import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
 import '../location/directions.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'member_registration_page.dart' show ScanPvc, scanPvcWithDevice;
 import 'membership_card_view.dart';
 
-/// The member app: membership card, polling unit, announcements and volunteering.
+/// The member app: membership card, polling unit, announcements, volunteering
+/// and the member's own appointments.
 class MemberShell extends StatefulWidget {
-  const MemberShell({super.key, this.launch = launchDirections});
+  const MemberShell({super.key, this.launch = launchDirections, this.scanPvc = scanPvcWithDevice});
 
   /// Opens the maps app (replaced in tests).
   final LaunchDirections launch;
+
+  /// Reads an updated voter card for a polling unit change (replaced in tests).
+  final ScanPvc scanPvc;
 
   @override
   State<MemberShell> createState() => _MemberShellState();
@@ -57,7 +65,11 @@ class _MemberShellState extends State<MemberShell> {
     return (card, photo);
   }
 
-  void _refresh() => setState(_reloadAll);
+  void _refresh() {
+    setState(_reloadAll);
+    // An appointment may have started meanwhile: the operations app opens then.
+    refreshOwnAccess(context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,14 +96,15 @@ class _MemberShellState extends State<MemberShell> {
       body: SafeArea(
         child: switch (_tab) {
           0 => _CardTab(card: _card!, onEmailChanged: _refresh),
-          1 => _UnitTab(unit: _unit!, launch: widget.launch),
+          1 => _UnitTab(unit: _unit!, launch: widget.launch, scanPvc: widget.scanPvc),
           2 => _NewsTab(news: _news!),
-          _ => _VolunteerTab(
+          3 => _VolunteerTab(
               offers: _volunteering!,
               onChanged: () => setState(() {
                 _volunteering = _members.volunteering();
               }),
             ),
+          _ => const MyAccessPage(showHeader: false),
         },
       ),
       bottomNavigationBar: NavigationBar(
@@ -102,6 +115,7 @@ class _MemberShellState extends State<MemberShell> {
           NavigationDestination(icon: Icon(Icons.how_to_vote_outlined), label: 'My unit'),
           NavigationDestination(icon: Icon(Icons.campaign_outlined), label: 'News'),
           NavigationDestination(icon: Icon(Icons.volunteer_activism_outlined), label: 'Volunteer'),
+          NavigationDestination(icon: Icon(Icons.assignment_ind_outlined), label: 'Roles'),
         ],
       ),
     );
@@ -202,9 +216,10 @@ class _CardTab extends StatelessWidget {
 }
 
 class _UnitTab extends StatelessWidget {
-  const _UnitTab({required this.unit, required this.launch});
+  const _UnitTab({required this.unit, required this.launch, required this.scanPvc});
   final Future<MyPollingUnit> unit;
   final LaunchDirections launch;
+  final ScanPvc scanPvc;
 
   @override
   Widget build(BuildContext context) => _Loaded(
@@ -247,6 +262,8 @@ class _UnitTab extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: TgcgColors.muted, fontSize: 12.5),
               ),
+              const SizedBox(height: 16),
+              _PollingUnitChanges(scanPvc: scanPvc),
             ],
           );
         },
@@ -575,4 +592,225 @@ String _date(DateTime value) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   final local = value.toLocal();
   return '${local.day} ${months[local.month - 1]} ${local.year}';
+}
+
+
+/// After an INEC transfer: ask for the registered polling unit to change, and
+/// follow the request. A coordinator checks the updated card first.
+class _PollingUnitChanges extends StatefulWidget {
+  const _PollingUnitChanges({required this.scanPvc});
+
+  final ScanPvc scanPvc;
+
+  @override
+  State<_PollingUnitChanges> createState() => _PollingUnitChangesState();
+}
+
+class _PollingUnitChangesState extends State<_PollingUnitChanges> {
+  Future<List<PollingUnitChange>>? _changes;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _changes ??= TgcgBackend.of(context)!.client.myPollingUnitChanges();
+  }
+
+  void _reload() =>
+      setState(() {
+        _changes = TgcgBackend.of(context)!.client.myPollingUnitChanges();
+      });
+
+  Future<void> _ask() async {
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ChangeRequestDialog(scanPvc: widget.scanPvc),
+    );
+    if (sent == true) _reload();
+  }
+
+  Future<void> _withdraw(PollingUnitChange change) async {
+    try {
+      await TgcgBackend.of(context)!.client.withdrawPollingUnitChange(change.id);
+      _reload();
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TgcgSectionCard(
+        title: 'Moved to another polling unit?',
+        subtitle: 'After an INEC transfer, send your updated voter card. A coordinator checks it '
+            'before your polling unit changes.',
+        child: FutureBuilder<List<PollingUnitChange>>(
+          future: _changes,
+          builder: (context, snapshot) {
+            final changes = snapshot.data ?? const <PollingUnitChange>[];
+            final pending = changes.where((change) => change.isPending).firstOrNull;
+            final last = changes.isEmpty ? null : changes.first;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (pending != null) ...[
+                  Text(
+                    'Waiting for review: move to ${pending.toPollingUnit} '
+                    '${pending.toPollingUnitName}.',
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () => _withdraw(pending),
+                      child: const Text('Withdraw request'),
+                    ),
+                  ),
+                ] else ...[
+                  if (last != null && last.status != 'withdrawn')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        last.status == 'approved'
+                            ? 'Your last request was approved.'
+                            : 'Your last request was not accepted: ${last.decisionReason}',
+                        style: const TextStyle(color: TgcgColors.muted),
+                      ),
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: _ask,
+                    icon: const Icon(Icons.move_down_rounded),
+                    label: const Text('Ask to change my polling unit'),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      );
+}
+
+class _ChangeRequestDialog extends StatefulWidget {
+  const _ChangeRequestDialog({required this.scanPvc});
+
+  final ScanPvc scanPvc;
+
+  @override
+  State<_ChangeRequestDialog> createState() => _ChangeRequestDialogState();
+}
+
+class _ChangeRequestDialogState extends State<_ChangeRequestDialog> {
+  final _delim = TextEditingController();
+  final _reason = TextEditingController();
+  Uint8List? _card;
+  bool _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _delim.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scan({required bool camera}) async {
+    final scan = await widget.scanPvc(camera: camera);
+    if (scan == null || !mounted) return;
+    setState(() {
+      _card = scan.photo.bytes;
+      if (scan.delim != null && scan.delim!.isNotEmpty) _delim.text = scan.delim!;
+    });
+  }
+
+  Future<void> _send() async {
+    final card = _card;
+    if (card == null || _delim.text.trim().isEmpty) {
+      setState(() => _error = 'Scan your updated card and check the code on it.');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await TgcgBackend.of(context)!.client.requestPollingUnitChange(
+            delim: _delim.text,
+            cardImage: card,
+            reason: _reason.text,
+          );
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) setState(() => _error = failureMessage(error));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Change my polling unit'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Scan the voter card INEC gave you after the transfer. Your appointments do '
+                  'not change.',
+                  style: TextStyle(color: TgcgColors.muted, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                if (_card != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(_card!, height: 140, fit: BoxFit.cover),
+                  ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _sending ? null : () => _scan(camera: true),
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: Text(_card == null ? 'Scan card' : 'Scan again'),
+                    ),
+                    TextButton.icon(
+                      onPressed: _sending ? null : () => _scan(camera: false),
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('From gallery'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _delim,
+                  decoration: const InputDecoration(
+                    labelText: 'Code on the card (DELIM)',
+                    hintText: '18/23/01/001',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _reason,
+                  decoration: const InputDecoration(
+                    labelText: 'Anything to add (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(_error!, style: const TextStyle(color: TgcgColors.danger)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _sending ? null : () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(onPressed: _sending ? null : _send, child: const Text('Send')),
+        ],
+      );
 }

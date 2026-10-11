@@ -47,14 +47,8 @@ class _PvcEnrollmentPageState extends State<PvcEnrollmentPage> {
     final session = TgcgSession.of(context);
     final store = MembershipOperations.of(context);
     _selectedStateId ??= store.geography.states.first.id;
-    final canManage = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.manageMembership,
-    );
-    final canAccredit = TgcgPermissionPolicy.allows(
-      session.role!,
-      TgcgCapability.accreditAgents,
-    );
+    final canManage = session.can(TgcgCapability.manageMembership);
+    final canAccredit = session.can(TgcgCapability.accreditAgents);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
