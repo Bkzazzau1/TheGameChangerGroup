@@ -50,6 +50,7 @@ class UnitDirections {
     required this.confirmed,
     this.accuracyMeters,
     this.source,
+    this.note = '',
   });
 
   final double latitude;
@@ -62,6 +63,10 @@ class UnitDirections {
   /// Where the location came from: inec, coordinator, checkIn or imported.
   final String? source;
 
+  /// Something to check about the location, such as an INEC point that lies
+  /// just inside the neighbouring LGA. Empty when there is nothing to check.
+  final String note;
+
   static UnitDirections? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     return UnitDirections(
@@ -70,6 +75,7 @@ class UnitDirections {
       confirmed: json['confirmed'] as bool? ?? false,
       accuracyMeters: (json['accuracy_m'] as num?)?.toDouble(),
       source: json['source'] as String?,
+      note: (json['note'] as String?) ?? '',
     );
   }
 }

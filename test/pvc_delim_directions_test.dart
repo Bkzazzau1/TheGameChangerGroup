@@ -157,6 +157,21 @@ void main() {
       expect(find.text('Navigate to polling unit'), findsOneWidget);
       expect(find.textContaining("from INEC's polling unit locator"), findsOneWidget);
       expect(find.textContaining('pinned by one coordinator'), findsNothing);
+      expect(find.textContaining('neighbouring LGA'), findsNothing);
+    });
+
+    testWidgets('passes on what to check about an INEC point', (tester) async {
+      await pump(tester, {
+        'latitude': 7.7721,
+        'longitude': 4.5569,
+        'confirmed': false,
+        'accuracy_m': 5.6,
+        'source': 'inec',
+        'note': "INEC's point lies just inside the neighbouring LGA on the map. Check it on arrival.",
+      });
+      expect(find.text('Navigate to polling unit'), findsOneWidget);
+      expect(find.textContaining("from INEC's polling unit locator"), findsOneWidget);
+      expect(find.textContaining('just inside the neighbouring LGA'), findsOneWidget);
     });
 
     testWidgets('says so when the unit is not mapped', (tester) async {
@@ -189,5 +204,6 @@ void main() {
     })!;
     expect(to.confirmed, isFalse);
     expect(to.accuracyMeters, isNull);
+    expect(to.note, isEmpty);
   });
 }

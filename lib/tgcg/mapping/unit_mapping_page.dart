@@ -78,7 +78,7 @@ class _UnitMappingPageState extends State<UnitMappingPage> {
           eyebrow: 'BEFORE ELECTION DAY',
           title: 'Polling Unit Mapping',
           subtitle:
-              '${session.scope.label}: visit each polling unit and pin its location. INEC publishes no coordinates, so these pins let the app check that agents are at their units.',
+              "${session.scope.label}: visit each polling unit and pin its location. Pins confirm or correct the points from INEC's polling unit locator, and let the app check that agents are at their units.",
         ),
         const SizedBox(height: 16),
         FutureBuilder(
@@ -217,9 +217,13 @@ class _ProgressCard extends StatelessWidget {
       MappingStatus.problem => ('PROBLEM', TgcgColors.warning),
     };
 
-/// A unit's status label, marking locations from INEC's polling unit locator.
-(String, Color) mappingUnitLabel(MappingUnit unit) =>
-    unit.locatedByInec ? ('INEC LOCATION', TgcgColors.info) : mappingStatusLabel(unit.status);
+/// A unit's status label, marking locations from INEC's polling unit locator
+/// and those with something to check.
+(String, Color) mappingUnitLabel(MappingUnit unit) => switch (unit) {
+      MappingUnit(locatedByInec: true, locationNote: '') => ('INEC LOCATION', TgcgColors.info),
+      MappingUnit(locatedByInec: true) => ('CHECK LOCATION', TgcgColors.warning),
+      _ => mappingStatusLabel(unit.status),
+    };
 
 class _UnitTile extends StatelessWidget {
   const _UnitTile({required this.unit, required this.onTap});

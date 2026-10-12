@@ -12,6 +12,7 @@ import 'package:tgcg_emcop/tgcg/domain/models.dart';
 import 'package:tgcg_emcop/tgcg/location/directions.dart';
 import 'package:tgcg_emcop/tgcg/location/gps_service.dart';
 import 'package:tgcg_emcop/tgcg/mapping/pin_guide_page.dart';
+import 'package:tgcg_emcop/tgcg/mapping/unit_mapping_page.dart' show mappingUnitLabel;
 
 class _FakeGps extends GpsService {
   _FakeGps(this.readings);
@@ -189,11 +190,34 @@ void main() {
     );
     expect(find.text('INEC LOCATION'), findsOneWidget);
     expect(find.textContaining("INEC's polling unit locator places this unit"), findsOneWidget);
+    expect(find.textContaining('neighbouring LGA'), findsNothing);
 
     await tester.tap(find.text("Directions to INEC's location"));
     await tester.pump();
     expect(launched.single.queryParameters['destination'], '11.0539,7.712954605');
     expect(requests, isEmpty);
+  });
+
+  testWidgets('flags an INEC point that lies in the neighbouring LGA', (tester) async {
+    const flagged = MappingUnit(
+      code: '29-22-01-001',
+      name: 'OKE ONITI, OPEN SPACE',
+      location: '',
+      wardCode: '29-22-01',
+      wardName: 'ATAOJA A',
+      status: MappingStatus.pinned,
+      pins: 0,
+      latitude: 7.7721,
+      longitude: 4.5569,
+      locationSource: 'inec',
+      locationNote: "INEC's point lies just inside the neighbouring LGA on the map. Check it on arrival.",
+    );
+    await _pump(tester, _FakeGps(StreamController<GpsFix>()), (_) => http.Response('{}', 500), unit: flagged);
+    expect(find.text('CHECK LOCATION'), findsOneWidget);
+    expect(find.text('INEC LOCATION'), findsNothing);
+    expect(find.textContaining("INEC's polling unit locator places this unit"), findsOneWidget);
+    expect(find.textContaining('just inside the neighbouring LGA'), findsOneWidget);
+    expect(find.text("Directions to INEC's location"), findsOneWidget);
   });
 
   test('progress and units read INEC locations', () {
@@ -219,10 +243,13 @@ void main() {
       'latitude': '11.053900',
       'longitude': '7.712955',
       'location_source': 'inec',
+      'location_note': '',
       'pins': 0,
     });
     expect(unit.locatedByInec, isTrue);
     expect(unit.hasLocation, isTrue);
+    expect(unit.locationNote, isEmpty);
+    expect(mappingUnitLabel(unit).$1, 'INEC LOCATION');
   });
 
   testWidgets('a mismatched signboard reports a problem instead of pinning', (tester) async {

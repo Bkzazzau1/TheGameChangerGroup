@@ -244,6 +244,14 @@ class _PinGuidePageState extends State<PinGuidePage> {
                       style: const TextStyle(fontSize: 12.5, color: TgcgColors.muted),
                     ),
                   ),
+                if (unit.locationNote.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      unit.locationNote,
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: TgcgColors.warning),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Stepper(
                   physics: const NeverScrollableScrollPhysics(),

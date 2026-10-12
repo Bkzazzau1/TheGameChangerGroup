@@ -142,6 +142,13 @@ class UnitDirectionsView extends StatelessWidget {
             style: const TextStyle(fontSize: 11.5, color: TgcgColors.muted),
           ),
         ],
+        if (to.note.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            to.note,
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: TgcgColors.warning),
+          ),
+        ],
       ],
     );
   }

@@ -28,6 +28,7 @@ class MappingUnit {
     this.latitude,
     this.longitude,
     this.locationSource = '',
+    this.locationNote = '',
   });
 
   final String code;
@@ -42,6 +43,10 @@ class MappingUnit {
 
   /// Where the current location came from: inec, coordinator, checkIn or imported.
   final String locationSource;
+
+  /// Something to check about the location, such as an INEC point that lies
+  /// just inside the neighbouring LGA. Cleared once a coordinator checks it.
+  final String locationNote;
 
   bool get hasLocation => latitude != null && longitude != null;
 
@@ -59,6 +64,7 @@ class MappingUnit {
         latitude: double.tryParse('${json['latitude']}'),
         longitude: double.tryParse('${json['longitude']}'),
         locationSource: (json['location_source'] as String?) ?? '',
+        locationNote: (json['location_note'] as String?) ?? '',
       );
 }
 
