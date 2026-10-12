@@ -122,19 +122,30 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server environment before enabling phone verification. Nginx currently returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`. After the real provider is configured and verified, remove those temporary locations, restart the API, test Nginx configuration and reload Nginx. No administrator phone or email was supplied.
 
-### Africa's Talking USSD sandbox preparation
+### Africa's Talking USSD sandbox enabled
 
-Prepared on 12 October 2026; activation is waiting for the exact sandbox service code from Africa's Talking. USSD remains disabled in the active environment until both `USSD_CALLBACK_TOKEN` and `USSD_SERVICE_CODE` can be configured together. The deployed backend already supports the form callback; no application code or migrations were changed, and no Africa's Talking API key is used or stored.
+Enabled on 12 October 2026 for Africa's Talking sandbox code `*384*027031#`, preserving the leading zero and trailing `#`. Both `USSD_CALLBACK_TOKEN` and `USSD_SERVICE_CODE` are configured in the private environment, owned by `tgcg` with mode 600. The API was restarted and production checks passed. No application code or migrations were changed, and no Africa's Talking API key is used or stored.
 
-A random callback token of at least 32 characters is staged privately on the VPS. The callback URL is provided to the user through a restricted local file under the Git-ignored `build` directory for the dashboard's USSD channel setup. Neither the URL nor the token is included in these notes.
+A random callback token of at least 32 characters is active privately on the VPS. The callback URL was provided to the user through a restricted local file under the Git-ignored `build` directory for the dashboard's USSD channel setup. The callback URL is unchanged from sandbox preparation. Neither the URL nor the token is included in these notes.
 
 Nginx now has a dedicated `/api/v1/ussd/` location in `/etc/nginx/tgcg-backend.inc`, with access logging off and callback error output discarded; the HTTP redirect location has the same logging protection. Proxy headers and timeouts match the existing API proxy. Africa's Talking callback IP addresses/CIDR ranges have not yet been supplied; provider allow rules followed by `deny all` will be added when that list is available.
 
 The API service loads `/opt/tgcg/deployment/gunicorn-ussd.conf.py`. This operational logging configuration records only IP, method, status and duration in Gunicorn access entries, and suppresses USSD URL records from process logging after Django starts. Other API diagnostics remain available. Application Git source remains unchanged.
 
-Preparation checks passed: the required backup returned `Result=success` and `ExecMainStatus=0`; Nginx and systemd configuration validation passed; the API was restarted for logging configuration and health returned `status=ok`, `database=ok`. Disabled callback POSTs returned HTTP 404 both on loopback and public HTTPS. Their paths were absent from new Nginx access-log and API-journal entries. No joining flow was completed and no membership was created.
+Backups ran successfully before activation and after the verified configuration was recorded. Nginx configuration and Django production checks passed; API health returned `status=ok`, `database=ok` after restart. The environment file remains `600:tgcg:tgcg`.
 
-Once the user supplies the service code, configure the two environment lines while preserving owner and mode 600, restart the API, and verify the initial menu, non-member lookup, wrong-service rejection and wrong-token 404 locally and publicly. Record the results here. The backend's `docs/ussd-registration.md` describes the menu and callback contract.
+The requested safe callback tests all passed on loopback and through public HTTPS:
+
+| Check | Local | Public HTTPS |
+| --- | --- | --- |
+| Initial menu | 200, `CON Welcome to TGCG` with both menu choices | Same |
+| Non-member lookup (`text=2`) | 200, `END This number is not a TGCG member yet...` | Same |
+| Wrong service code | 200, `END This service is not available.` | Same |
+| Wrong callback token | 404 | 404 |
+
+Successful screens used `text/plain`. The callback token was absent from newly written Nginx access/error logs and the API service journal. The test number's membership and sign-in-account counts were unchanged, and no Join sequence was submitted. Secret-free results are recorded in `/opt/tgcg/deployment/ussd-status.json`.
+
+The user can now test `*384*027031#` in Africa's Talking's simulator with their own `+234` number; completing Join creates their real TGCG membership. Callback address restrictions remain pending the provider's trusted IP/CIDR list from support. The backend's `docs/ussd-registration.md` describes the menu and callback contract. To disable USSD, remove the two environment lines and restart the API; callback POSTs then return 404.
 
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
 
