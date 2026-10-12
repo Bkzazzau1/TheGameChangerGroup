@@ -25,6 +25,7 @@ dependencies:
   http: ^1.6.0
   url_launcher: ^6.3.3
   qr_flutter: ^4.1.0
+  google_mlkit_face_detection: ^0.15.0
 
 dev_dependencies:
   flutter_test:

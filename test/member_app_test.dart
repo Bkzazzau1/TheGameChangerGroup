@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -10,6 +11,7 @@ import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/member/forgot_pin_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_registration_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
+import 'package:tgcg_emcop/tgcg/member/selfie_check.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 
 // A valid 1x1 PNG, so photo previews decode.
@@ -146,13 +148,14 @@ void main() {
           vin: '90F5B0E8D0295847263',
           delim: '18-23-01-001',
         ),
-        takeSelfie: () async => (bytes: _pixel, name: 'selfie.png'),
+        takeSelfie: () async => XFile.fromData(_pixel),
       ),
     );
 
     // Step 1: the scan fills the form and finds the polling unit.
     await tester.tap(find.text('Scan PVC'));
     await tester.pumpAndSettle();
+    expect(find.text('Read from your card: name, VIN, DELIM. Check each one against the card.'), findsOneWidget);
     expect(find.textContaining('Your polling unit: KWARBAI I/ PRI. SCH. MADARKACI'), findsOneWidget);
     expect(server.requests.first.url.queryParameters['delim'], '18-23-01-001');
     await tester.tap(find.text('Next'));
@@ -228,7 +231,7 @@ void main() {
           vin: '90F5B0E8D0295847263',
           delim: '18/23/01/014',
         ),
-        takeSelfie: () async => (bytes: _pixel, name: 'selfie.png'),
+        takeSelfie: () async => XFile.fromData(_pixel),
       ),
     );
     await tester.tap(find.text('Scan PVC'));
@@ -263,6 +266,146 @@ void main() {
     expect(session.isMember, isFalse);
     expect(find.text('Confirm your phone'), findsOneWidget);
     expect(find.text('The code is wrong or has expired. Request a new one.'), findsOneWidget);
+  });
+
+  testWidgets('a scan says what it read, what to type, and fills in the details', (tester) async {
+    final server = _Server((request) => switch (_path(request)) {
+          'register/polling-unit/' => _json({..._unit, 'navigation': null}),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      MemberRegistrationPage(
+        canReadText: true,
+        scanPvc: ({required camera}) async => PvcScan(
+          photo: (bytes: _pixel, name: 'pvc.png'),
+          fullName: 'Musa Bello',
+          delim: '18/23/01/014',
+          dateOfBirth: DateTime(1990, 5, 14),
+          gender: 'male',
+          occupation: 'Teacher',
+        ),
+        takeSelfie: () async => XFile.fromData(_pixel),
+      ),
+    );
+    await tester.tap(find.text('Scan PVC'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Read from your card: name, DELIM, date of birth, gender, occupation. '
+          'Check each one against the card.'),
+      findsOneWidget,
+    );
+    expect(find.text('Not found on the photo: VIN. Type it from the card.'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'VIN (Voter Identification Number)'), '90F5B0E8D0295847263');
+    await tester.pump();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SegmentedButton<String>>(find.byType(SegmentedButton<String>)).selected, {'male'});
+    expect(find.text('Born 14/5/1990'), findsOneWidget);
+    expect(find.text('Teacher'), findsOneWidget);
+  });
+
+  testWidgets('where text cannot be read, registration asks for the details to be typed', (tester) async {
+    await _pump(
+      tester,
+      _Server((request) => null).connect(),
+      MemberRegistrationPage(
+        canReadText: false,
+        scanPvc: ({required camera}) async => PvcScan(photo: (bytes: _pixel, name: 'pvc.png')),
+        takeSelfie: () async => XFile.fromData(_pixel),
+      ),
+    );
+    expect(find.textContaining('the app cannot read the text from the photo'), findsOneWidget);
+    await tester.tap(find.text('Choose photo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Scan again'), findsOneWidget); // the photo is attached
+    expect(find.textContaining('Read from your card'), findsNothing);
+    expect(find.textContaining('No text could be read'), findsNothing);
+  });
+
+  group('the selfie', () {
+    Future<void> toSelfie(WidgetTester tester, CheckSelfie checkSelfie) async {
+      final server = _Server((request) => switch (_path(request)) {
+            'register/polling-unit/' => _json({..._unit, 'navigation': null}),
+            'register/code/' => _json({'expires_in': 600}),
+            _ => null,
+          });
+      await _pump(
+        tester,
+        server.connect(),
+        MemberRegistrationPage(
+          scanPvc: ({required camera}) async => PvcScan(
+            photo: (bytes: _pixel, name: 'pvc.png'),
+            fullName: 'Musa Bello',
+            vin: '90F5B0E8D0295847263',
+            delim: '18/23/01/014',
+          ),
+          takeSelfie: () async => XFile.fromData(_pixel),
+          checkSelfie: checkSelfie,
+        ),
+      );
+      await tester.tap(find.text('Scan PVC'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Female'));
+      await tester.enterText(find.widgetWithText(TextField, 'Phone number'), '08031234567');
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send code'));
+      await tester.pump();
+      await tester.pump();
+      await tester.enterText(find.widgetWithText(TextField, 'Code from the SMS'), '123456');
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Take a selfie'), findsOneWidget);
+    }
+
+    bool canContinue(WidgetTester tester) =>
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Next')).onPressed != null;
+
+    testWidgets('must show one face before the member can go on', (tester) async {
+      final results = [
+        const SelfieCheck.failed('More than one face in the photo. Take it with only you in the picture.'),
+        const SelfieCheck.passed(),
+      ];
+      await toSelfie(tester, (_) async => results.removeAt(0));
+
+      await tester.tap(find.text('Take selfie'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('More than one face'), findsOneWidget);
+      expect(canContinue(tester), isFalse);
+      expect(find.text('Use this photo anyway'), findsNothing);
+
+      await tester.tap(find.text('Take again'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear photo: one face, looking at the camera.'), findsOneWidget);
+      expect(canContinue(tester), isTrue);
+    });
+
+    testWidgets('can be kept after failing twice, since the check can be wrong', (tester) async {
+      await toSelfie(tester, (_) async => const SelfieCheck.failed('No face found.'));
+      await tester.tap(find.text('Take selfie'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Take again'));
+      await tester.pumpAndSettle();
+      expect(canContinue(tester), isFalse);
+      await tester.tap(find.text('Use this photo anyway'));
+      await tester.pump();
+      expect(canContinue(tester), isTrue);
+    });
+
+    testWidgets('goes through when the phone cannot check faces', (tester) async {
+      await toSelfie(tester, (_) async => const SelfieCheck.notAvailable());
+      await tester.tap(find.text('Take selfie'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Clear photo'), findsNothing);
+      expect(canContinue(tester), isTrue);
+    });
   });
 
   testWidgets('a forgotten PIN is reset by SMS code and signs the member in', (tester) async {

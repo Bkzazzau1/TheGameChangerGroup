@@ -368,6 +368,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.12.0"
+  google_mlkit_face_detection:
+    dependency: "direct main"
+    description:
+      name: google_mlkit_face_detection
+      sha256: "3574cd65740d58d23ec7a0d783e215b069d421942f625b866688be1a0ce4c0c1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.15.0"
   google_mlkit_text_recognition:
     dependency: "direct main"
     description:

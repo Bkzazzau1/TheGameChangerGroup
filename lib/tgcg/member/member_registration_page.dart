@@ -12,21 +12,33 @@ import '../media/device_media.dart';
 import '../membership/pvc_recognition_service.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'selfie_check.dart';
 
 /// A photo as bytes, with a file name for the upload.
 typedef PhotoBytes = ({Uint8List bytes, String name});
 
 /// What a PVC scan read off the card.
 class PvcScan {
-  const PvcScan({required this.photo, this.fullName, this.vin, this.delim});
+  const PvcScan({
+    required this.photo,
+    this.fullName,
+    this.vin,
+    this.delim,
+    this.dateOfBirth,
+    this.gender,
+    this.occupation,
+  });
   final PhotoBytes photo;
   final String? fullName;
   final String? vin;
   final String? delim;
+  final DateTime? dateOfBirth;
+  final String? gender;
+  final String? occupation;
 }
 
 typedef ScanPvc = Future<PvcScan?> Function({required bool camera});
-typedef TakeSelfie = Future<PhotoBytes?> Function();
+typedef TakeSelfie = Future<XFile?> Function();
 
 /// Scans a PVC with the device camera or gallery and reads it.
 Future<PvcScan?> scanPvcWithDevice({required bool camera}) async {
@@ -38,19 +50,18 @@ Future<PvcScan?> scanPvcWithDevice({required bool camera}) async {
     fullName: result.fullName,
     vin: result.voterId,
     delim: result.delim,
+    dateOfBirth: result.dateOfBirth,
+    gender: result.gender,
+    occupation: result.occupation,
   );
 }
 
-Future<PhotoBytes?> _selfieWithDevice() async {
-  final image = await ImagePicker().pickImage(
-    source: ImageSource.camera,
-    preferredCameraDevice: CameraDevice.front,
-    imageQuality: 85,
-    maxWidth: 1080,
-  );
-  if (image == null) return null;
-  return (bytes: await image.readAsBytes(), name: image.name);
-}
+Future<XFile?> _selfieWithDevice() => ImagePicker().pickImage(
+      source: ImageSource.camera,
+      preferredCameraDevice: CameraDevice.front,
+      imageQuality: 85,
+      maxWidth: 1080,
+    );
 
 /// A Nigerian mobile number as +234XXXXXXXXXX, or null (matches the server).
 String? normalizeNigerianPhone(String value) {
@@ -72,10 +83,16 @@ class MemberRegistrationPage extends StatefulWidget {
     super.key,
     this.scanPvc = scanPvcWithDevice,
     this.takeSelfie = _selfieWithDevice,
+    this.checkSelfie = checkSelfieOnDevice,
+    this.canReadText,
   });
 
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
+
+  /// Whether a scan reads text off the card here (null: ask the device).
+  final bool? canReadText;
 
   @override
   State<MemberRegistrationPage> createState() => _MemberRegistrationPageState();
@@ -92,6 +109,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   DelimUnit? _unit;
   bool _busy = false;
 
+  /// The fields the last scan read, to say what to check and what to type.
+  List<String>? _read;
+
   // Step 2: details.
   String? _gender;
   DateTime? _dateOfBirth;
@@ -107,6 +127,13 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   // Step 4 and 5.
   PhotoBytes? _selfie;
+  SelfieCheck? _selfieCheck;
+  bool _checkingSelfie = false;
+
+  /// After two photos fail the face check, the member may keep one anyway:
+  /// the check can be wrong, and a coordinator reviews the photo regardless.
+  int _selfieFailures = 0;
+  bool _keepSelfieAnyway = false;
   final _pin = TextEditingController();
   final _pinAgain = TextEditingController();
   bool _consent = false;
@@ -125,6 +152,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   MemberRepository get _members => TgcgBackend.of(context)!.member;
 
+  bool get _canReadText => widget.canReadText ?? PvcRecognitionService.canReadText;
+
   void _go(_Step step) => setState(() => _step = step);
 
   // --- step 1 ---------------------------------------------------------------------
@@ -139,6 +168,17 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
         if (scan.fullName != null) _name.text = scan.fullName!;
         if (scan.vin != null) _vin.text = scan.vin!;
         if (scan.delim != null) _delim.text = scan.delim!;
+        if (scan.gender != null) _gender = scan.gender;
+        if (scan.dateOfBirth != null) _dateOfBirth = scan.dateOfBirth;
+        if (scan.occupation != null) _occupation.text = scan.occupation!;
+        _read = [
+          if (scan.fullName != null) 'name',
+          if (scan.vin != null) 'VIN',
+          if (scan.delim != null) 'DELIM',
+          if (scan.dateOfBirth != null) 'date of birth',
+          if (scan.gender != null) 'gender',
+          if (scan.occupation != null) 'occupation',
+        ];
         _unit = null;
       });
       if (scan.delim != null) await _lookUp();
@@ -239,15 +279,38 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   Future<void> _takeSelfie() async {
     try {
-      final selfie = await widget.takeSelfie();
-      if (selfie != null && mounted) {
+      final file = await widget.takeSelfie();
+      if (file == null) return;
+      final selfie = (bytes: await file.readAsBytes(), name: file.name.isEmpty ? 'selfie.jpg' : file.name);
+      if (!mounted) return;
+      setState(() {
+        _selfie = selfie;
+        _selfieCheck = null;
+        _checkingSelfie = true;
+        _errors.remove('photo');
+      });
+      final check = await _checkSelfie(file);
+      if (mounted) {
         setState(() {
-          _selfie = selfie;
-          _errors.remove('photo');
+          _selfieCheck = check;
+          _checkingSelfie = false;
+          _keepSelfieAnyway = false;
+          if (!check.passed) _selfieFailures++;
         });
       }
     } catch (error) {
       if (mounted) setState(() => _errors = {'photo': describeDeviceError(error)});
+    }
+  }
+
+  /// The phone's face check. If the check itself breaks, the photo goes
+  /// through: it is about photo quality, and a coordinator reviews every
+  /// member anyway.
+  Future<SelfieCheck> _checkSelfie(XFile file) async {
+    try {
+      return await widget.checkSelfie(file);
+    } catch (_) {
+      return const SelfieCheck.notAvailable();
     }
   }
 
@@ -405,10 +468,14 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   Widget _pvcStep() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Have your Permanent Voter Card (PVC) with you. Scan the front of the card: '
-            'your name, VIN and polling unit are read from it.',
-            style: TextStyle(color: TgcgColors.muted, height: 1.4),
+          Text(
+            _canReadText
+                ? 'Have your Permanent Voter Card (PVC) with you. Scan the front of the card: '
+                    'your name, VIN and polling unit are read from it.'
+                : 'Have your Permanent Voter Card (PVC) with you. Add a photo of the front of the '
+                    'card, then type your name, VIN and DELIM exactly as printed on it. On this '
+                    'device the app cannot read the text from the photo.',
+            style: const TextStyle(color: TgcgColors.muted, height: 1.4),
           ),
           const SizedBox(height: 14),
           if (_pvcPhoto != null)
@@ -437,6 +504,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             ],
           ),
           if (_errors['pvc_image'] != null) _FieldError(_errors['pvc_image']!),
+          if (_canReadText && _read != null) ..._scanSummary(_read!),
           const SizedBox(height: 16),
           TextField(
             controller: _name,
@@ -498,6 +566,38 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           _nav(canContinue: _pvcDone, onNext: () => _go(_Step.details)),
         ],
       );
+
+  /// What the scan read, to check against the card, and what is left to type.
+  List<Widget> _scanSummary(List<String> read) {
+    if (read.isEmpty) {
+      return const [
+        _Notice(
+          icon: Icons.error_outline_rounded,
+          color: TgcgColors.warning,
+          text: 'No text could be read from this photo. Scan again in good light with the card '
+              'filling the frame, or type the details below.',
+        ),
+      ];
+    }
+    final missing = [
+      for (final field in ['name', 'VIN', 'DELIM'])
+        if (!read.contains(field)) field,
+    ];
+    return [
+      _Notice(
+        icon: Icons.fact_check_outlined,
+        color: TgcgColors.info,
+        text: 'Read from your card: ${read.join(', ')}. Check each one against the card.',
+      ),
+      if (missing.isNotEmpty)
+        _Notice(
+          icon: Icons.edit_outlined,
+          color: TgcgColors.warning,
+          text: 'Not found on the photo: ${missing.join(', ')}. '
+              'Type ${missing.length == 1 ? 'it' : 'them'} from the card.',
+        ),
+    ];
+  }
 
   Widget _detailsStep() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -601,32 +701,63 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     );
   }
 
-  Widget _selfieStep() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Take a clear photo of your face, like a passport photo. It goes on your '
-            'membership card.',
-            style: TextStyle(color: TgcgColors.muted, height: 1.4),
+  Widget _selfieStep() {
+    final check = _selfieCheck;
+    final problem = check?.problem;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Take a clear photo of your face, like a passport photo. It goes on your '
+          'membership card.',
+          style: TextStyle(color: TgcgColors.muted, height: 1.4),
+        ),
+        const SizedBox(height: 14),
+        if (_selfie != null)
+          Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.memory(_selfie!.bytes, height: 200, fit: BoxFit.cover),
+            ),
           ),
-          const SizedBox(height: 14),
-          if (_selfie != null)
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.memory(_selfie!.bytes, height: 200, fit: BoxFit.cover),
+        if (_checkingSelfie)
+          const _Notice(
+            icon: Icons.hourglass_top_rounded,
+            color: TgcgColors.muted,
+            text: 'Checking the photo…',
+          )
+        else if (problem != null && !_keepSelfieAnyway) ...[
+          _Notice(icon: Icons.error_outline_rounded, color: TgcgColors.warning, text: problem),
+          if (_selfieFailures >= 2)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => setState(() => _keepSelfieAnyway = true),
+                child: const Text('Use this photo anyway'),
               ),
             ),
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: _takeSelfie,
-            icon: const Icon(Icons.camera_front_outlined),
-            label: Text(_selfie == null ? 'Take selfie' : 'Take again'),
+        ] else if (check != null && check.ran && problem == null)
+          const _Notice(
+            icon: Icons.check_circle_outline_rounded,
+            color: TgcgColors.success,
+            text: 'Clear photo: one face, looking at the camera.',
           ),
-          if (_errors['photo'] != null) _FieldError(_errors['photo']!),
-          _nav(canContinue: _selfie != null, onNext: () => _go(_Step.pin)),
-        ],
-      );
+        const SizedBox(height: 10),
+        FilledButton.icon(
+          onPressed: _checkingSelfie ? null : _takeSelfie,
+          icon: const Icon(Icons.camera_front_outlined),
+          label: Text(_selfie == null ? 'Take selfie' : 'Take again'),
+        ),
+        if (_errors['photo'] != null) _FieldError(_errors['photo']!),
+        _nav(
+          canContinue: _selfie != null &&
+              !_checkingSelfie &&
+              ((check?.passed ?? false) || _keepSelfieAnyway),
+          onNext: () => _go(_Step.pin),
+        ),
+      ],
+    );
+  }
 
   Widget _pinStep() {
     final problem = _pin.text.isEmpty ? null : _pinProblem;
@@ -690,6 +821,26 @@ class _FieldError extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 6),
         child: Text(message, style: const TextStyle(color: TgcgColors.danger, fontSize: 12.5)),
+      );
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({required this.icon, required this.color, required this.text});
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: const TextStyle(fontSize: 12.5, height: 1.35))),
+          ],
+        ),
       );
 }
 

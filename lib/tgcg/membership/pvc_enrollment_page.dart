@@ -424,10 +424,10 @@ class _ScannerPanel extends StatelessWidget {
                           Icon(
                             scan == null
                                 ? Icons.credit_card_rounded
-                                : Icons.verified_rounded,
+                                : Icons.document_scanner_outlined,
                             color: scan == null
                                 ? TgcgColors.accent
-                                : TgcgColors.success,
+                                : Colors.white,
                             size: 52,
                           ),
                           const SizedBox(height: 10),
@@ -442,13 +442,15 @@ class _ScannerPanel extends StatelessWidget {
                           ),
                           if (scan != null) ...[
                             const SizedBox(height: 5),
-                            Text(
-                              scan!.hasRecognizedText
-                                  ? 'Identity text recognized'
-                                  : 'Card captured',
-                              style: const TextStyle(
-                                color: Color(0xFFAEB4C3),
-                                fontSize: 11,
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                describePvcScan(scan!),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFFAEB4C3),
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
                           ],
@@ -479,6 +481,17 @@ class _ScannerPanel extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// What a scan amounts to, said plainly: reading a card is not checking it.
+String describePvcScan(PvcRecognitionResult scan, {bool? canReadText}) {
+  if (scan.hasRecognizedText) {
+    return 'Text read from the card. Check each field against the PVC.';
+  }
+  if (!(canReadText ?? PvcRecognitionService.canReadText)) {
+    return 'Card photo attached. Text cannot be read from photos on this device, so type the details.';
+  }
+  return 'No text could be read. Scan again in good light, or type the details.';
 }
 
 /// The registry state whose name matches the server's (FCT is named
@@ -688,7 +701,7 @@ class _IdentityForm extends StatelessWidget {
               TgcgStatusPill(
                 label: created!.membershipNumber ?? created!.id,
                 color: TgcgColors.success,
-                icon: Icons.verified_rounded,
+                icon: Icons.badge_outlined,
               ),
             ],
           ],
