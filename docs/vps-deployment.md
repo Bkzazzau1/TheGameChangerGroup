@@ -15,30 +15,34 @@ Configured and verified on 12 October 2026 (Africa/Lagos).
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `bd423b8`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `ee7c2661ec721eac65312057a49f6aaff8c33e13`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
+- Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
+- PVC reader: Google Cloud Vision first; installed Tesseract handles Google errors, timeouts, malformed replies and blank text.
 - Service: `tgcg-api.service`, enabled at boot, listening on `127.0.0.1:8000`.
 - Database: `tgcg`, accessed through `/var/run/postgresql` with local peer authentication.
 - Production environment: `/opt/tgcg/backend/.env`, mode 600. The generated secret remains on the VPS.
 - Nginx configuration: `/etc/nginx/nginx.conf`, `/etc/nginx/conf.d/tgcg.conf` and `/etc/nginx/tgcg-*.inc`.
 - TLS certificate: `/etc/letsencrypt/live/tgcg.online/`; renewal uses `certbot-renew.timer`.
-- Geography: 8,809 wards, 176,846 polling units, 9,858 imported INEC locations.
+- Geography: 8,809 wards, 176,846 polling units, 11,382 imported INEC locations.
 - Administrator: access ID and display name `TGCG`, national administrator with country scope.
 
 Nginx publishes the API and administration over HTTPS while Gunicorn remains on loopback. Flutter uses `https://api.tgcg.online`; browser access is limited to the app origin. Termii SMS credentials remain to be configured.
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261012-BDB3291C45FB`.
+- Published release: `/var/www/tgcg/releases/web-20261012-163806-9a87bb5d70ea`.
+- Frontend source: committed `main` from `Bkzazzau1/TheGameChangerGroup`, including the OCR timeout changes and their tests. The exact commit is recorded in the release metadata.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261012-135705-cb2320b76d59`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `bdb3291c45fbdf36a11cd984aedf98231468c1bbb9c9d2b3e9744c058b7c3064`.
-- Build: 855 files, 53,951,645 uncompressed bytes. The served main bundle matches the compiled release.
+- Main JavaScript SHA256: `9a87bb5d70ea94b628c3c5c1036fae268282c21aa9ee95e75c5b3d9177a33107`.
+- Build: 855 files, 53,968,804 uncompressed bytes. The served main bundle matches the compiled release.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 The app was published with the user's approved demo labels. Local and mixed operational views show a page-specific notice before their statistics. Mixed result and report views distinguish live submissions from sample totals. Role Management, Member Review, Unit Mapping, Agent Tracking and API-backed member tabs keep their live data views. The polling-agent assignment selector and sample Digital Agent ID also carry explicit notices.
 
-The browser version keeps its offline queue in memory, so pending work does not survive a reload. PVC OCR runs on mobile, and audio-file recording is unavailable on web. Unintegrated dashboards remain demonstrations. Compilation and public HTTP checks passed; browser UI automation was unavailable in this session.
+The browser version keeps its offline queue in memory, so pending work does not survive a reload. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web, and unintegrated dashboards remain demonstrations. Compilation and public HTTP checks passed; browser UI automation was unavailable in this session.
 
 The release was built with:
 
@@ -47,6 +51,12 @@ flutter build web --release --dart-define=TGCG_API_URL=https://api.tgcg.online -
 ```
 
 Web entrypoints and JavaScript use `no-store`; missing assets return 404 rather than HTML. Nginx serves renderer `.wasm` files as `application/wasm`.
+
+Both readers are enabled at the user's request. `GOOGLE_VISION_API_KEY` is stored only in the private VPS environment, never in Flutter source or compiled artifacts. Google receives browser PVC photos for the first attempt, including requests that later fall back to Tesseract. One reader's text is returned; conflicting readings are never combined. A non-empty reading is not proof that all fields were recognized. The added browser Google Vision notice remains removed as requested.
+
+Each reader has a 25-second timeout; sequential attempts may take about 50 seconds plus processing and transfer. Only the app's card-reading multipart request has a 90-second deadline, covering both sending and the response body. Ordinary uploads retain the 30-second default.
+
+Both repositories are committed and pushed to their GitHub `main` branches. The VPS source checkouts are `/opt/tgcg/backend` and `/opt/tgcg/frontend`; their commits match the local repositories and GitHub. Backend source no longer relies on an applied working-tree patch. `/opt/tgcg/deployment/web-release.json` records the exact frontend and backend commits and the served web bundle checksum. Private runtime configuration, media and database contents remain managed on the VPS.
 
 ## Administrator password
 
@@ -102,6 +112,12 @@ Production settings passed `manage.py check --deploy`. Database migrations and g
 
 Public HTTPS health, API sign-in/logout, the app's CORS preflight, Django admin form sign-in/logout and secure host-specific cookies passed. Admin static CSS and Flutter bootstrap/JavaScript/renderer files were served successfully. Root/www redirects, deep-link HTML handling, private-path 404 responses and missing JavaScript 404 responses were checked. Certificate renewal and the reload hook passed a dry run.
 
+An earlier deployment on 12 October 2026 rebuilt frontend `f6e362f`, updated the matching backend to `c793d8e` and applied the polling-unit location-note and USSD registration-channel migrations. Its targeted member-app/server-login suite passed 18 tests; backend authentication, access policy, USSD, location import and mapping checks passed 105 tests against an isolated database.
+
+An earlier deployment on 12 October 2026 published frontend `3f5405c` with backend `c2dd3cd` and installed Tesseract with English language data. Its targeted Flutter suite passed 41 tests and backend registration-related suites passed 66 tests. Public card reading, missing-image validation, administrator HTTPS login/logout, API health and the served web bundle checksum passed.
+
+The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
+
 ## Remaining configuration
 
 Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server environment before enabling phone verification. Nginx currently returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`. After the real provider is configured and verified, remove those temporary locations, restart the API, test Nginx configuration and reload Nginx. No administrator phone or email was supplied.
@@ -109,3 +125,5 @@ Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server envi
 Joining by USSD is in the backend from 12 October 2026 but stays off until `USSD_CALLBACK_TOKEN` (at least 32 random characters) and `USSD_SERVICE_CODE` are set, the backend release containing it is deployed, and Nginx lets only the USSD aggregator's addresses reach `/api/v1/ussd/`. The backend's `docs/ussd-registration.md` has the steps.
 
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
+
+USSD registration remains disabled until a provider callback token and service code are configured and the provider's network access is restricted and tested.

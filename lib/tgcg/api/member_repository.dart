@@ -278,6 +278,8 @@ class MemberRepository {
     final body = await client.postMultipart(
       'register/read-pvc/',
       authenticated: false,
+      // Allow time for the server to try both card readers before falling back.
+      requestTimeout: const Duration(seconds: 90),
       fields: const {},
       files: () async => [
         http.MultipartFile.fromBytes('image', photo.bytes, filename: photo.name),

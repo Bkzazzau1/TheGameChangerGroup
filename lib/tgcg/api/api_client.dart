@@ -174,11 +174,14 @@ class ApiClient {
   /// are JSON-encoded (the backend accepts JSON text for nested fields).
   /// [files] builds fresh file parts, because a request may be re-sent after
   /// a token refresh and file streams can only be read once.
+  /// [requestTimeout] overrides the deadline for sending and reading the
+  /// complete response; otherwise the client's normal [timeout] applies.
   Future<dynamic> postMultipart(
     String path, {
     required Map<String, Object?> fields,
     Future<List<http.MultipartFile>> Function()? files,
     bool authenticated = true,
+    Duration? requestTimeout,
   }) =>
       _withAuthRetry(authenticated, () async {
         final request = http.MultipartRequest('POST', uri(path));
@@ -190,7 +193,10 @@ class ApiClient {
         }
         if (files != null) request.files.addAll(await files());
         await _authorize(request, authenticated);
-        return http.Response.fromStream(await _http.send(request).timeout(timeout));
+        return _http
+            .send(request)
+            .then(http.Response.fromStream)
+            .timeout(requestTimeout ?? timeout);
       });
 
   Future<dynamic> _send(

@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/auth_repository.dart';
+import 'package:tgcg_emcop/tgcg/api/member_repository.dart';
 import 'package:tgcg_emcop/tgcg/domain/models.dart';
 
 const _user = {
@@ -145,6 +148,136 @@ void main() {
       expect(error.isOffline, isTrue);
       expect(error.message, contains('No connection'));
     }
+  });
+
+  group('multipart response deadlines', () {
+    testWidgets('the ordinary deadline still applies without an override', (tester) async {
+      final client = ApiClient(
+        baseUrl: 'https://api.tgcg.test',
+        tokens: MemoryTokenStore(),
+        httpClient: MockClient((_) async {
+          await Future<void>.delayed(const Duration(seconds: 60));
+          return _json({'ok': true});
+        }),
+      );
+      Object? failure;
+      unawaited(client.postMultipart('register/', fields: const {}, authenticated: false).then<void>(
+        (_) => fail('The ordinary request should time out.'),
+        onError: (Object error) => failure = error,
+      ));
+
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 31));
+      expect(failure, isA<ApiException>().having((e) => e.isOffline, 'offline', isTrue));
+      await tester.pump(const Duration(seconds: 30));
+    });
+
+    testWidgets('an override shares one budget across sending and the body', (tester) async {
+      final client = ApiClient(
+        baseUrl: 'https://api.tgcg.test',
+        tokens: MemoryTokenStore(),
+        timeout: const Duration(milliseconds: 100),
+        httpClient: MockClient.streaming((_, _) async {
+          await Future<void>.delayed(const Duration(milliseconds: 6));
+          return http.StreamedResponse(
+            Stream.fromFuture(Future<List<int>>.delayed(
+              const Duration(milliseconds: 6),
+              () => utf8.encode('{"ok":true}'),
+            )),
+            200,
+          );
+        }),
+      );
+      Object? failure;
+      unawaited(client.postMultipart(
+        'register/',
+        fields: const {},
+        authenticated: false,
+        requestTimeout: const Duration(milliseconds: 10),
+      ).then<void>(
+        (_) => fail('Sending plus reading must fit the same deadline.'),
+        onError: (Object error) => failure = error,
+      ));
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 6));
+      await tester.pump(const Duration(milliseconds: 5));
+      expect(
+        failure,
+        isA<ApiException>().having((e) => e.message, 'message', 'The TGCG server did not respond in time.'),
+      );
+      await tester.pump(const Duration(milliseconds: 6));
+    });
+
+    testWidgets('card reading can wait for fallback without extending other uploads', (tester) async {
+      final tokens = MemoryTokenStore();
+      await tokens.write(access: 'A', refresh: 'R');
+      final client = ApiClient(
+        baseUrl: 'https://api.tgcg.test',
+        tokens: tokens,
+        httpClient: MockClient.streaming((request, body) async {
+          await body.toBytes();
+          if (request.url.path.endsWith('/register/read-pvc/')) {
+            expectSync(request.method, 'POST');
+            expectSync(request.headers['Authorization'], isNull);
+            final photo = (request as http.MultipartRequest).files.single;
+            expectSync(photo.field, 'image');
+            expectSync(photo.filename, 'card.png');
+          }
+          await Future<void>.delayed(const Duration(seconds: 60));
+          return http.StreamedResponse(
+            Stream.value(utf8.encode('{"text":"CODE: 18-23-01-014"}')),
+            200,
+          );
+        }),
+      );
+      String? text;
+      Object? ordinaryFailure;
+      unawaited(MemberRepository(client).readPvcText(
+        (bytes: Uint8List.fromList([1, 2, 3]), name: 'card.png'),
+      ).then<void>((value) => text = value));
+      unawaited(client.postMultipart('register/', fields: const {}, authenticated: false).then<void>(
+        (_) => fail('Other uploads keep the normal deadline.'),
+        onError: (Object error) => ordinaryFailure = error,
+      ));
+
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 31));
+      expect(text, isNull);
+      expect(ordinaryFailure, isA<ApiException>().having((e) => e.isOffline, 'offline', isTrue));
+      await tester.pump(const Duration(seconds: 29));
+      expect(text, 'CODE: 18-23-01-014');
+    });
+
+    testWidgets('card reading times out at 90 seconds even with an unfinished body', (tester) async {
+      final body = StreamController<List<int>>();
+      final client = ApiClient(
+        baseUrl: 'https://api.tgcg.test',
+        tokens: MemoryTokenStore(),
+        httpClient: MockClient.streaming((_, _) async => http.StreamedResponse(body.stream, 200)),
+      );
+      Object? failure;
+      unawaited(MemberRepository(client).readPvcText(
+        (bytes: Uint8List.fromList([1, 2, 3]), name: 'card.png'),
+      ).then<void>(
+        (_) => fail('An unfinished card-reading response should time out.'),
+        onError: (Object error) => failure = error,
+      ));
+
+      await tester.pump();
+      body.add(utf8.encode('{"text":"'));
+      await tester.pump(const Duration(seconds: 89));
+      expect(failure, isNull);
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        failure,
+        isA<ApiException>()
+            .having((e) => e.isOffline, 'offline', isTrue)
+            .having((e) => e.message, 'message', 'The TGCG server did not respond in time.'),
+      );
+      body.add(utf8.encode('CODE: 18-23-01-014"}'));
+      await body.close();
+    });
   });
 
   test('restore returns the saved user, or null without a valid session', () async {
