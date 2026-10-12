@@ -163,9 +163,14 @@ class _CardTab extends StatelessWidget {
         future: card,
         builder: (data) {
           final (card, photo) = data;
+          final waitingRole = TgcgSession.of(context).waitingRole;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (waitingRole != null) ...[
+                _WaitingRoleNote(role: waitingRole),
+                const SizedBox(height: 14),
+              ],
               Center(child: MembershipCardView(card: card, photo: photo)),
               const SizedBox(height: 18),
               TgcgSectionCard(
@@ -183,7 +188,15 @@ class _CardTab extends StatelessWidget {
                     ),
                     _Detail('PVC', card.vin ?? 'Not on record'),
                     if (card.occupation.isNotEmpty) _Detail('Occupation', card.occupation),
-                    _Detail('Status', card.status.isEmpty ? '—' : _title(card.status)),
+                    _Detail(
+                      'Membership',
+                      switch (card.membershipState) {
+                        'suspended' => 'Suspended',
+                        'deactivated' => 'Ended',
+                        _ => 'Active',
+                      },
+                    ),
+                    if (card.identityChecked) _Detail('ID check', 'Done'),
                   ],
                 ),
               ),
@@ -560,6 +573,37 @@ class _TextPromptState extends State<_TextPrompt> {
       );
 }
 
+/// For a member listed as an agent or observer whose identity is not checked
+/// yet: why they see the member app, and what happens next.
+class _WaitingRoleNote extends StatelessWidget {
+  const _WaitingRoleNote({required this.role});
+  final String role;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: TgcgColors.primarySoft,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.hourglass_top_rounded, color: TgcgColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'You are listed as a $role. That work starts once a coordinator has checked '
+                'your identity; then tap refresh at the top. Until then, you have everything '
+                'members have.',
+                style: const TextStyle(height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
 class _Detail extends StatelessWidget {
   const _Detail(this.label, this.value, {this.action});
   final String label;
@@ -584,9 +628,6 @@ class _Detail extends StatelessWidget {
         ),
       );
 }
-
-String _title(String value) =>
-    value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
 
 String _date(DateTime value) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

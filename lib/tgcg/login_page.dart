@@ -60,8 +60,16 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
       if (user.usesMemberApp) {
         TgcgSession.of(context, listen: false).signInMember(
           fullName: user.fullName,
-          membershipNumber: user.accessId,
+          membershipNumber: user.membershipNumber ?? user.accessId,
+          waitingRole: user.roleAwaitingVerification,
         );
+        return;
+      }
+      if (user.roleAwaitingVerification case final role?) {
+        // An agent or observer account that belongs to no member.
+        await services.auth.logout();
+        setState(() => serverError = 'This $role account cannot work yet. Agents and observers '
+            'must be members whose identity a coordinator has checked. Ask your coordinator.');
         return;
       }
       if (user.role == null && user.capabilities.isEmpty) {

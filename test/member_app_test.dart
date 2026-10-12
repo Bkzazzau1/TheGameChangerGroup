@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
+import 'package:tgcg_emcop/tgcg/api/auth_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/member/forgot_pin_page.dart';
@@ -36,7 +37,7 @@ const _unit = {
   },
 };
 
-Map<String, dynamic> _card() => {
+Map<String, dynamic> _card({String verification = 'verified'}) => {
       'membership_number': 'TGCG-000123',
       'full_name': 'Musa Bello',
       'phone_number': '+2348031234567',
@@ -46,7 +47,9 @@ Map<String, dynamic> _card() => {
       'gender': 'male',
       'date_of_birth': '1990-05-14',
       'occupation': 'Teacher',
-      'status': 'verified',
+      'status': 'submitted',
+      'membership_state': 'active',
+      'verification_status': verification,
       'polling_unit': _unit,
       'member_since': '2026-10-11T08:00:00Z',
       'photo_url': null,
@@ -569,6 +572,74 @@ void main() {
 
     expect(find.text('TGCG Member'), findsOneWidget);
     expect(find.text('TGCG-000123'), findsOneWidget);
+  });
+
+  group('who needs an identity check', () {
+    Map<String, dynamic> user({String? membershipNumber, bool verified = false, List<String> can = const []}) => {
+          'access_id': membershipNumber ?? 'AG-1',
+          'full_name': 'Musa Bello',
+          'role': 'pollingUnitAgent',
+          'scope': {'level': 'pollingUnit', 'country': 'Nigeria', 'pollingUnitId': '18-23-01-014'},
+          'capabilities': can,
+          'membership_number': membershipNumber,
+          'identity_verified': verified,
+        };
+
+    test('agents wait for it; members never do', () {
+      final waiting = ServerUser.fromJson(user(membershipNumber: 'TGCG-000123'));
+      expect(waiting.usesMemberApp, isTrue);
+      expect(waiting.roleAwaitingVerification, 'polling unit agent');
+
+      final unlinked = ServerUser.fromJson(user());
+      expect(unlinked.usesMemberApp, isFalse);
+      expect(unlinked.roleAwaitingVerification, 'polling unit agent');
+
+      final working = ServerUser.fromJson(
+        user(membershipNumber: 'TGCG-000123', verified: true, can: ['submitElectionResult']),
+      );
+      expect(working.usesMemberApp, isFalse);
+      expect(working.roleAwaitingVerification, isNull);
+
+      final member = ServerUser.fromJson({...user(membershipNumber: 'TGCG-000124'), 'role': 'member'});
+      expect(member.usesMemberApp, isTrue);
+      expect(member.roleAwaitingVerification, isNull);
+    });
+
+    Future<void> signIn(WidgetTester tester, Map<String, dynamic> account) async {
+      tester.view.physicalSize = const Size(430, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final server = _Server((request) => switch (_path(request)) {
+            'auth/login/' => _json({'access': 'A', 'refresh': 'R', 'user': account}),
+            'auth/logout/' => _json(<String, Object>{}),
+            'me/member/' => _json(_card(verification: 'pendingReview')),
+            'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 1, 'members_in_ward': 1}),
+            'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
+            'me/volunteer/' => _json(<Object>[]),
+            _ => null,
+          });
+      await tester.pumpWidget(TgcgApp(backend: server.connect()));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), '0803 123 4567');
+      await tester.enterText(find.byType(TextField).at(1), '482915');
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('an agent not checked yet gets the member app and is told why', (tester) async {
+      await signIn(tester, user(membershipNumber: 'TGCG-000123'));
+      expect(find.text('TGCG Member'), findsOneWidget);
+      expect(find.textContaining('You are listed as a polling unit agent.'), findsOneWidget);
+      expect(find.text('Membership'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('ID check'), findsNothing);
+    });
+
+    testWidgets('an agent account that belongs to no member cannot sign in', (tester) async {
+      await signIn(tester, user());
+      expect(find.textContaining('This polling unit agent account cannot work yet.'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
+    });
   });
 
   testWidgets('a member asks to move polling unit with their updated card', (tester) async {

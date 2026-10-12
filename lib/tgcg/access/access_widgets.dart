@@ -554,7 +554,11 @@ Future<void> refreshOwnAccess(BuildContext context) async {
   try {
     final user = await services.auth.me();
     if (user.usesMemberApp && !session.isMember) {
-      session.signInMember(fullName: user.fullName, membershipNumber: user.accessId);
+      session.signInMember(
+        fullName: user.fullName,
+        membershipNumber: user.membershipNumber ?? user.accessId,
+        waitingRole: user.roleAwaitingVerification,
+      );
     } else if (!user.usesMemberApp && (session.isMember || session.role != user.role)) {
       session.signInFromServer(
         role: user.role,

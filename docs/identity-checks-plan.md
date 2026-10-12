@@ -4,6 +4,20 @@ Started on 12 October 2026 from a review of PVC scanning, fingerprint and face
 security. We will do every item below, roughly in this order. Tick each one
 off here when it lands.
 
+## Who must be verified
+
+Decided on 12 October 2026, so that joining stays simple for people who find
+forms hard:
+
+- **Members: nobody.** Every member gets the whole member app, verified or
+  not, and their membership card is valid.
+- **Agents and observers: always.** Their accounts work only for a member
+  whose identity a coordinator has checked. Until then, a member listed as
+  an agent gets the member app with a note that the work starts after the
+  check.
+- **Anyone given a role: always.** Roles are given only to verified members,
+  and stop if verification is withdrawn.
+
 ## Done on 12 October 2026
 
 - [x] **PVC reading.** The reader takes only a VIN of exactly 19 letters and
@@ -39,52 +53,55 @@ off here when it lands.
    the aggregator, Nginx letting only the aggregator's addresses reach it, and
    a test on every network.
 3. [ ] **Let members who joined by USSD add their selfie and PVC**, in the app
-   or with a coordinator. Without a selfie no coordinator can verify them, so
-   they cannot hold an operational role.
-4. [ ] **Try scanning real PVCs on Android and iPhone**, and tune the reader to
+   or with a coordinator. They are full members without it, but a coordinator
+   cannot verify them for agent work or a role until they have one.
+4. [ ] **Make a verified member an agent from the app.** Approving an agent's
+   accreditation should give the member's own account the agent role at
+   their polling unit. Today that is done by hand in the Django admin.
+5. [ ] **Try scanning real PVCs on Android and iPhone**, and tune the reader to
    what the phones actually return. Use a few cards with their owners'
    consent, and keep their photos and text out of the repository.
    *Needs:* a phone build of the app and a few volunteers.
-5. [ ] **Member Enrolment creates real members.** It now keeps new members
+6. [ ] **Member Enrolment creates real members.** It now keeps new members
    only in the app on that device and drops the VIN and polling unit. It
    should use the server's coordinator-assisted registration, which already
    exists and takes the PVC, the selfie and the member's SMS code.
-6. [ ] **Check selfies for a face on the server as well.** A browser or a
+7. [ ] **Check selfies for a face on the server as well.** A browser or a
    modified app can skip the phone's check. A server check covers every
    registration, and its result can be recorded as a check the system
    performed.
-7. [ ] **Liveness check on the phone.** Ask the member to blink or turn their
+8. [ ] **Liveness check on the phone.** Ask the member to blink or turn their
    head while the camera watches, so a printed photo cannot pass. Like the
    face check, this improves the capture; the server cannot rely on it.
-8. [ ] **Lock the agent app with the phone's fingerprint or face unlock.** This
+9. [ ] **Lock the agent app with the phone's fingerprint or face unlock.** This
    shows that the phone's owner opened the app. The app never sees the
    fingerprint, so it cannot identify anyone.
-9. [ ] **Remove the manual "Biometric enrollment recorded" switch.** The
+10. [ ] **Remove the manual "Biometric enrollment recorded" switch.** The
    "Biometric" counts and the "Identity" tick on agent cards come from it,
    though nothing is captured. Show real status from the server, or nothing.
-10. [ ] **Label the AI Verification screen in presentation mode.** Its "Face
+11. [ ] **Label the AI Verification screen in presentation mode.** Its "Face
     match 97.9%" and "Liveness passed" are fixed example text. It shows the
     "Demo data" notice only when signed in to the live server.
-11. [ ] **Show in Member Review how each member joined**: in the app, with a
+12. [ ] **Show in Member Review how each member joined**: in the app, with a
     coordinator, or by USSD.
-12. [ ] **Read PVC text from photos added in a browser** (optional), with text
+13. [ ] **Read PVC text from photos added in a browser** (optional), with text
     recognition on the server.
 
 ## Needs an outside source or equipment
 
-13. [ ] **Match faces against a trusted photo.** The photo printed on a PVC is
+14. [ ] **Match faces against a trusted photo.** The photo printed on a PVC is
     not a trusted reference. NIN records through a NIMC-licensed verification
     provider would be.
     *Needs:* a provider contract and access keys (kept in the server's
     environment, never in the code), consent wording, and a data protection
     review: biometric data is sensitive personal data under the Nigeria Data
     Protection Act 2023.
-14. [ ] **Fingerprint identification.** A phone's sensor cannot identify
+15. [ ] **Fingerprint identification.** A phone's sensor cannot identify
     people. This needs fingerprint scanners for coordinators and a matching
     service, or NIN biometric verification through a provider.
     *Needs:* the equipment, a provider, and the same consent and data
-    protection work as item 13.
-15. [ ] **Confirm PVCs against INEC's records.** We have no authorised INEC
+    protection work as item 14.
+16. [ ] **Confirm PVCs against INEC's records.** We have no authorised INEC
     service to check a card against. Until there is one, the server keeps
     recording "PVC confirmed with an authoritative source" as not available.
 

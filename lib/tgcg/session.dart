@@ -50,6 +50,7 @@ class TgcgSessionController extends ChangeNotifier {
   Set<String> _serverCapabilities = const {};
   List<AccessGrant> _grants = const [];
   String? _membershipNumber;
+  String? _waitingRole;
   bool _supervises = false;
   bool _serverSession = false;
   bool _operator = false;
@@ -81,6 +82,10 @@ class TgcgSessionController extends ChangeNotifier {
 
   /// The member behind this account, when there is one.
   String? get membershipNumber => _membershipNumber;
+
+  /// In the member app: the field role this member holds but cannot use
+  /// until a coordinator has checked their identity ("polling unit agent").
+  String? get waitingRole => _waitingRole;
 
   /// Holds a role others report to (the server says so): may see, suspend
   /// and reinstate the appointments they supervise.
@@ -134,6 +139,7 @@ class TgcgSessionController extends ChangeNotifier {
     _serverCapabilities = Set.unmodifiable(capabilities);
     _grants = List.unmodifiable(grants);
     _membershipNumber = membershipNumber;
+    _waitingRole = null;
     _supervises = supervises;
     _serverSession = true;
     _operator = true;
@@ -155,14 +161,20 @@ class TgcgSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sign a member in to the member app (server accounts only).
-  void signInMember({required String fullName, required String membershipNumber}) {
+  /// Sign a member in to the member app (server accounts only). Every member
+  /// gets it, whether or not their identity has been checked.
+  void signInMember({
+    required String fullName,
+    required String membershipNumber,
+    String? waitingRole,
+  }) {
     _member = true;
     _operator = false;
     _role = null;
     _operatorName = fullName;
     _accessId = membershipNumber;
     _membershipNumber = membershipNumber;
+    _waitingRole = waitingRole;
     _scope = GeographicScope.nigeria;
     _serverCapabilities = const {};
     _grants = const [];
@@ -205,6 +217,7 @@ class TgcgSessionController extends ChangeNotifier {
     _serverCapabilities = const {};
     _grants = const [];
     _membershipNumber = null;
+    _waitingRole = null;
     _supervises = false;
     _operator = false;
     _member = false;

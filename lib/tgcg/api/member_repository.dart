@@ -54,6 +54,8 @@ class MemberCard {
     this.gender = '',
     this.occupation = '',
     this.status = '',
+    this.membershipState = 'active',
+    this.verificationStatus = '',
     this.pollingUnit,
     this.hasPhoto = false,
   });
@@ -69,9 +71,18 @@ class MemberCard {
   final String gender;
   final String occupation;
   final String status;
+
+  /// active, suspended or deactivated.
+  final String membershipState;
+
+  /// Whether a coordinator has checked the member's identity. Membership
+  /// needs no check; working as an agent or holding a role does.
+  final String verificationStatus;
   final MemberUnit? pollingUnit;
   final DateTime memberSince;
   final bool hasPhoto;
+
+  bool get identityChecked => verificationStatus == 'verified';
 
   /// Signed value printed as the card's QR code; staff scan it to verify.
   final String qrToken;
@@ -88,6 +99,8 @@ class MemberCard {
       gender: (json['gender'] as String?) ?? '',
       occupation: (json['occupation'] as String?) ?? '',
       status: (json['status'] as String?) ?? '',
+      membershipState: (json['membership_state'] as String?) ?? 'active',
+      verificationStatus: (json['verification_status'] as String?) ?? '',
       pollingUnit: unit is Map<String, dynamic> ? MemberUnit.fromJson(unit) : null,
       memberSince: DateTime.parse(json['member_since'] as String),
       hasPhoto: json['photo_url'] != null,

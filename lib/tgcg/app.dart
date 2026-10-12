@@ -81,8 +81,12 @@ class _TgcgAppState extends State<TgcgApp> {
       if (user != null && user.usesMemberApp && mounted) {
         sessionController.signInMember(
           fullName: user.fullName,
-          membershipNumber: user.accessId,
+          membershipNumber: user.membershipNumber ?? user.accessId,
+          waitingRole: user.roleAwaitingVerification,
         );
+      } else if (user != null && user.roleAwaitingVerification != null) {
+        // An agent account that belongs to no member: signing in says why.
+        await services.auth.logout();
       } else if (user != null && (user.role != null || user.capabilities.isNotEmpty) && mounted) {
         sessionController.signInFromServer(
           role: user.role,

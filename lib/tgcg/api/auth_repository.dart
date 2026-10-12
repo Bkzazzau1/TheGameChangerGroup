@@ -14,6 +14,7 @@ class ServerUser {
     this.access = const [],
     this.membershipNumber,
     this.supervises = false,
+    this.identityVerified = true,
     this.phoneNumber,
     this.email,
   });
@@ -37,14 +38,30 @@ class ServerUser {
   /// Holds a role others report to: may see, suspend and reinstate their
   /// appointments.
   final bool supervises;
+
+  /// A coordinator has checked the identity of the member behind the account.
+  /// Membership never needs it; agents, observers and appointed roles do.
+  final bool identityVerified;
   final String? phoneNumber;
   final String? email;
 
   /// A member's own account (no former fixed role).
   bool get isMember => roleName == 'member';
 
-  /// A member account without any operational access: the member app.
-  bool get usesMemberApp => isMember && capabilities.isEmpty && !supervises;
+  /// Any member's account without operational access gets the member app,
+  /// including a member whose agent role waits for an identity check.
+  bool get usesMemberApp =>
+      (isMember || membershipNumber != null) && capabilities.isEmpty && !supervises;
+
+  /// The field role this account holds but cannot use until the member's
+  /// identity is checked, in words for the member.
+  String? get roleAwaitingVerification => identityVerified || capabilities.isNotEmpty
+      ? null
+      : switch (roleName) {
+          'pollingUnitAgent' => 'polling unit agent',
+          'observer' => 'observer',
+          _ => null,
+        };
 
   /// Where the operator works: a former fixed role's own scope, or the
   /// smallest area containing every area their appointments cover (a member's
@@ -69,6 +86,7 @@ class ServerUser {
       ],
       membershipNumber: json['membership_number'] as String?,
       supervises: json['supervises'] as bool? ?? false,
+      identityVerified: json['identity_verified'] as bool? ?? true,
       phoneNumber: json['phone_number'] as String?,
       email: json['email'] as String?,
     );
