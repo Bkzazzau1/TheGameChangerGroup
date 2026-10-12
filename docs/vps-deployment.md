@@ -122,8 +122,20 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server environment before enabling phone verification. Nginx currently returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`. After the real provider is configured and verified, remove those temporary locations, restart the API, test Nginx configuration and reload Nginx. No administrator phone or email was supplied.
 
-Joining by USSD is in the backend from 12 October 2026 but stays off until `USSD_CALLBACK_TOKEN` (at least 32 random characters) and `USSD_SERVICE_CODE` are set, the backend release containing it is deployed, and Nginx lets only the USSD aggregator's addresses reach `/api/v1/ussd/`. The backend's `docs/ussd-registration.md` has the steps.
+### Africa's Talking USSD sandbox preparation
+
+Prepared on 12 October 2026; activation is waiting for the exact sandbox service code from Africa's Talking. USSD remains disabled in the active environment until both `USSD_CALLBACK_TOKEN` and `USSD_SERVICE_CODE` can be configured together. The deployed backend already supports the form callback; no application code or migrations were changed, and no Africa's Talking API key is used or stored.
+
+A random callback token of at least 32 characters is staged privately on the VPS. The callback URL is provided to the user through a restricted local file under the Git-ignored `build` directory for the dashboard's USSD channel setup. Neither the URL nor the token is included in these notes.
+
+Nginx now has a dedicated `/api/v1/ussd/` location in `/etc/nginx/tgcg-backend.inc`, with access logging off and callback error output discarded; the HTTP redirect location has the same logging protection. Proxy headers and timeouts match the existing API proxy. Africa's Talking callback IP addresses/CIDR ranges have not yet been supplied; provider allow rules followed by `deny all` will be added when that list is available.
+
+The API service loads `/opt/tgcg/deployment/gunicorn-ussd.conf.py`. This operational logging configuration records only IP, method, status and duration in Gunicorn access entries, and suppresses USSD URL records from process logging after Django starts. Other API diagnostics remain available. Application Git source remains unchanged.
+
+Preparation checks passed: the required backup returned `Result=success` and `ExecMainStatus=0`; Nginx and systemd configuration validation passed; the API was restarted for logging configuration and health returned `status=ok`, `database=ok`. Disabled callback POSTs returned HTTP 404 both on loopback and public HTTPS. Their paths were absent from new Nginx access-log and API-journal entries. No joining flow was completed and no membership was created.
+
+Once the user supplies the service code, configure the two environment lines while preserving owner and mode 600, restart the API, and verify the initial menu, non-member lookup, wrong-service rejection and wrong-token 404 locally and publicly. Record the results here. The backend's `docs/ussd-registration.md` describes the menu and callback contract.
 
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
 
-USSD registration remains disabled until a provider callback token and service code are configured and the provider's network access is restricted and tested.
+Moving from sandbox to live later requires the exact live service code, an API restart, the same callback checks and user tests on MTN, Airtel, Glo and 9mobile.
