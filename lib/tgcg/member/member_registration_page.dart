@@ -27,7 +27,23 @@ class PvcScan {
     this.dateOfBirth,
     this.gender,
     this.occupation,
+    this.textRead = true,
   });
+
+  /// The fields in [text], read off [photo] by the server.
+  factory PvcScan.read(PhotoBytes photo, String text) {
+    final fields = PvcRecognitionService.fromText(text);
+    return PvcScan(
+      photo: photo,
+      fullName: fields.fullName,
+      vin: fields.voterId,
+      delim: fields.delim,
+      dateOfBirth: fields.dateOfBirth,
+      gender: fields.gender,
+      occupation: fields.occupation,
+    );
+  }
+
   final PhotoBytes photo;
   final String? fullName;
   final String? vin;
@@ -35,10 +51,34 @@ class PvcScan {
   final DateTime? dateOfBirth;
   final String? gender;
   final String? occupation;
+
+  /// False when the device could not read text (a browser): the server reads
+  /// the photo instead.
+  final bool textRead;
 }
 
 typedef ScanPvc = Future<PvcScan?> Function({required bool camera});
 typedef TakeSelfie = Future<XFile?> Function();
+
+/// Reads the text on a card photo on the server (replaced in tests).
+typedef ReadPvcText = Future<String> Function(PhotoBytes photo);
+
+/// The fields a browser could not read itself, read by the server. Returns the
+/// scan unchanged, with the reason, when that is not possible.
+Future<(PvcScan, String?)> readScanOnServer(PvcScan scan, ReadPvcText read) async {
+  try {
+    return (PvcScan.read(scan.photo, await read(scan.photo)), null);
+  } on ApiException catch (error) {
+    // 503 carries the server's own explanation; anything else (offline, too
+    // many photos, an older server) gets a plain one.
+    final problem = error.statusCode == 503
+        ? error.message
+        : error.isOffline
+            ? 'Your card could not be read without a connection. Type the details from the card.'
+            : 'Your card could not be read just now. Type the details from the card.';
+    return (scan, problem);
+  }
+}
 
 /// Scans a PVC with the device camera or gallery and reads it.
 Future<PvcScan?> scanPvcWithDevice({required bool camera}) async {
@@ -53,6 +93,7 @@ Future<PvcScan?> scanPvcWithDevice({required bool camera}) async {
     dateOfBirth: result.dateOfBirth,
     gender: result.gender,
     occupation: result.occupation,
+    textRead: PvcRecognitionService.canReadText,
   );
 }
 
@@ -84,15 +125,16 @@ class MemberRegistrationPage extends StatefulWidget {
     this.scanPvc = scanPvcWithDevice,
     this.takeSelfie = _selfieWithDevice,
     this.checkSelfie = checkSelfieOnDevice,
-    this.canReadText,
+    this.readPvcText,
   });
 
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
   final CheckSelfie checkSelfie;
 
-  /// Whether a scan reads text off the card here (null: ask the device).
-  final bool? canReadText;
+  /// Reads a card photo on the server when the device cannot (null: the
+  /// server this app is connected to).
+  final ReadPvcText? readPvcText;
 
   @override
   State<MemberRegistrationPage> createState() => _MemberRegistrationPageState();
@@ -111,6 +153,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   /// The fields the last scan read, to say what to check and what to type.
   List<String>? _read;
+
+  /// The server is reading the card; or why it could not.
+  bool _readingCard = false;
+  String? _readProblem;
 
   // Step 2: details.
   String? _gender;
@@ -152,40 +198,66 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   MemberRepository get _members => TgcgBackend.of(context)!.member;
 
-  bool get _canReadText => widget.canReadText ?? PvcRecognitionService.canReadText;
-
   void _go(_Step step) => setState(() => _step = step);
 
   // --- step 1 ---------------------------------------------------------------------
 
   Future<void> _scan({required bool camera}) async {
-    setState(() => _errors = {});
+    setState(() {
+      _errors = {};
+      _readProblem = null;
+    });
     try {
-      final scan = await widget.scanPvc(camera: camera);
+      var scan = await widget.scanPvc(camera: camera);
       if (scan == null || !mounted) return;
+      if (!scan.textRead) {
+        // A browser cannot read the card: the server reads the photo.
+        final read = widget.readPvcText ?? _members.readPvcText;
+        setState(() {
+          _pvcPhoto = scan!.photo;
+          _readingCard = true;
+          _read = null;
+        });
+        final (readScan, problem) = await readScanOnServer(scan, read);
+        if (!mounted) return;
+        setState(() {
+          _readingCard = false;
+          _readProblem = problem;
+        });
+        if (problem != null) return;
+        scan = readScan;
+      }
+      final done = scan;
       setState(() {
-        _pvcPhoto = scan.photo;
-        if (scan.fullName != null) _name.text = scan.fullName!;
-        if (scan.vin != null) _vin.text = scan.vin!;
-        if (scan.delim != null) _delim.text = scan.delim!;
-        if (scan.gender != null) _gender = scan.gender;
-        if (scan.dateOfBirth != null) _dateOfBirth = scan.dateOfBirth;
-        if (scan.occupation != null) _occupation.text = scan.occupation!;
+        _pvcPhoto = done.photo;
+        if (done.fullName != null) _name.text = done.fullName!;
+        if (done.vin != null) _vin.text = done.vin!;
+        if (done.delim != null) _delim.text = done.delim!;
+        if (done.gender != null) _gender = done.gender;
+        if (done.dateOfBirth != null) _dateOfBirth = done.dateOfBirth;
+        if (done.occupation != null) _occupation.text = done.occupation!;
         _read = [
-          if (scan.fullName != null) 'name',
-          if (scan.vin != null) 'VIN',
-          if (scan.delim != null) 'DELIM',
-          if (scan.dateOfBirth != null) 'date of birth',
-          if (scan.gender != null) 'gender',
-          if (scan.occupation != null) 'occupation',
+          if (done.fullName != null) 'name',
+          if (done.vin != null) 'VIN',
+          if (done.delim != null) _codeField,
+          if (done.dateOfBirth != null) 'date of birth',
+          if (done.gender != null) 'gender',
+          if (done.occupation != null) 'occupation',
         ];
         _unit = null;
       });
-      if (scan.delim != null) await _lookUp();
+      if (done.delim != null) await _lookUp();
     } catch (error) {
-      if (mounted) setState(() => _errors = {'pvc_image': describeDeviceError(error)});
+      if (mounted) {
+        setState(() {
+          _readingCard = false;
+          _errors = {'pvc_image': describeDeviceError(error)};
+        });
+      }
     }
   }
+
+  static const _codeField = 'polling unit code';
 
   Future<void> _lookUp() async {
     final delim = _delim.text.trim();
@@ -468,14 +540,11 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   Widget _pvcStep() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            _canReadText
-                ? 'Have your Permanent Voter Card (PVC) with you. Scan the front of the card: '
-                    'your name, VIN and polling unit are read from it.'
-                : 'Have your Permanent Voter Card (PVC) with you. Add a photo of the front of the '
-                    'card, then type your name, VIN and DELIM exactly as printed on it. On this '
-                    'device the app cannot read the text from the photo.',
-            style: const TextStyle(color: TgcgColors.muted, height: 1.4),
+          const Text(
+            'Have your Permanent Voter Card (PVC) with you. Scan the front of the card or '
+            'choose a photo of it: your name, VIN, polling unit code and other details are '
+            'read from it. Check each one, and type anything that is missing.',
+            style: TextStyle(color: TgcgColors.muted, height: 1.4),
           ),
           const SizedBox(height: 14),
           if (_pvcPhoto != null)
@@ -488,7 +557,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _busy ? null : () => _scan(camera: true),
+                  onPressed: _busy || _readingCard ? null : () => _scan(camera: true),
                   icon: const Icon(Icons.document_scanner_outlined),
                   label: Text(_pvcPhoto == null ? 'Scan PVC' : 'Scan again'),
                 ),
@@ -496,7 +565,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _scan(camera: false),
+                  onPressed: _busy || _readingCard ? null : () => _scan(camera: false),
                   icon: const Icon(Icons.photo_library_outlined),
                   label: const Text('Choose photo'),
                 ),
@@ -504,7 +573,16 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             ],
           ),
           if (_errors['pvc_image'] != null) _FieldError(_errors['pvc_image']!),
-          if (_canReadText && _read != null) ..._scanSummary(_read!),
+          if (_readingCard)
+            const _Notice(
+              icon: Icons.hourglass_top_rounded,
+              color: TgcgColors.muted,
+              text: 'Reading your card. This can take a few seconds.',
+            )
+          else if (_readProblem != null)
+            _Notice(icon: Icons.edit_outlined, color: TgcgColors.warning, text: _readProblem!)
+          else if (_read != null)
+            ..._scanSummary(_read!),
           const SizedBox(height: 16),
           TextField(
             controller: _name,
@@ -531,8 +609,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             onSubmitted: (_) => _lookUp(),
             onChanged: (_) => setState(() => _unit = null),
             decoration: InputDecoration(
-              labelText: 'DELIM (polling unit code on the PVC)',
-              hintText: '18/23/01/001',
+              labelText: 'Polling unit code (marked CODE on the PVC)',
+              hintText: '18-23-01-001',
               errorText: _errors['delim'],
               suffixIcon: IconButton(
                 tooltip: 'Find polling unit',
@@ -580,7 +658,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       ];
     }
     final missing = [
-      for (final field in ['name', 'VIN', 'DELIM'])
+      for (final field in ['name', 'VIN', _codeField])
         if (!read.contains(field)) field,
     ];
     return [

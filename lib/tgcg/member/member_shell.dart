@@ -11,7 +11,7 @@ import '../api/member_repository.dart';
 import '../location/directions.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
-import 'member_registration_page.dart' show ScanPvc, scanPvcWithDevice;
+import 'member_registration_page.dart' show ScanPvc, readScanOnServer, scanPvcWithDevice;
 import 'membership_card_view.dart';
 
 /// The member app: membership card, polling unit, announcements, volunteering
@@ -752,12 +752,18 @@ class _ChangeRequestDialogState extends State<_ChangeRequestDialog> {
   }
 
   Future<void> _scan({required bool camera}) async {
-    final scan = await widget.scanPvc(camera: camera);
+    final members = TgcgBackend.of(context)!.member;
+    var scan = await widget.scanPvc(camera: camera);
     if (scan == null || !mounted) return;
-    setState(() {
-      _card = scan.photo.bytes;
-      if (scan.delim != null && scan.delim!.isNotEmpty) _delim.text = scan.delim!;
-    });
+    setState(() => _card = scan!.photo.bytes);
+    if (!scan.textRead) {
+      // A browser cannot read the card: the server reads the photo, and if it
+      // cannot, the member types the code.
+      (scan, _) = await readScanOnServer(scan, members.readPvcText);
+      if (!mounted) return;
+    }
+    final code = scan.delim;
+    if (code != null && code.isNotEmpty) setState(() => _delim.text = code);
   }
 
   Future<void> _send() async {
@@ -824,8 +830,8 @@ class _ChangeRequestDialogState extends State<_ChangeRequestDialog> {
                 TextField(
                   controller: _delim,
                   decoration: const InputDecoration(
-                    labelText: 'Code on the card (DELIM)',
-                    hintText: '18/23/01/001',
+                    labelText: 'Polling unit code (marked CODE on the card)',
+                    hintText: '18-23-01-001',
                     border: OutlineInputBorder(),
                   ),
                 ),

@@ -35,10 +35,16 @@ forms hard:
   member can keep one anyway, because the check can be wrong. The server does
   not rely on it, and coordinators still review every new member.
 - [x] **Joining by USSD, on the server.** Any phone can join by dialling a
-  code, once item 2 is done: name, the DELIM code from the PVC, gender,
+  code, once item 2 is done: name, the polling unit code from the PVC, gender,
   optional date of birth and VIN, and a PIN for the app. The network supplies
   the phone number, so no SMS code is needed. See the backend's
   `docs/ussd-registration.md`.
+- [x] **Reading cards in a browser.** A browser cannot read a card photo, so
+  the server reads it and the app fills in the form, once item 3 is done.
+  A real card showed what to read: the polling unit code is marked CODE (the
+  DELIM line names the state, LGA and ward), the name is printed unlabelled
+  as SURNAME, OTHER NAMES, and date of birth sits beside gender. The phones'
+  reader handles all of this too. See the backend's `docs/pvc-reading.md`.
 
 ## Next
 
@@ -52,40 +58,43 @@ forms hard:
    `USSD_SERVICE_CODE` in the server's environment, the callback URL given to
    the aggregator, Nginx letting only the aggregator's addresses reach it, and
    a test on every network.
-3. [ ] **Let members who joined by USSD add their selfie and PVC**, in the app
+3. [ ] **Turn on reading cards from browsers on the live server.**
+   *Needs:* Tesseract installed on the server (free, but it often misses the
+   VIN), or a Google Cloud Vision key (reads cards well; the photo goes to
+   Google, so the privacy notice must say so). See the backend's
+   `docs/pvc-reading.md`.
+4. [ ] **Let members who joined by USSD add their selfie and PVC**, in the app
    or with a coordinator. They are full members without it, but a coordinator
    cannot verify them for agent work or a role until they have one.
-4. [ ] **Make a verified member an agent from the app.** Approving an agent's
+5. [ ] **Make a verified member an agent from the app.** Approving an agent's
    accreditation should give the member's own account the agent role at
    their polling unit. Today that is done by hand in the Django admin.
-5. [ ] **Try scanning real PVCs on Android and iPhone**, and tune the reader to
+6. [ ] **Try scanning real PVCs on Android and iPhone**, and tune the reader to
    what the phones actually return. Use a few cards with their owners'
    consent, and keep their photos and text out of the repository.
    *Needs:* a phone build of the app and a few volunteers.
-6. [ ] **Member Enrolment creates real members.** It now keeps new members
+7. [ ] **Member Enrolment creates real members.** It now keeps new members
    only in the app on that device and drops the VIN and polling unit. It
    should use the server's coordinator-assisted registration, which already
    exists and takes the PVC, the selfie and the member's SMS code.
-7. [ ] **Check selfies for a face on the server as well.** A browser or a
+8. [ ] **Check selfies for a face on the server as well.** A browser or a
    modified app can skip the phone's check. A server check covers every
    registration, and its result can be recorded as a check the system
    performed.
-8. [ ] **Liveness check on the phone.** Ask the member to blink or turn their
+9. [ ] **Liveness check on the phone.** Ask the member to blink or turn their
    head while the camera watches, so a printed photo cannot pass. Like the
    face check, this improves the capture; the server cannot rely on it.
-9. [ ] **Lock the agent app with the phone's fingerprint or face unlock.** This
+10. [ ] **Lock the agent app with the phone's fingerprint or face unlock.** This
    shows that the phone's owner opened the app. The app never sees the
    fingerprint, so it cannot identify anyone.
-10. [ ] **Remove the manual "Biometric enrollment recorded" switch.** The
+11. [ ] **Remove the manual "Biometric enrollment recorded" switch.** The
    "Biometric" counts and the "Identity" tick on agent cards come from it,
    though nothing is captured. Show real status from the server, or nothing.
-11. [ ] **Label the AI Verification screen in presentation mode.** Its "Face
+12. [ ] **Label the AI Verification screen in presentation mode.** Its "Face
     match 97.9%" and "Liveness passed" are fixed example text. It shows the
     "Demo data" notice only when signed in to the live server.
-12. [ ] **Show in Member Review how each member joined**: in the app, with a
+13. [ ] **Show in Member Review how each member joined**: in the app, with a
     coordinator, or by USSD.
-13. [ ] **Read PVC text from photos added in a browser** (optional), with text
-    recognition on the server.
 
 ## Needs an outside source or equipment
 

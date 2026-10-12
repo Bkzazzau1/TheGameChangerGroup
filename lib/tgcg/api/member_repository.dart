@@ -272,6 +272,20 @@ class MemberRepository {
     return _session(body);
   }
 
+  /// Reads the text on a PVC photo on the server, for browsers, which cannot
+  /// read it themselves. The app picks out the fields; nothing is kept.
+  Future<String> readPvcText(({Uint8List bytes, String name}) photo) async {
+    final body = await client.postMultipart(
+      'register/read-pvc/',
+      authenticated: false,
+      fields: const {},
+      files: () async => [
+        http.MultipartFile.fromBytes('image', photo.bytes, filename: photo.name),
+      ],
+    ) as Map<String, dynamic>;
+    return (body['text'] as String?) ?? '';
+  }
+
   /// Sends a code for setting a new PIN (the reply is the same for unknown numbers).
   Future<int> requestPinCode(String phone) async {
     final body = await client.post(

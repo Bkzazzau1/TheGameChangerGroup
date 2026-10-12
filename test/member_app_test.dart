@@ -158,7 +158,10 @@ void main() {
     // Step 1: the scan fills the form and finds the polling unit.
     await tester.tap(find.text('Scan PVC'));
     await tester.pumpAndSettle();
-    expect(find.text('Read from your card: name, VIN, DELIM. Check each one against the card.'), findsOneWidget);
+    expect(
+      find.text('Read from your card: name, VIN, polling unit code. Check each one against the card.'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Your polling unit: KWARBAI I/ PRI. SCH. MADARKACI'), findsOneWidget);
     expect(server.requests.first.url.queryParameters['delim'], '18-23-01-001');
     await tester.tap(find.text('Next'));
@@ -280,7 +283,6 @@ void main() {
       tester,
       server.connect(),
       MemberRegistrationPage(
-        canReadText: true,
         scanPvc: ({required camera}) async => PvcScan(
           photo: (bytes: _pixel, name: 'pvc.png'),
           fullName: 'Musa Bello',
@@ -295,7 +297,7 @@ void main() {
     await tester.tap(find.text('Scan PVC'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Read from your card: name, DELIM, date of birth, gender, occupation. '
+      find.text('Read from your card: name, polling unit code, date of birth, gender, occupation. '
           'Check each one against the card.'),
       findsOneWidget,
     );
@@ -310,22 +312,91 @@ void main() {
     expect(find.text('Teacher'), findsOneWidget);
   });
 
-  testWidgets('where text cannot be read, registration asks for the details to be typed', (tester) async {
-    await _pump(
-      tester,
-      _Server((request) => null).connect(),
-      MemberRegistrationPage(
-        canReadText: false,
-        scanPvc: ({required camera}) async => PvcScan(photo: (bytes: _pixel, name: 'pvc.png')),
-        takeSelfie: () async => XFile.fromData(_pixel),
-      ),
-    );
-    expect(find.textContaining('the app cannot read the text from the photo'), findsOneWidget);
-    await tester.tap(find.text('Choose photo'));
-    await tester.pumpAndSettle();
-    expect(find.text('Scan again'), findsOneWidget); // the photo is attached
-    expect(find.textContaining('Read from your card'), findsNothing);
-    expect(find.textContaining('No text could be read'), findsNothing);
+  group('a card photo added in a browser', () {
+    // A browser cannot read text itself, so the server reads the photo.
+    PvcScan photoOnly({required bool camera}) =>
+        PvcScan(photo: (bytes: _pixel, name: 'pvc.png'), textRead: false);
+
+    testWidgets('is read on the server and fills the form', (tester) async {
+      final sent = <String>[];
+      final server = _Server((request) => switch (_path(request)) {
+            'register/polling-unit/' => _json({..._unit, 'navigation': null}),
+            _ => null,
+          });
+      await _pump(
+        tester,
+        server.connect(),
+        MemberRegistrationPage(
+          scanPvc: ({required camera}) async => photoOnly(camera: camera),
+          readPvcText: (photo) async {
+            sent.add(photo.name);
+            // Made-up details in a PVC's layout.
+            return [
+              'CODE: 18-23-01-014 VIN 90F5 B0E8 D029 5847 263',
+              'DELIM: KADUNA | ZARIA',
+              'BELLO, MUSA IBRAHIM',
+              'DATE OF BIRTH GENDER',
+              '14-05-1990 Male',
+              'OCCUPATION',
+              'TRADER',
+            ].join('\n');
+          },
+          takeSelfie: () async => XFile.fromData(_pixel),
+        ),
+      );
+      await tester.tap(find.text('Choose photo'));
+      await tester.pumpAndSettle();
+      expect(sent, ['pvc.png']);
+      expect(find.text('Bello Musa Ibrahim'), findsOneWidget);
+      expect(find.text('90F5B0E8D0295847263'), findsOneWidget);
+      expect(
+        find.text('Read from your card: name, VIN, polling unit code, date of birth, gender, '
+            'occupation. Check each one against the card.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Your polling unit: '), findsOneWidget);
+
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Born 14/5/1990'), findsOneWidget);
+      expect(find.text('Trader'), findsOneWidget);
+    });
+
+    testWidgets('that cannot be read asks for the details to be typed', (tester) async {
+      await _pump(
+        tester,
+        _Server((request) => null).connect(),
+        MemberRegistrationPage(
+          scanPvc: ({required camera}) async => photoOnly(camera: camera),
+          readPvcText: (photo) async => throw const ApiException(
+            503,
+            'Reading cards is not set up on this server. Type the details from the card.',
+          ),
+          takeSelfie: () async => XFile.fromData(_pixel),
+        ),
+      );
+      await tester.tap(find.text('Choose photo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Scan again'), findsOneWidget); // the photo is attached
+      expect(find.textContaining('Type the details from the card.'), findsOneWidget);
+      expect(find.textContaining('Read from your card'), findsNothing);
+    });
+
+    testWidgets('gets a plain message from a server that cannot read cards yet', (tester) async {
+      await _pump(
+        tester,
+        _Server((request) => null).connect(),
+        MemberRegistrationPage(
+          scanPvc: ({required camera}) async => photoOnly(camera: camera),
+          readPvcText: (photo) async => throw const ApiException(404, 'Not found.'),
+          takeSelfie: () async => XFile.fromData(_pixel),
+        ),
+      );
+      await tester.tap(find.text('Choose photo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Your card could not be read just now. Type the details from the card.'), findsOneWidget);
+      expect(find.textContaining('Not found'), findsNothing);
+    });
   });
 
   group('the selfie', () {

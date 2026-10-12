@@ -69,13 +69,61 @@ void main() {
     expect(born('ISSUED 14/05/1990'), isNull); // not labelled as a birth date
   });
 
-  test('reads gender and occupation only from their labels', () {
+  test('reads gender from its label or the word itself, occupation from its label', () {
     expect(gender('GENDER: FEMALE'), 'female');
     expect(gender('SEX: X'), isNull);
-    expect(gender('MALE'), isNull);
+    // With the label misread, the words Male and Female still count; a letter does not.
+    expect(gender('GENDEP\nMale'), 'male');
+    expect(gender('M'), isNull);
     expect(occupation('OCCUPATION: TRADER'), 'Trader');
     // A line the reader ran together stops at the next label.
     expect(occupation('OCCUPATION: FARMER ADDRESS: 4 MAIN STREET'), 'Farmer');
+  });
+
+  test('reads a card laid out as PVCs print it', () {
+    // Today's PVC, with made-up details: the code labelled CODE, a DELIM line
+    // of place names, the name unlabelled as SURNAME, OTHER NAMES, and date of
+    // birth beside gender.
+    const card = 'INDEPENDENT NATIONAL ELECTORAL COMMISSION\n'
+        "VOTER'S CARD\n"
+        'CODE: 18-23-01-001 VIN 90F5 B0E8 D029 5847 263\n'
+        'DELIM: KADUNA | ZARIA\n'
+        'KWARBAI "A"\n'
+        'BELLO, MUSA IBRAHIM\n'
+        'DATE OF BIRTH GENDER\n'
+        '14-05-1990 Male\n'
+        'OCCUPATION\n'
+        'TRADER\n'
+        'ADDRESS\n'
+        'NO12 ANGUWAN KAHU, ZARIA CITY';
+    expect(name(card), 'Bello Musa Ibrahim');
+    expect(vin(card), '90F5B0E8D0295847263');
+    expect(PvcRecognitionService.extractDelim(card), '18-23-01-001');
+    expect(born(card), DateTime(1990, 5, 14));
+    expect(gender(card), 'male');
+    expect(occupation(card), 'Trader');
+  });
+
+  test('copes with what a weaker reader makes of a card', () {
+    // As Tesseract read a real card photo: stray marks, a lost colon and
+    // dashes, misread labels and an unreadable VIN (details made up).
+    const card = 'CODE" 182301001 Vv oF 8O4D Ce. RR\n'
+        'A DELIM: KADUNA |} ZARID.\n'
+        '4 KWARBAL "A"\n'
+        '3 BELLO, MUSA IBRAHIM gs\n'
+        '9 DATE OF 3IRTH GENDER,\n'
+        '9 14-05-1990 Male\n'
+        'CCCUPATION\n'
+        'OTHER\n'
+        'ADDRT AS XY\n'
+        'NO33 ANGUWAN KAHU,ZARIA CITY';
+    expect(name(card), 'Bello Musa Ibrahim');
+    expect(PvcRecognitionService.extractDelim(card), '18-23-01-001');
+    expect(vin(card), isNull); // left for the member to type
+    expect(born(card), DateTime(1990, 5, 14));
+    expect(gender(card), 'male');
+    // The address is never taken for the name, even when it is the only comma line.
+    expect(name('ADDRT AS XY\nNO33 ANGUWAN KAHU,ZARIA CITY'), isNull);
   });
 
   test('says plainly what a scan amounts to', () {
