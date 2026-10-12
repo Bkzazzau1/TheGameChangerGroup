@@ -33,6 +33,7 @@ import 'security/security_response_portal_page.dart';
 import 'session.dart';
 import 'mapping/unit_mapping_page.dart';
 import 'tracking/agents_on_ground_page.dart';
+import 'ui/demo_data_notice.dart';
 import 'ui/tgcg_design.dart';
 
 class TgcgShell extends StatefulWidget {
@@ -144,7 +145,12 @@ class _TgcgShellState extends State<TgcgShell> {
     );
   }
 
-  Widget _pageFor(TgcgModule module) => switch (module) {
+  Widget _pageFor(TgcgModule module) => TgcgDemoDataPage(
+        module: module,
+        child: _contentFor(module),
+      );
+
+  Widget _contentFor(TgcgModule module) => switch (module) {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
         TgcgModule.accreditation => const PvcEnrollmentPage(),
         TgcgModule.membershipNetwork => const NationalMembershipPage(),

@@ -5,6 +5,7 @@ import '../evidence/evidence_capture_page.dart';
 import '../membership/membership_store.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
+import '../ui/demo_data_notice.dart';
 import '../ui/tgcg_design.dart';
 import 'digital_agent_id_page.dart';
 import 'field_agent_communications_page.dart';
@@ -47,9 +48,14 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       return Scaffold(
         backgroundColor: TgcgColors.canvas,
         appBar: _appBar(session, allowHome: false),
-        body: _FieldAssignmentRequired(
-          session: session,
-          membership: membership,
+        body: TgcgDemoDataPage(
+          module: TgcgModule.overview,
+          message:
+              'The agent profiles below are sample or local assignments, not assignments verified by the live server.',
+          child: _FieldAssignmentRequired(
+            session: session,
+            membership: membership,
+          ),
         ),
       );
     }
@@ -213,7 +219,12 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
     return session.scope.pollingUnitName ?? 'Polling-unit operations';
   }
 
-  Widget _pageFor(TgcgModule module) => switch (module) {
+  Widget _pageFor(TgcgModule module) => TgcgDemoDataPage(
+        module: module,
+        child: _contentFor(module),
+      );
+
+  Widget _contentFor(TgcgModule module) => switch (module) {
         TgcgModule.overview => FieldAgentDashboardPage(
             onOpenModule: (next) => setState(() => selectedModule = next),
           ),

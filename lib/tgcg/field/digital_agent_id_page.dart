@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../membership/membership_store.dart';
 import '../session.dart';
+import '../ui/demo_data_notice.dart';
 import '../ui/tgcg_design.dart';
 
 class DigitalAgentIdPage extends StatelessWidget {
@@ -45,7 +46,7 @@ class DigitalAgentIdPage extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
         title: const Text('Digital Agent ID'),
       ),
-      body: Center(
+      body: _labelDemoCard(Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: ConstrainedBox(
@@ -256,9 +257,16 @@ class DigitalAgentIdPage extends StatelessWidget {
             ),
           ),
         ),
-      ),
+      )),
     );
   }
+
+  Widget _labelDemoCard(Widget child) => TgcgDemoDataPage(
+        module: TgcgModule.overview,
+        message:
+            'This agent card uses a sample or local assignment. It is not a credential verified by the live server.',
+        child: child,
+      );
 
   static String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();

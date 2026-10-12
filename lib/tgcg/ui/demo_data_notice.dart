@@ -1,0 +1,121 @@
+import 'package:flutter/material.dart';
+
+import '../session.dart';
+import 'tgcg_design.dart';
+
+/// Identifies local demonstration views when signed in to the live server.
+/// API-backed pages have no notice; mixed views describe their live actions.
+class TgcgDemoDataPage extends StatelessWidget {
+  const TgcgDemoDataPage({
+    super.key,
+    required this.module,
+    required this.child,
+    this.message,
+  });
+
+  final TgcgModule module;
+  final Widget child;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final notice = message ?? _messageFor(module);
+    if (!TgcgSession.of(context).isServerSession || notice == null) {
+      return child;
+    }
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: const BoxDecoration(
+            color: TgcgColors.accentSoft,
+            border: Border(bottom: BorderSide(color: TgcgColors.accent)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                color: TgcgColors.accentDeep,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Demo data. ',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      TextSpan(text: notice),
+                    ],
+                  ),
+                  style: const TextStyle(
+                    color: TgcgColors.ink,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  static String? _messageFor(TgcgModule module) => switch (module) {
+    TgcgModule.overview =>
+      'Membership, agent, incident and result counts include sample records. These summaries are not a live server report.',
+    TgcgModule.membershipNetwork =>
+      'Members, agent profiles and totals on this page are sample or local records, not the server member register.',
+    TgcgModule.accreditation =>
+      'Enrollment and agent profiles on this page use sample or local records. Polling-unit lookup uses the live API.',
+    TgcgModule.geography =>
+      'Membership, agent, incident and result counts include sample records. Geographic boundaries are shown for navigation.',
+    TgcgModule.liveOperations =>
+      'The map activity and operational counts include sample records, not live server activity.',
+    TgcgModule.fieldMonitoring =>
+      'Incident and report lists include sample records. New incidents and reports can upload to the live API.',
+    TgcgModule.evidenceCapture =>
+      'Evidence lists and linked incidents include sample records. This view is not the server evidence register.',
+    TgcgModule.resultCapture =>
+      'Result totals and review lists include sample records. New result submissions use the live API.',
+    TgcgModule.collation =>
+      'Vote totals and collation summaries include sample results. They are not live server results.',
+    TgcgModule.aiVerification =>
+      'The review examples and verification activity are demonstrations, not server verification decisions.',
+    TgcgModule.aiAnalytics =>
+      'Charts, forecasts and analysis on this page use sample data, not live server records.',
+    TgcgModule.alertCenter =>
+      'Alerts and activity shown here include sample records, not live server alerts.',
+    TgcgModule.situationRoom =>
+      'Incident, response and operational activity include sample records, not a live server situation report.',
+    TgcgModule.securityResponse =>
+      'Agency contacts, dispatches and response activity include sample or local records, not live emergency services.',
+    TgcgModule.mediaIntelligence =>
+      'Media reports and intelligence shown here use sample or local records, not a live media feed.',
+    TgcgModule.communications =>
+      'Contacts, messages and delivery activity are sample or local records. Messages here are not delivered through the live server.',
+    TgcgModule.bulkCommunications =>
+      'Recipients and campaign activity use sample or local records. Campaigns here do not send live messages.',
+    TgcgModule.discussionRoom =>
+      'Discussion messages and participants are sample or local records, not a live server conversation.',
+    TgcgModule.meetingRoom =>
+      'Contacts and participants are demonstrations. This page does not connect remote calls; your camera preview is local.',
+    TgcgModule.systemMonitoring =>
+      'Activity counts include sample records. Sync status reflects this device, not overall server health.',
+    TgcgModule.reports =>
+      'Report totals and previews include sample records, not live server reports.',
+    TgcgModule.governance =>
+      'Governance activity and profiles use sample or local records. Use Role Management for live server appointments.',
+    TgcgModule.roleAssignment ||
+    TgcgModule.memberReview ||
+    TgcgModule.unitMapping ||
+    TgcgModule.agentTracking => null,
+  };
+}
