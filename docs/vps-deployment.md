@@ -106,4 +106,6 @@ Public HTTPS health, API sign-in/logout, the app's CORS preflight, Django admin 
 
 Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server environment before enabling phone verification. Nginx currently returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`. After the real provider is configured and verified, remove those temporary locations, restart the API, test Nginx configuration and reload Nginx. No administrator phone or email was supplied.
 
+Joining by USSD is in the backend from 12 October 2026 but stays off until `USSD_CALLBACK_TOKEN` (at least 32 random characters) and `USSD_SERVICE_CODE` are set, the backend release containing it is deployed, and Nginx lets only the USSD aggregator's addresses reach `/api/v1/ussd/`. The backend's `docs/ussd-registration.md` has the steps.
+
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
