@@ -93,7 +93,7 @@ Private uploads remain under `/opt/tgcg/backend/media`; they require the applica
 
 ## Scheduled work and backups
 
-- `tgcg-maintenance.timer`: removes expired location history daily at 03:00 Africa/Lagos.
+- `tgcg-maintenance.timer`: removes expired location history and USSD progress daily at 03:00 Africa/Lagos.
 - `tgcg-backup.timer`: backs up PostgreSQL, private media, `.env`, Nginx configuration, TLS configuration and deployment metadata daily at 03:15 Africa/Lagos.
 - Backup directories: `/var/backups/tgcg/<UTC timestamp>-<unique suffix>`, accessible to root.
 - Initial backup: `/var/backups/tgcg/20261012T072156Z-gTgoU1`.
@@ -150,6 +150,33 @@ Reverified on 13 October 2026 after a successful backup, reusing the existing ca
 In the dashboard, replace any literal `<TOKEN>` placeholder by pasting the complete callback URL from the restricted, Git-ignored `build/ussd-callback-private.txt`. Leave Events URL blank. The private VPS copy is `/root/tgcg-ussd-callback-private.txt`. The user's 13 October 2026 screenshot confirmed the callback in the [Africa's Talking simulator](https://developers.africastalking.com/simulator), reaching the TGCG Join prompt: `Enter your full name as written on your PVC:`. Provider IP/CIDR restrictions remain pending; completed registration and creation of a new membership have not yet been confirmed.
 
 The user can now test `*384*027031#` in Africa's Talking's simulator with their own `+234` number; completing Join creates their real TGCG membership. Callback address restrictions remain pending the provider's trusted IP/CIDR list from support. The backend's `docs/ussd-registration.md` describes the menu and callback contract. To disable USSD, remove the two environment lines and restart the API; callback POSTs then return 404.
+
+### Quick USSD membership and resumable progress deployed (13 October 2026)
+
+Deployed backend implementation `f9ded2a` and Flutter build `c06b1ad`. Menu 1 joins or continues: enter the required 19-letter/digit VIN, then the polling unit code as `18-23-01-001`, `18*23*01*001` or separate parts. The unit confirmation includes the data-use notice: `1` joins, `2` changes the unit and `0` cancels. Successful confirmation returns a membership number and creates active membership awaiting identity review (`verification_status=pendingReview`), with an empty name and no sign-in account. Full name and a repeated 6-digit app PIN can be added later through menu 1; quick membership alone does not enable app sign-in. Coordinator review displays a clear label and membership number until a name is added.
+
+Migration `membership.0008_ussd_resumable_registration` was applied after a successful backup. PostgreSQL now keeps progress by normalized phone number across workers, API restarts and provider session IDs for 30 days of inactivity. The opening notice explains this retention. `/etc/systemd/system/tgcg-maintenance.service.d/ussd.conf` adds `purge_ussd_progress` to the existing daily maintenance service; its manual run succeeded. Cancelling clears progress, leaving existing membership intact. Duplicate and callback-prefix tracking uses keyed HMAC digests rather than raw callback text or PINs. Each new question, including consent and PIN confirmation, must be displayed before its answer can be accepted. Native session timeouts remain controlled by the provider; an in-flight old-format session asks the caller to redial.
+
+The existing callback token, sandbox code `*384*027031#`, protected Nginx locations and Gunicorn logging remain unchanged. No Africa's Talking API key is required. The environment file remains `600:tgcg:tgcg`. Provider IP/CIDR restrictions and the user's completion of a real registration remain pending.
+
+Validation used isolated databases without reading dotenv files: the full local backend suite passed 354 tests, with one native Tesseract test skipped; 57 focused USSD integration tests passed. On the VPS, 91 USSD, registration-service and concurrency tests passed against a separate PostgreSQL database. These included simultaneous final joins, redial/completion races, simultaneous profile completion and cleanup lock ordering. The isolated database was removed afterward. Fifteen existing coordinator/phone Flutter tests and targeted static analysis passed, and the production web build succeeded.
+
+Production checks passed without creating a test membership or sign-in account:
+
+| Check | Result |
+| --- | --- |
+| Saved VIN survives API restart | Passed; public redial resumed at polling unit |
+| Partial polling-unit code survives redial | Passed across local and public callbacks |
+| Cancel progress | Passed; temporary draft and callback records removed |
+| Initial menu, non-member lookup, wrong service code | Passed on loopback and public HTTPS; 200, expected `CON`/`END`, `text/plain` |
+| Wrong callback token | 404 on loopback and public HTTPS |
+| Member, User, draft and session counts after temporary checks | Unchanged |
+| Production Django checks and API/database health | Passed |
+| Nginx configuration and daily maintenance | Passed |
+| Callback credential logging and existing private URL | No credential in Nginx logs or the new API journal; private URL still matches |
+| Built web assets | All 855 files matched the uploaded manifest; public JavaScript checksum matched |
+
+The current web release is `/var/www/tgcg/releases/web-20261013-122745-a3cbb36d5073`; the previous release is retained. Secret-free operational results are in `/opt/tgcg/deployment/ussd-quick-validation.json`. Backups cover the release and operational configuration. Source checkouts are synchronized with GitHub; later documentation commits do not require rebuilding this web bundle.
 
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
 
