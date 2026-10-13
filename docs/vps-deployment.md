@@ -145,6 +145,10 @@ The requested safe callback tests all passed on loopback and through public HTTP
 
 Successful screens used `text/plain`. The callback token was absent from newly written Nginx access/error logs and the API service journal. The test number's membership and sign-in-account counts were unchanged, and no Join sequence was submitted. Secret-free results are recorded in `/opt/tgcg/deployment/ussd-status.json`.
 
+Reverified on 13 October 2026 after a successful backup, reusing the existing callback token and service code `*384*027031#`. Initial menu, non-member lookup (`text=2`) and wrong-service checks returned 200 with `text/plain`; a wrong token returned 404, on both loopback and public HTTPS. Member/User counts were unchanged, API/database health passed, and the API and Nginx remained active. No environment, code, migration, Nginx or restart changes were needed.
+
+In the dashboard, replace any literal `<TOKEN>` placeholder by pasting the complete callback URL from the restricted, Git-ignored `build/ussd-callback-private.txt`. Leave Events URL blank. The private VPS copy is `/root/tgcg-ussd-callback-private.txt`. Provider IP/CIDR restrictions and confirmation of the user's actual test in the [Africa's Talking simulator](https://developers.africastalking.com/simulator) remain pending.
+
 The user can now test `*384*027031#` in Africa's Talking's simulator with their own `+234` number; completing Join creates their real TGCG membership. Callback address restrictions remain pending the provider's trusted IP/CIDR list from support. The backend's `docs/ussd-registration.md` describes the menu and callback contract. To disable USSD, remove the two environment lines and restart the API; callback POSTs then return 404.
 
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
