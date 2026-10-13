@@ -172,10 +172,12 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.stateCoordinator: {
-      // As on the server: register members, pin units, see members' contacts.
+      // As on the server: register members, pin units, see members' contacts
+      // and confirm their identities.
       TgcgCapability.registerMembers,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
+      TgcgCapability.verifyMemberIdentity,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewAlerts,
@@ -206,10 +208,12 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.lgaCoordinator: {
-      // As on the server: register members, pin units, see members' contacts.
+      // As on the server: register members, pin units, see members' contacts
+      // and confirm their identities.
       TgcgCapability.registerMembers,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
+      TgcgCapability.verifyMemberIdentity,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewAlerts,
@@ -235,10 +239,12 @@ class TgcgPermissionPolicy {
       TgcgCapability.viewEvidence,
     },
     TgcgRole.wardCoordinator: {
-      // As on the server: register members, pin units, see members' contacts.
+      // As on the server: register members, pin units, see members' contacts
+      // and confirm their identities.
       TgcgCapability.registerMembers,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
+      TgcgCapability.verifyMemberIdentity,
       TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewGeography,

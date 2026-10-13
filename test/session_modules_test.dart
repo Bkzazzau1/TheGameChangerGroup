@@ -9,8 +9,10 @@ void main() {
 
     // The role grid agreed on 10 October 2026 ("Proposed"), plus screens built
     // since: Unit Mapping for coordinators who pin units, and Agents on the
-    // Ground for whoever sees live operations. Role Assignment for zonal and
-    // state coordinators and Technical Support waits for cascading appointments.
+    // Ground for whoever sees live operations, and Member Review for the state,
+    // LGA and ward coordinators who verify identities (13 October 2026). Role
+    // Assignment for zonal and state coordinators and Technical Support waits for
+    // cascading appointments.
     final grid = <TgcgRole, Set<TgcgModule>>{
       TgcgRole.nationalCollationOfficer: modules(
         'overview liveOperations agentTracking alertCenter situationRoom evidenceCapture '
@@ -30,19 +32,19 @@ void main() {
       ),
       TgcgRole.stateCoordinator: modules(
         'overview liveOperations agentTracking aiAnalytics alertCenter situationRoom '
-        'securityResponse mediaIntelligence accreditation unitMapping aiVerification '
+        'securityResponse mediaIntelligence accreditation memberReview unitMapping aiVerification '
         'fieldMonitoring evidenceCapture resultCapture collation communications '
         'bulkCommunications discussionRoom meetingRoom reports',
       ),
       TgcgRole.lgaCoordinator: modules(
         'overview liveOperations agentTracking alertCenter situationRoom securityResponse '
-        'accreditation unitMapping aiVerification fieldMonitoring evidenceCapture resultCapture '
-        'collation communications discussionRoom meetingRoom',
+        'accreditation memberReview unitMapping aiVerification fieldMonitoring evidenceCapture '
+        'resultCapture collation communications discussionRoom meetingRoom',
       ),
       TgcgRole.wardCoordinator: modules(
-        'overview liveOperations agentTracking situationRoom accreditation unitMapping '
-        'fieldMonitoring evidenceCapture resultCapture collation communications discussionRoom '
-        'meetingRoom',
+        'overview liveOperations agentTracking situationRoom accreditation memberReview '
+        'unitMapping fieldMonitoring evidenceCapture resultCapture collation communications '
+        'discussionRoom meetingRoom',
       ),
       TgcgRole.pollingUnitAgent: modules(
         'overview fieldMonitoring evidenceCapture resultCapture communications discussionRoom '
