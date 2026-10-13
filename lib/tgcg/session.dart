@@ -320,10 +320,12 @@ Set<TgcgModule> allowedModulesFor(
   bool any(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
   final modules = <TgcgModule>{TgcgModule.overview};
 
+  // Member Enrolment: whoever registers members in person or accredits agents.
   if (any(const [
     TgcgCapability.manageMembership,
     TgcgCapability.accreditAgents,
     TgcgCapability.manageAgentAssignments,
+    TgcgCapability.registerMembers,
   ])) {
     modules.add(TgcgModule.accreditation);
   }
@@ -350,17 +352,24 @@ Set<TgcgModule> allowedModulesFor(
   if (can(TgcgCapability.confirmAgentLocation)) {
     modules.add(TgcgModule.unitMapping);
   }
-  if (can(TgcgCapability.viewGeography)) {
+  // Screens the role grid (agreed 10 October 2026) gives to their own groups.
+  // Geographic Operations manages master data: the National Administrator's.
+  if (can(TgcgCapability.manageGeography)) {
     modules.add(TgcgModule.geography);
-    // Operational views; agents and observers (who see no incidents) go without.
-    if (can(TgcgCapability.viewIncidents)) {
-      modules.add(TgcgModule.liveOperations);
-      modules.add(TgcgModule.aiAnalytics);
-      modules.add(TgcgModule.alertCenter);
-    }
   }
+  if (can(TgcgCapability.viewLiveOperations)) {
+    modules.add(TgcgModule.liveOperations);
+    // Live agent positions and check-in coverage (server tracking/live and coverage).
+    modules.add(TgcgModule.agentTracking);
+  }
+  if (can(TgcgCapability.viewAnalytics)) {
+    modules.add(TgcgModule.aiAnalytics);
+  }
+  if (can(TgcgCapability.viewAlerts)) {
+    modules.add(TgcgModule.alertCenter);
+  }
+  // Field Monitoring is for those who report from the field.
   if (any(const [
-    TgcgCapability.viewIncidents,
     TgcgCapability.createIncident,
     TgcgCapability.submitFieldReport,
   ])) {
@@ -371,8 +380,6 @@ Set<TgcgModule> allowedModulesFor(
   }
   if (can(TgcgCapability.viewSituationRoom)) {
     modules.add(TgcgModule.situationRoom);
-    // Live agent positions and check-in coverage (server tracking/live and coverage).
-    modules.add(TgcgModule.agentTracking);
   }
   if (can(TgcgCapability.viewSituationRoom) && can(TgcgCapability.assignIncident)) {
     modules.add(TgcgModule.securityResponse);
@@ -387,7 +394,6 @@ Set<TgcgModule> allowedModulesFor(
   if (any(const [
     TgcgCapability.verifyElectionResult,
     TgcgCapability.manageMembership,
-    TgcgCapability.manageEvidence,
   ])) {
     modules.add(TgcgModule.aiVerification);
   }
@@ -409,10 +415,10 @@ Set<TgcgModule> allowedModulesFor(
   if (can(TgcgCapability.viewMeetingRoom)) {
     modules.add(TgcgModule.meetingRoom);
   }
+  // System Monitoring: the administrator and Technical Support only.
   if (any(const [
-    TgcgCapability.viewAudit,
     TgcgCapability.manageSystemSettings,
-    TgcgCapability.viewSituationRoom,
+    TgcgCapability.manageUsers,
   ])) {
     modules.add(TgcgModule.systemMonitoring);
   }
