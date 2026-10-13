@@ -216,7 +216,7 @@ class _MemberListState extends State<_MemberList> {
                   ),
                   child: ListTile(
                     title: Text(
-                      member.fullName,
+                      member.displayName,
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     // Pills under the details, so the text keeps the row's width on phones.
@@ -331,7 +331,7 @@ class _IdentityReviewDialogState extends State<IdentityReviewDialog> {
   Future<void> _approve() async {
     final notes = await promptText(
       context,
-      title: 'Confirm ${widget.member.fullName}\'s identity?',
+      title: 'Confirm ${widget.member.displayName}\'s identity?',
       message:
           'Record what you checked yourself, for example that you compared the PVC with '
           'the person in front of you. Do not write the VIN or phone number here.',
@@ -349,7 +349,7 @@ class _IdentityReviewDialogState extends State<IdentityReviewDialog> {
   Future<void> _reject() async {
     final reason = await promptText(
       context,
-      title: 'Reject ${widget.member.fullName}\'s identity?',
+      title: 'Reject ${widget.member.displayName}\'s identity?',
       message:
           'Any appointments they hold stop at once, and they cannot be appointed until '
           'their identity is confirmed.',
@@ -367,7 +367,7 @@ class _IdentityReviewDialogState extends State<IdentityReviewDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.member.fullName),
+    title: Text(widget.member.displayName),
     content: SizedBox(
       width: 560,
       child: FutureBuilder<MemberVerification>(
@@ -741,18 +741,18 @@ class _StandingDialogState extends State<StandingDialog> {
   Future<void> _change(String action) async {
     final (title, message, required) = switch (action) {
       'suspend' => (
-        'Suspend ${_member.fullName}?',
+        'Suspend ${_member.displayName}?',
         'All their operational access stops at once and they are signed out. Their '
             'appointments stay on record.',
         true,
       ),
       'deactivate' => (
-        'Deactivate ${_member.fullName}\'s membership?',
+        'Deactivate ${_member.displayName}\'s membership?',
         'They are signed out and cannot sign in again. Their history is kept.',
         true,
       ),
       _ => (
-        'Restore ${_member.fullName}\'s membership?',
+        'Restore ${_member.displayName}\'s membership?',
         'Only appointments that are otherwise still valid give access again.',
         false,
       ),
@@ -791,7 +791,7 @@ class _StandingDialogState extends State<StandingDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(_member.fullName),
+    title: Text(_member.displayName),
     content: SizedBox(
       width: 520,
       child: SingleChildScrollView(

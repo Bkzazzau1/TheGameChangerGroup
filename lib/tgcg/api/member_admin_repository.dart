@@ -31,6 +31,11 @@ class StaffMember {
   final String membershipNumber;
   final String fullName;
 
+  /// Quick USSD membership can exist before the caller adds their name.
+  String get displayName => fullName.trim().isEmpty
+      ? 'Name not added yet ($membershipNumber)'
+      : fullName;
+
   /// unverified, pendingReview, verified or rejected.
   final String verificationStatus;
 
