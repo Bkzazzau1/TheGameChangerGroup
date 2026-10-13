@@ -90,9 +90,11 @@ forms hard:
 11. [ ] **Remove the manual "Biometric enrollment recorded" switch.** The
    "Biometric" counts and the "Identity" tick on agent cards come from it,
    though nothing is captured. Show real status from the server, or nothing.
-12. [ ] **Label the AI Verification screen in presentation mode.** Its "Face
+12. [x] **Label the AI Verification screen in presentation mode.** Its "Face
     match 97.9%" and "Liveness passed" are fixed example text. It shows the
     "Demo data" notice only when signed in to the live server.
+    *Done differently on 14 October 2026:* presentation mode was removed, and
+    the screen is no longer offered to anyone until it works on the server.
 13. [ ] **Show in Member Review how each member joined**: in the app, with a
     coordinator, or by USSD.
 

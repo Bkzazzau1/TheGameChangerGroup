@@ -87,13 +87,22 @@ flutter run --dart-define=TGCG_API_URL=http://10.0.2.2:8000
 flutter run --dart-define=TGCG_API_URL=http://192.168.1.20:8000
 ```
 
-With `TGCG_API_URL` set, the login screen signs in against the server. Use an
-access ID or phone number with a password, or a PIN for members. The server
-decides the role and area. Tokens are kept in secure storage, the session is
-restored on the next launch, and an expired session signs the user out.
+With `TGCG_API_URL` set, the app opens on the TGCG poster
+(`assets/brand/login_poster.webp`), the logo and a welcome note. On a phone,
+**Sign in** opens the form; on a wide screen the form stands beside the poster.
+Sign in with an access ID or phone number and a password, or a PIN for members.
+The server decides the role and area. Tokens are kept in secure storage, the
+session is restored on the next launch, and an expired session signs the user
+out.
 
-Without `TGCG_API_URL`, the app runs in **presentation mode**. It shows the
-role picker and seeded demo data, and nothing is sent to a server.
+Without `TGCG_API_URL`, the app is not connected to a server and says so. There
+is no presentation or demo mode, so every build for real users must set it:
+
+```bash
+flutter build apk --release --dart-define=TGCG_API_URL=https://api.tgcg.online
+```
+
+The web build is in `docs/vps-deployment.md`.
 
 The connection code lives in `lib/tgcg/api/`:
 
@@ -105,9 +114,11 @@ The connection code lives in `lib/tgcg/api/`:
   review decisions.
 - `meetings_repository.dart` lists, calls, ends and cancels meetings, and gets
   the pass to join a meeting's call.
+- `overview_repository.dart` reads the Overview's counts: members, results,
+  verified results and today's agent check-ins.
 
-Signed in to a server, these screens work on server records: Role
-Management, Member Review, Unit Mapping, Agents on the Ground, the Situation
+Signed in to a server, these screens work on server records: the Overview,
+Role Management, Member Review, Unit Mapping, Agents on the Ground, the Situation
 Room, Field Monitoring, Result Capture, Collation and the Meeting Room.
 Incident actions (acknowledge, assign, escalate, resolve, close, reopen),
 field report reviews and result decisions (verify, dispute, reject) go to the
@@ -117,5 +128,13 @@ LiveKit; the server decides who may join and hands out the join pass (see the
 server's docs/meetings.md). New incidents, reports and results are saved on
 the device first and upload when there is a connection; photos taken with
 them (incident photos, the signed result sheet) upload after their record,
-and reviewers open them from the record. Other screens still show sample
-records and carry a "Demo data" notice.
+and reviewers open them from the record.
+
+A polling-unit agent's phone opens on their own account: their polling unit,
+today's check-in and their duty, with tabs to report an incident, submit the
+result and join meetings.
+
+Only these screens are offered (`liveModules` in `lib/tgcg/session.dart`).
+The others, such as messages, the forum, reports and member enrolment, ran on
+sample records, so they stay hidden until each one works on the server. The
+role grid (`allowedModulesFor`) still says who will get them.

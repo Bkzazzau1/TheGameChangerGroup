@@ -16,7 +16,6 @@ import 'member/member_shell.dart';
 import 'membership/membership_store.dart';
 import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
-import 'presentation_access_login.dart';
 import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
 import 'security/emergency_response_store.dart';
@@ -161,44 +160,6 @@ class _TgcgAppState extends State<TgcgApp> {
         EmergencyResponseController.prototypeSeed(governanceOperationsController);
   }
 
-  Future<void> _resetPresentation() async {
-    final oldSession = sessionController;
-    final oldOffline = offlinePersistenceController;
-    final oldMembership = membershipOperationsController;
-    final oldGovernance = governanceOperationsController;
-    final oldField = fieldOperationsController;
-    final oldResults = resultOperationsController;
-    final oldCommunications = communicationsController;
-    final oldBulkCommunications = bulkCommunicationsController;
-    final oldReports = reportOperationsController;
-    final oldEmergency = emergencyResponseController;
-
-    try {
-      await oldOffline.clearPresentationData();
-    } catch (_) {
-      // Recreating all in-memory controllers still restores the presentation
-      // even if local persistence is unavailable on this platform.
-    }
-    await oldOffline.close();
-    if (!mounted) return;
-
-    setState(_createControllers);
-    unawaited(offlinePersistenceController.initialize());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      oldSession.dispose();
-      oldField.dispose();
-      oldResults.dispose();
-      oldMembership.dispose();
-      oldCommunications.dispose();
-      oldBulkCommunications.dispose();
-      oldReports.dispose();
-      oldEmergency.dispose();
-      oldGovernance.dispose();
-      oldOffline.dispose();
-    });
-  }
-
   @override
   void dispose() {
     syncController?.dispose();
@@ -249,9 +210,7 @@ class _TgcgAppState extends State<TgcgApp> {
                             theme: _theme(),
                             home: restoringSession
                                 ? const _RestoringSession()
-                                : _AuthenticationGate(
-                                    onResetPresentation: _resetPresentation,
-                                  ),
+                                : const _AuthenticationGate(),
                           ),
                         ),
                       ),
@@ -492,22 +451,14 @@ class _RestoringSession extends StatelessWidget {
 }
 
 class _AuthenticationGate extends StatelessWidget {
-  const _AuthenticationGate({required this.onResetPresentation});
-
-  final Future<void> Function() onResetPresentation;
+  const _AuthenticationGate();
 
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    if (!session.isAuthenticated && TgcgBackend.of(context) != null) {
-      // Connected to a server: real sign-in, no presentation controls.
-      return const TgcgLoginPage(key: ValueKey('server-login'));
-    }
+    if (TgcgBackend.of(context) == null) return const _NotConnected();
     if (!session.isAuthenticated) {
-      return PresentationAccessLogin(
-        key: const ValueKey('presentation-access-login'),
-        onResetPresentation: onResetPresentation,
-      );
+      return const TgcgLoginPage(key: ValueKey('server-login'));
     }
     if (session.isMember) {
       return const MemberShell(key: ValueKey('member-shell'));
@@ -517,4 +468,38 @@ class _AuthenticationGate extends StatelessWidget {
     }
     return const TgcgShell(key: ValueKey('tgcg-shell'));
   }
+}
+
+/// A build made without the server's address (TGCG_API_URL). The app only
+/// works against the TGCG server, so it says so instead of showing samples.
+class _NotConnected extends StatelessWidget {
+  const _NotConnected();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+        backgroundColor: TgcgColors.primaryDark,
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TgcgLogo(size: 88),
+                SizedBox(height: 22),
+                Text(
+                  'This copy of the app is not connected to the TGCG server.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'Install the official TGCG app, or open app.tgcg.online.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }

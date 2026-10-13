@@ -633,7 +633,11 @@ void main() {
         });
     await tester.pumpWidget(TgcgApp(backend: server.connect()));
     await tester.pumpAndSettle();
+    // The first page welcomes; signing in opens the form.
+    expect(find.text('Welcome to TGCG-EMCOP'), findsOneWidget);
     expect(find.text('New member? Register with your PVC'), findsOneWidget);
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
     expect(find.text('Forgot PIN?'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).at(0), '0803 123 4567');
@@ -690,6 +694,8 @@ void main() {
             _ => null,
           });
       await tester.pumpWidget(TgcgApp(backend: server.connect()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sign in'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).at(0), '0803 123 4567');
       await tester.enterText(find.byType(TextField).at(1), '482915');
@@ -808,14 +814,17 @@ void main() {
         });
     await tester.pumpWidget(TgcgApp(backend: server.connect()));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '0803 123 4567');
     await tester.enterText(find.byType(TextField).at(1), '482915');
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
 
-    // The operations app, with what the appointment allows and nothing else.
+    // The operations app, with what the appointment allows and nothing else:
+    // broadcasting is not built on the server yet, so it is not offered.
     expect(find.text('TGCG Member'), findsNothing);
-    expect(find.text('Bulk Communications'), findsWidgets);
+    expect(find.text('Bulk Communications'), findsNothing);
     expect(find.text('Roles & Access'), findsNothing);
     expect(find.text('Your access'), findsOneWidget);
     expect(find.text('Kaduna Media Director'), findsWidgets);

@@ -37,6 +37,22 @@ enum TgcgModule {
   memberReview,
 }
 
+/// The modules that work on the server's records today. The others still
+/// show sample records; they stay out of every menu until they are built
+/// on the server (the role grid in [allowedModulesFor] says who will get them).
+const liveModules = {
+  TgcgModule.overview,
+  TgcgModule.roleAssignment,
+  TgcgModule.memberReview,
+  TgcgModule.unitMapping,
+  TgcgModule.agentTracking,
+  TgcgModule.situationRoom,
+  TgcgModule.fieldMonitoring,
+  TgcgModule.resultCapture,
+  TgcgModule.collation,
+  TgcgModule.meetingRoom,
+};
+
 class TgcgSessionController extends ChangeNotifier {
   TgcgSessionController({this.onSignOut});
 
@@ -103,9 +119,11 @@ class TgcgSessionController extends ChangeNotifier {
 
   bool canAny(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
 
-  /// The modules this session may open.
-  Set<TgcgModule> get modules =>
-      _operator ? allowedModulesFor(can, supervises: _supervises) : const {};
+  /// The modules this session may open: what its permissions allow, of the
+  /// modules that work on server records ([liveModules]).
+  Set<TgcgModule> get modules => _operator
+      ? allowedModulesFor(can, supervises: _supervises).intersection(liveModules)
+      : const {};
 
   /// The fixed role's name, or the appointments the access comes from.
   String get roleTitle {

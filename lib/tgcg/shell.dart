@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'access/access_page.dart';
 import 'access/my_access_page.dart';
 import 'ai/ai_verification_page.dart';
-import 'api/backend.dart';
 import 'alerts/alert_center_page.dart';
 import 'analytics/ai_data_analytics_page.dart';
 import 'collation/collation_page.dart';
@@ -16,7 +15,6 @@ import 'field/field_monitoring_page.dart';
 import 'field/situation_room_page.dart';
 import 'geography/geography_page.dart';
 import 'governance/governance_page.dart';
-import 'governance/role_assignment_page.dart';
 import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
 import 'member/member_shell.dart';
@@ -26,7 +24,6 @@ import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
 import 'offline/offline_persistence.dart';
 import 'operations/live_operations_page.dart';
-import 'presentation/presentation_tour_sheet.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
 import 'security/security_response_portal_page.dart';
@@ -47,14 +44,6 @@ class _TgcgShellState extends State<TgcgShell> {
   TgcgModule selectedModule = TgcgModule.overview;
 
   void _select(TgcgModule module) => setState(() => selectedModule = module);
-
-  void _openTour(Set<TgcgModule> allowed) {
-    showPresentationTour(
-      context,
-      allowedModules: allowed,
-      onOpenModule: _select,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,11 +72,6 @@ class _TgcgShellState extends State<TgcgShell> {
                   actions: [
                     const _CompactSync(),
                     const SizedBox(width: 2),
-                    IconButton(
-                      tooltip: 'Presentation Tour',
-                      onPressed: () => _openTour(allowed),
-                      icon: const Icon(Icons.slideshow_rounded),
-                    ),
                     if (allowed.contains(TgcgModule.alertCenter))
                       IconButton(
                         tooltip: 'Alert Centre',
@@ -131,7 +115,6 @@ class _TgcgShellState extends State<TgcgShell> {
                             selectedModule: selectedModule,
                             showAlerts: allowed.contains(TgcgModule.alertCenter),
                             onAlerts: () => _select(TgcgModule.alertCenter),
-                            onTour: () => _openTour(allowed),
                           ),
                           Expanded(child: _pageFor(selectedModule)),
                         ],
@@ -154,10 +137,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
         TgcgModule.accreditation => const PvcEnrollmentPage(),
         TgcgModule.membershipNetwork => const NationalMembershipPage(),
-        // Server accounts manage real roles; presentation mode keeps the demo.
-        TgcgModule.roleAssignment => TgcgBackend.of(context) != null
-            ? const AccessControlPage()
-            : const RoleAssignmentPage(),
+        TgcgModule.roleAssignment => const AccessControlPage(),
         TgcgModule.memberReview => const MemberReviewPage(),
         TgcgModule.geography => const GeographyPage(),
         TgcgModule.liveOperations => const LiveOperationsPage(),
@@ -431,13 +411,11 @@ class _CommandBar extends StatelessWidget {
     required this.selectedModule,
     required this.showAlerts,
     required this.onAlerts,
-    required this.onTour,
   });
 
   final TgcgModule selectedModule;
   final bool showAlerts;
   final VoidCallback onAlerts;
-  final VoidCallback onTour;
 
   @override
   Widget build(BuildContext context) {
@@ -456,36 +434,12 @@ class _CommandBar extends StatelessWidget {
             _moduleLabel(selectedModule),
             style: const TextStyle(color: TgcgColors.ink, fontSize: 14, fontWeight: FontWeight.w900),
           ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: const TextField(
-                readOnly: true,
-                decoration: InputDecoration(
-                  hintText: 'Search agents, polling units, incidents or results',
-                  prefixIcon: Icon(Icons.search_rounded, size: 20),
-                  isDense: true,
-                ),
-              ),
-            ),
-          ),
           const Spacer(),
           TgcgStatusPill(
             label: pending == 0 ? 'SYNCED' : '$pending TO SYNC',
             color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
             icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
             compact: true,
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: onTour,
-            icon: const Icon(Icons.slideshow_rounded, size: 17),
-            label: const Text('Tour'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              visualDensity: VisualDensity.compact,
-            ),
           ),
           if (showAlerts) ...[
             const SizedBox(width: 4),

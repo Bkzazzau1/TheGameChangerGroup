@@ -21,6 +21,8 @@ void main() {
       'https://api.tgcg.test',
       tokens: MemoryTokenStore(),
       httpClient: MockClient((request) async {
+        // Only sign-in is answered; the app's other reads find nothing.
+        if (request.method != 'POST') return _json({'detail': 'Not found.'}, 404);
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         if (body['password'] != 'Strong-Pass-2027!') {
           return _json({'detail': 'No active account found with the given credentials'}, 401);
@@ -42,7 +44,8 @@ void main() {
     await tester.pumpWidget(TgcgApp(backend: backend));
     await tester.pumpAndSettle();
 
-    // No presentation role picker when connected to a server.
+    // The first page welcomes and signs in against the server.
+    expect(find.text('Welcome to TGCG-EMCOP'), findsOneWidget);
     expect(find.text('Operational role'), findsNothing);
     expect(find.text('Sign in'), findsOneWidget);
 

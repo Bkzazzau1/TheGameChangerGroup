@@ -8,6 +8,7 @@ import 'field_repository.dart';
 import 'member_admin_repository.dart';
 import 'mapping_repository.dart';
 import 'meetings_repository.dart';
+import 'overview_repository.dart';
 import 'member_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
@@ -24,6 +25,7 @@ class BackendServices {
         field = FieldRepository(client),
         results = ResultsRepository(client),
         meetings = MeetingsRepository(client),
+        overview = OverviewRepository(client, TrackingRepository(client)),
         access = AccessRepository(client),
         members = MemberAdminRepository(client);
 
@@ -60,6 +62,9 @@ class BackendServices {
   /// Meetings, and passes to join their calls (which run on LiveKit).
   final MeetingsRepository meetings;
 
+  /// The dashboard's counts.
+  final OverviewRepository overview;
+
   /// Roles, appointments, delegation and administrator approvals.
   final AccessRepository access;
 
@@ -67,8 +72,8 @@ class BackendServices {
   final MemberAdminRepository members;
 }
 
-/// Makes [BackendServices] available below it. `services` is null in
-/// offline presentation mode (no TGCG_API_URL configured).
+/// Makes [BackendServices] available below it. `services` is null in a
+/// build made without TGCG_API_URL; the app then says it is not connected.
 class TgcgBackend extends InheritedWidget {
   const TgcgBackend({super.key, required this.services, required super.child});
 

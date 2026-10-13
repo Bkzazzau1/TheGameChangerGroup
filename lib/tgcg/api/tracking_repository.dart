@@ -189,4 +189,18 @@ class TrackingRepository {
   Future<Coverage> coverage({GeographyLevel? level, String? code}) async => Coverage.fromJson(
         await client.get('tracking/coverage/', query: _area(level, code)) as Map<String, dynamic>,
       );
+
+  /// When the agent [accessId] last checked in, if ever. Agents see their
+  /// own check-ins; the newest comes first.
+  Future<DateTime?> lastCheckIn(String accessId) async {
+    final body = await client.get(
+      'tracking/check-ins/',
+      query: {'ordering': '-created_at', 'limit': '20'},
+    ) as Map<String, dynamic>;
+    for (final item in body['results'] as List<dynamic>) {
+      final row = item as Map<String, dynamic>;
+      if (row['agent'] == accessId) return DateTime.tryParse('${row['created_at']}');
+    }
+    return null;
+  }
 }

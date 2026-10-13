@@ -135,13 +135,19 @@ void main() {
         session.modules,
         containsAll([
           TgcgModule.overview,
-          TgcgModule.bulkCommunications,
           TgcgModule.roleAssignment,
           TgcgModule.memberReview,
         ]),
       );
       expect(session.modules, isNot(contains(TgcgModule.governance)));
       expect(session.modules, isNot(contains(TgcgModule.collation)));
+      // The role grid gives broadcasting its page, but it is not built on the
+      // server yet, so it stays out of the menu.
+      expect(
+        allowedModulesFor(session.can, supervises: session.supervises),
+        contains(TgcgModule.bulkCommunications),
+      );
+      expect(session.modules, isNot(contains(TgcgModule.bulkCommunications)));
     });
 
     test('signing out forgets the grants', () {
