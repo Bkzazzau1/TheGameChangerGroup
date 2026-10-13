@@ -100,3 +100,12 @@ The connection code lives in `lib/tgcg/api/`:
 - `api_client.dart` handles HTTP, token refresh and error messages.
 - `auth_repository.dart` handles login, session restore and logout.
 - `backend.dart` makes the connection available to the app.
+- `field_repository.dart` reads incidents and field reports, and changes them.
+
+Signed in to a server, these screens work on server records: Role
+Management, Member Review, Unit Mapping, Agents on the Ground, the Situation
+Room and Field Monitoring. In the last two, incident actions (acknowledge,
+assign, escalate, resolve, close, reopen) and field report reviews go to the
+server, which checks each one. New incidents and reports are saved on the
+device first and upload when there is a connection. Other screens still show
+sample records and carry a "Demo data" notice.

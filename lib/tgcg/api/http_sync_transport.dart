@@ -2,6 +2,13 @@ import '../offline/offline_persistence.dart';
 import '../sync/sync_worker.dart';
 import 'api_client.dart';
 
+/// The `client_id` an outbox entry is uploaded with: unique to the account
+/// and the entry, so a retried upload never creates a second record.
+String syncClientId(String accessId, String outboxId) {
+  final id = '$accessId:$outboxId';
+  return id.length <= 64 ? id : id.substring(id.length - 64);
+}
+
 /// Delivers offline-outbox mutations to the TGCG backend.
 ///
 /// Each upload carries a stable `client_id` derived from the outbox entry,
@@ -71,10 +78,7 @@ class HttpSyncTransport implements SyncTransport {
     }
   }
 
-  String _clientId(SyncOutboxItem mutation) {
-    final id = '${accessId()}:${mutation.id}';
-    return id.length <= 64 ? id : id.substring(id.length - 64);
-  }
+  String _clientId(SyncOutboxItem mutation) => syncClientId(accessId(), mutation.id);
 
   static String? _reference(Object? body) {
     if (body is! Map) return null;
@@ -114,9 +118,15 @@ class HttpSyncTransport implements SyncTransport {
         'category': p['category'],
         'summary': p['summary'],
         'scope': _scope(p['scope']),
+        'incident': _incidentReference(p['incidentId']),
         'reported_at': p['reportedAt'],
         'client_id': clientId,
       }..removeWhere((_, value) => value == null);
+
+  /// A server incident reference (INC-000012). Sample incidents and ones
+  /// still on the device have no server record to link to.
+  static String? _incidentReference(Object? id) =>
+      id is String && RegExp(r'^INC-\d{6,}$').hasMatch(id) ? id : null;
 
   static Map<String, Object?> _checkIn(Map<String, Object?> p, String clientId) {
     if (p['gps'] == null) {

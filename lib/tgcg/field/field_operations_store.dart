@@ -1,9 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
+import '../api/api_client.dart';
+import '../api/field_repository.dart';
+import '../api/http_sync_transport.dart' show syncClientId;
 import '../domain/models.dart';
 import '../offline/offline_payloads.dart';
 import '../offline/offline_persistence.dart';
 
+/// Incidents and field reports for every screen that shows them.
+///
+/// In presentation mode it holds sample records and changes them locally. In
+/// a server session ([connect]) it holds what the server returns, and every
+/// change is made on the server, which checks it. New records are always
+/// saved on the device first and uploaded by the sync controller, so they can
+/// be made offline; each stays on the list until the server's copy replaces it.
 class FieldOperationsController extends ChangeNotifier {
   FieldOperationsController._({
     required List<FieldIncident> incidents,
@@ -15,170 +27,364 @@ class FieldOperationsController extends ChangeNotifier {
 
   factory FieldOperationsController.prototypeSeed({
     OfflinePersistenceController? persistence,
-  }) {
-    final now = DateTime.utc(2026, 9, 27, 6, 30);
+  }) =>
+      FieldOperationsController._(
+        persistence: persistence,
+        incidents: _sampleIncidents(),
+        reports: _sampleReports(),
+      );
 
-    GeographicScope lga({
-      required String zoneId,
-      required String zoneName,
-      required String stateId,
-      required String stateName,
-      required String lgaId,
-      required String lgaName,
-    }) => GeographicScope(
-          level: GeographyLevel.lga,
-          country: 'Nigeria',
-          zoneId: zoneId,
-          zoneName: zoneName,
-          stateId: stateId,
-          stateName: stateName,
-          lgaId: lgaId,
-          lgaName: lgaName,
-        );
+  static final _sampleTime = DateTime.utc(2026, 9, 27, 6, 30);
 
-    final kadunaNorth = lga(
-      zoneId: 'NW',
-      zoneName: 'North West',
-      stateId: 'KD',
-      stateName: 'Kaduna',
-      lgaId: 'KD-KADUNA-NORTH',
-      lgaName: 'Kaduna North',
-    );
-    final makurdi = lga(
-      zoneId: 'NC',
-      zoneName: 'North Central',
-      stateId: 'BN',
-      stateName: 'Benue',
-      lgaId: 'BN-MAKURDI',
-      lgaName: 'Makurdi',
-    );
-    final ikeja = lga(
-      zoneId: 'SW',
-      zoneName: 'South West',
-      stateId: 'LA',
-      stateName: 'Lagos',
-      lgaId: 'LA-IKEJA',
-      lgaName: 'Ikeja',
-    );
-    final tarauni = lga(
-      zoneId: 'NW',
-      zoneName: 'North West',
-      stateId: 'KN',
-      stateName: 'Kano',
-      lgaId: 'KN-TARAUNI',
-      lgaName: 'Tarauni',
-    );
+  static GeographicScope _lga({
+    required String zoneId,
+    required String zoneName,
+    required String stateId,
+    required String stateName,
+    required String lgaId,
+    required String lgaName,
+  }) =>
+      GeographicScope(
+        level: GeographyLevel.lga,
+        country: 'Nigeria',
+        zoneId: zoneId,
+        zoneName: zoneName,
+        stateId: stateId,
+        stateName: stateName,
+        lgaId: lgaId,
+        lgaName: lgaName,
+      );
 
-    EvidenceAttachment photo(String id, String uploader, DateTime at) =>
-        EvidenceAttachment(
-          id: id,
-          type: EvidenceType.photo,
-          fileName: '$id.jpg',
-          createdAt: at,
-          uploaderId: uploader,
-          contentHash: 'sha256:prototype-$id',
-          mimeType: 'image/jpeg',
-          caption: 'Prototype evidence record. Replace with verified field media.',
-          origin: RecordOrigin.systemDerived,
-        );
+  static final _kadunaNorth = _lga(
+    zoneId: 'NW',
+    zoneName: 'North West',
+    stateId: 'KD',
+    stateName: 'Kaduna',
+    lgaId: 'KD-KADUNA-NORTH',
+    lgaName: 'Kaduna North',
+  );
+  static final _makurdi = _lga(
+    zoneId: 'NC',
+    zoneName: 'North Central',
+    stateId: 'BN',
+    stateName: 'Benue',
+    lgaId: 'BN-MAKURDI',
+    lgaName: 'Makurdi',
+  );
+  static final _ikeja = _lga(
+    zoneId: 'SW',
+    zoneName: 'South West',
+    stateId: 'LA',
+    stateName: 'Lagos',
+    lgaId: 'LA-IKEJA',
+    lgaName: 'Ikeja',
+  );
+  static final _tarauni = _lga(
+    zoneId: 'NW',
+    zoneName: 'North West',
+    stateId: 'KN',
+    stateName: 'Kano',
+    lgaId: 'KN-TARAUNI',
+    lgaName: 'Tarauni',
+  );
 
-    return FieldOperationsController._(
-      persistence: persistence,
-      incidents: [
-        FieldIncident(
-          id: 'INC-0001',
-          title: 'Polling-unit access obstruction reported',
-          category: 'Access',
-          severity: IncidentSeverity.high,
-          status: IncidentStatus.investigating,
-          scope: kadunaNorth,
-          reportedAt: now.subtract(const Duration(minutes: 16)),
-          reporterId: 'AG-KD-001',
-          summary: 'Field team reported delayed access and requested coordinator review.',
-          assignedTeam: 'North West Response Desk',
-          evidence: [photo('EVD-0001', 'AG-KD-001', now.subtract(const Duration(minutes: 15)))],
-          origin: RecordOrigin.systemDerived,
-        ),
-        FieldIncident(
-          id: 'INC-0002',
-          title: 'Result-form image quality below review threshold',
-          category: 'Evidence quality',
-          severity: IncidentSeverity.medium,
-          status: IncidentStatus.assigned,
-          scope: makurdi,
-          reportedAt: now.subtract(const Duration(minutes: 31)),
-          reporterId: 'AG-BN-014',
-          summary: 'Uploaded form is readable only in part; recapture requested.',
-          assignedTeam: 'Evidence Verification Desk',
-          evidence: [photo('EVD-0002', 'AG-BN-014', now.subtract(const Duration(minutes: 30)))],
-          origin: RecordOrigin.systemDerived,
-        ),
-        FieldIncident(
-          id: 'INC-0003',
-          title: 'Agent check-in requires location verification',
-          category: 'Geolocation',
-          severity: IncidentSeverity.low,
-          status: IncidentStatus.acknowledged,
-          scope: ikeja,
-          reportedAt: now.subtract(const Duration(minutes: 48)),
-          reporterId: 'AG-LA-032',
-          summary: 'Reported GPS position is outside the configured operational radius.',
-          assignedTeam: 'Lagos State Coordination Desk',
-          origin: RecordOrigin.systemDerived,
-        ),
-        FieldIncident(
-          id: 'INC-0004',
-          title: 'Field device unable to synchronize queued report',
-          category: 'Technical',
-          severity: IncidentSeverity.medium,
-          status: IncidentStatus.reported,
-          scope: tarauni,
-          reportedAt: now.subtract(const Duration(hours: 1, minutes: 8)),
-          reporterId: 'AG-KN-009',
-          summary: 'Report remains safely queued locally; technical support escalation required.',
-          origin: RecordOrigin.systemDerived,
-        ),
-      ],
-      reports: [
-        FieldReport(
-          id: 'RPT-0001',
-          category: 'Opening status',
-          summary: 'Team present; operational checklist completed and communications confirmed.',
-          scope: kadunaNorth,
-          reporterId: 'AG-KD-002',
-          reportedAt: now.subtract(const Duration(minutes: 22)),
-          status: RecordStatus.verified,
-          origin: RecordOrigin.systemDerived,
-        ),
-        FieldReport(
-          id: 'RPT-0002',
-          category: 'Operational update',
-          summary: 'Monitoring activity proceeding; one evidence-quality issue referred for review.',
-          scope: makurdi,
-          reporterId: 'AG-BN-014',
-          reportedAt: now.subtract(const Duration(minutes: 37)),
-          status: RecordStatus.underReview,
-          incidentId: 'INC-0002',
-          origin: RecordOrigin.systemDerived,
-        ),
-        FieldReport(
-          id: 'RPT-0003',
-          category: 'Connectivity update',
-          summary: 'Intermittent connectivity detected. Offline queue operating normally.',
-          scope: tarauni,
-          reporterId: 'AG-KN-009',
-          reportedAt: now.subtract(const Duration(hours: 1)),
-          status: RecordStatus.submitted,
-          incidentId: 'INC-0004',
-          origin: RecordOrigin.systemDerived,
-        ),
-      ],
-    );
+  static EvidenceAttachment _photo(String id, String uploader, DateTime at) =>
+      EvidenceAttachment(
+        id: id,
+        type: EvidenceType.photo,
+        fileName: '$id.jpg',
+        createdAt: at,
+        uploaderId: uploader,
+        contentHash: 'sha256:prototype-$id',
+        mimeType: 'image/jpeg',
+        caption: 'Prototype evidence record. Replace with verified field media.',
+        origin: RecordOrigin.systemDerived,
+      );
+
+  static List<FieldIncident> _sampleIncidents() {
+    final now = _sampleTime;
+    return [
+      FieldIncident(
+        id: 'INC-0001',
+        title: 'Polling-unit access obstruction reported',
+        category: 'Access',
+        severity: IncidentSeverity.high,
+        status: IncidentStatus.investigating,
+        scope: _kadunaNorth,
+        reportedAt: now.subtract(const Duration(minutes: 16)),
+        reporterId: 'AG-KD-001',
+        summary: 'Field team reported delayed access and requested coordinator review.',
+        assignedTeam: 'North West Response Desk',
+        evidence: [_photo('EVD-0001', 'AG-KD-001', now.subtract(const Duration(minutes: 15)))],
+        origin: RecordOrigin.systemDerived,
+      ),
+      FieldIncident(
+        id: 'INC-0002',
+        title: 'Result-form image quality below review threshold',
+        category: 'Evidence quality',
+        severity: IncidentSeverity.medium,
+        status: IncidentStatus.assigned,
+        scope: _makurdi,
+        reportedAt: now.subtract(const Duration(minutes: 31)),
+        reporterId: 'AG-BN-014',
+        summary: 'Uploaded form is readable only in part; recapture requested.',
+        assignedTeam: 'Evidence Verification Desk',
+        evidence: [_photo('EVD-0002', 'AG-BN-014', now.subtract(const Duration(minutes: 30)))],
+        origin: RecordOrigin.systemDerived,
+      ),
+      FieldIncident(
+        id: 'INC-0003',
+        title: 'Agent check-in requires location verification',
+        category: 'Geolocation',
+        severity: IncidentSeverity.low,
+        status: IncidentStatus.acknowledged,
+        scope: _ikeja,
+        reportedAt: now.subtract(const Duration(minutes: 48)),
+        reporterId: 'AG-LA-032',
+        summary: 'Reported GPS position is outside the configured operational radius.',
+        assignedTeam: 'Lagos State Coordination Desk',
+        origin: RecordOrigin.systemDerived,
+      ),
+      FieldIncident(
+        id: 'INC-0004',
+        title: 'Field device unable to synchronize queued report',
+        category: 'Technical',
+        severity: IncidentSeverity.medium,
+        status: IncidentStatus.reported,
+        scope: _tarauni,
+        reportedAt: now.subtract(const Duration(hours: 1, minutes: 8)),
+        reporterId: 'AG-KN-009',
+        summary: 'Report remains safely queued locally; technical support escalation required.',
+        origin: RecordOrigin.systemDerived,
+      ),
+    ];
+  }
+
+  static List<FieldReport> _sampleReports() {
+    final now = _sampleTime;
+    return [
+      FieldReport(
+        id: 'RPT-0001',
+        category: 'Opening status',
+        summary: 'Team present; operational checklist completed and communications confirmed.',
+        scope: _kadunaNorth,
+        reporterId: 'AG-KD-002',
+        reportedAt: now.subtract(const Duration(minutes: 22)),
+        status: RecordStatus.verified,
+        origin: RecordOrigin.systemDerived,
+      ),
+      FieldReport(
+        id: 'RPT-0002',
+        category: 'Operational update',
+        summary: 'Monitoring activity proceeding; one evidence-quality issue referred for review.',
+        scope: _makurdi,
+        reporterId: 'AG-BN-014',
+        reportedAt: now.subtract(const Duration(minutes: 37)),
+        status: RecordStatus.underReview,
+        incidentId: 'INC-0002',
+        origin: RecordOrigin.systemDerived,
+      ),
+      FieldReport(
+        id: 'RPT-0003',
+        category: 'Connectivity update',
+        summary: 'Intermittent connectivity detected. Offline queue operating normally.',
+        scope: _tarauni,
+        reporterId: 'AG-KN-009',
+        reportedAt: now.subtract(const Duration(hours: 1)),
+        status: RecordStatus.submitted,
+        incidentId: 'INC-0004',
+        origin: RecordOrigin.systemDerived,
+      ),
+    ];
   }
 
   final List<FieldIncident> _incidents;
   final List<FieldReport> _reports;
   final OfflinePersistenceController? _persistence;
+
+  // --- server session ---------------------------------------------------------
+
+  FieldRepository? _server;
+  String _account = '';
+
+  /// Counts connections, so a load started for an earlier one is dropped.
+  int _session = 0;
+  Future<void>? _running;
+  bool _loadAgain = false;
+  bool _disposed = false;
+  String? _loadError;
+  DateTime? _loadedAt;
+  int _openOnServer = 0;
+
+  /// Records made on this device while connected, by id, with the outbox
+  /// entry that uploads each. They have no server reference yet.
+  final Map<String, String> _local = {};
+
+  /// Outbox entries whose upload has already prompted a refresh.
+  final Set<String> _refreshedFor = {};
+
+  /// True in a server session: the records come from the server.
+  bool get isLive => _server != null;
+
+  /// Loading from the server now.
+  bool get loading => _running != null;
+
+  /// Why the last load failed, if it did.
+  String? get loadError => _loadError;
+
+  /// When the server's records were last loaded.
+  DateTime? get loadedAt => _loadedAt;
+
+  /// Every open incident on the server in your areas. The list holds the
+  /// most urgent of them when there are more than it loads.
+  int get openOnServer => _openOnServer;
+
+  /// Read from and act on the server, as [account] (the signed-in access ID,
+  /// which the uploads also carry).
+  void connect(FieldRepository server, {required String account}) {
+    if (identical(server, _server) && account == _account) return;
+    if (_server == null) _persistence?.addListener(_onOutboxChanged);
+    _server = server;
+    _account = account;
+    _clearLive();
+    _incidents.clear();
+    _reports.clear();
+    notifyListeners();
+    unawaited(refresh());
+  }
+
+  /// Back to presentation mode and its sample records.
+  void disconnect() {
+    if (_server == null) return;
+    _persistence?.removeListener(_onOutboxChanged);
+    _server = null;
+    _account = '';
+    _clearLive();
+    _incidents
+      ..clear()
+      ..addAll(_sampleIncidents());
+    _reports
+      ..clear()
+      ..addAll(_sampleReports());
+    notifyListeners();
+  }
+
+  void _clearLive() {
+    _session++;
+    _local.clear();
+    _refreshedFor.clear();
+    _running = null;
+    _loadAgain = false;
+    _loadError = null;
+    _loadedAt = null;
+    _openOnServer = 0;
+  }
+
+  /// Loads what the server holds now. While a load runs, asking again
+  /// loads once more when it ends.
+  Future<void> refresh() {
+    final server = _server;
+    if (server == null) return Future.value();
+    final running = _running;
+    if (running != null) {
+      _loadAgain = true;
+      return running;
+    }
+    late final Future<void> run;
+    run = _load(server, _session).whenComplete(() {
+      if (!identical(_running, run)) return;
+      _running = null;
+      if (!_disposed) notifyListeners();
+    });
+    _running = run;
+    notifyListeners();
+    return run;
+  }
+
+  Future<void> _load(FieldRepository server, int session) async {
+    try {
+      do {
+        _loadAgain = false;
+        final snapshot = await server.load();
+        if (session != _session) return;
+        _apply(snapshot);
+        _loadError = null;
+        _loadedAt = DateTime.now();
+      } while (_loadAgain);
+    } on ApiException catch (error) {
+      if (session == _session) _loadError = error.message;
+    } catch (_) {
+      if (session == _session) {
+        _loadError = 'The server sent records this app cannot read. Update the app.';
+      }
+    }
+  }
+
+  /// Loads again unless the records are newer than [age] or loading now.
+  Future<void> refreshIfOlderThan(Duration age) {
+    final running = _running;
+    if (running != null) return running;
+    final loadedAt = _loadedAt;
+    if (loadedAt != null && DateTime.now().difference(loadedAt) < age) return Future.value();
+    return refresh();
+  }
+
+  void _apply(FieldSnapshot snapshot) {
+    final onServer = {
+      for (final item in snapshot.incidents) ?item.clientId,
+      for (final item in snapshot.reports) ?item.clientId,
+    };
+    // The server's copy replaces the one made here.
+    _local.removeWhere((_, outbox) => onServer.contains(syncClientId(_account, outbox)));
+    final incidents = _incidents.where((item) => _local.containsKey(item.id)).toList();
+    final reports = _reports.where((item) => _local.containsKey(item.id)).toList();
+    _incidents
+      ..clear()
+      ..addAll(incidents)
+      ..addAll(snapshot.incidents);
+    _reports
+      ..clear()
+      ..addAll(reports)
+      ..addAll(snapshot.reports);
+    _openOnServer = snapshot.openIncidents;
+  }
+
+  SyncOutboxItem? _outboxFor(String id) {
+    final outbox = _local[id];
+    if (outbox == null) return null;
+    return _persistence?.outbox.where((item) => item.id == outbox).firstOrNull;
+  }
+
+  bool _uploaded(String outbox) {
+    final item = _persistence?.outbox.where((entry) => entry.id == outbox).firstOrNull;
+    return item == null || item.state == SyncState.synced;
+  }
+
+  void _onOutboxChanged() {
+    var uploaded = false;
+    for (final outbox in _local.values) {
+      if (_uploaded(outbox) && _refreshedFor.add(outbox)) uploaded = true;
+    }
+    if (uploaded) unawaited(refresh());
+  }
+
+  /// Made on this device and not yet replaced by the server's copy: it has
+  /// no server reference, so it cannot be acted on yet.
+  bool isOnDevice(String id) => _local.containsKey(id);
+
+  /// Where a record made on this device stands, for showing it.
+  String? uploadStatus(String id) {
+    if (!_local.containsKey(id)) return null;
+    final item = _outboxFor(id);
+    if (item == null || item.state == SyncState.synced) return 'Uploaded to the server.';
+    if (item.state == SyncState.failed || item.state == SyncState.conflict) {
+      final why = (item.lastError ?? 'see Sync status').trim();
+      return 'The server refused the upload: ${why.endsWith('.') ? why : '$why.'}';
+    }
+    return 'Saved on this device. It uploads automatically when there is a connection.';
+  }
+
+  // --- records ----------------------------------------------------------------
 
   List<FieldIncident> get incidents => List.unmodifiable(_incidents);
   List<FieldReport> get reports => List.unmodifiable(_reports);
@@ -203,6 +409,11 @@ class FieldOperationsController extends ChangeNotifier {
         (total, incident) => total + incident.evidence.length,
       );
 
+  String _newId(String prefix) => isLive
+      // Unique on this device; the server gives the record its reference.
+      ? 'NEW-${DateTime.now().microsecondsSinceEpoch.toRadixString(36).toUpperCase()}'
+      : '$prefix-${((prefix == 'INC' ? _incidents : _reports).length + 1).toString().padLeft(4, '0')}';
+
   Future<FieldIncident> createIncident({
     required String title,
     required String category,
@@ -216,7 +427,7 @@ class FieldOperationsController extends ChangeNotifier {
     List<EvidenceAttachment> evidence = const [],
   }) async {
     final incident = FieldIncident(
-      id: 'INC-${(_incidents.length + 1).toString().padLeft(4, '0')}',
+      id: _newId('INC'),
       title: title.trim(),
       category: category.trim(),
       severity: severity,
@@ -231,7 +442,7 @@ class FieldOperationsController extends ChangeNotifier {
       evidence: List.unmodifiable(evidence),
       origin: RecordOrigin.localEntry,
     );
-    await _persistence?.persistMutation(
+    final receipt = await _persistence?.persistMutation(
       entityType: 'field_incident',
       entityId: incident.id,
       mutationType: SyncMutationType.create,
@@ -239,6 +450,7 @@ class FieldOperationsController extends ChangeNotifier {
       scopeKey: scopeStorageKey(scope),
       ownerId: reporterId,
     );
+    if (isLive && receipt != null) _local[incident.id] = receipt.outbox.id;
     _incidents.insert(0, incident);
     notifyListeners();
     return incident;
@@ -254,7 +466,7 @@ class FieldOperationsController extends ChangeNotifier {
     List<EvidenceAttachment> evidence = const [],
   }) async {
     final report = FieldReport(
-      id: 'RPT-${(_reports.length + 1).toString().padLeft(4, '0')}',
+      id: _newId('RPT'),
       category: category.trim(),
       summary: summary.trim(),
       scope: scope,
@@ -266,7 +478,7 @@ class FieldOperationsController extends ChangeNotifier {
       evidence: List.unmodifiable(evidence),
       origin: RecordOrigin.localEntry,
     );
-    await _persistence?.persistMutation(
+    final receipt = await _persistence?.persistMutation(
       entityType: 'field_report',
       entityId: report.id,
       mutationType: SyncMutationType.create,
@@ -274,33 +486,121 @@ class FieldOperationsController extends ChangeNotifier {
       scopeKey: scopeStorageKey(scope),
       ownerId: reporterId,
     );
+    if (isLive && receipt != null) _local[report.id] = receipt.outbox.id;
     _reports.insert(0, report);
     notifyListeners();
     return report;
   }
 
-  void updateIncidentStatus(String incidentId, IncidentStatus status) {
-    final index = _incidents.indexWhere((item) => item.id == incidentId);
-    if (index < 0) return;
-    final incident = _incidents[index];
-    _incidents[index] = FieldIncident(
-      id: incident.id,
-      title: incident.title,
-      category: incident.category,
-      severity: incident.severity,
-      status: status,
-      scope: incident.scope,
-      reportedAt: incident.reportedAt,
-      reporterId: incident.reporterId,
-      summary: incident.summary,
-      assignedTeam: incident.assignedTeam,
-      latitude: incident.latitude,
-      longitude: incident.longitude,
-      gps: incident.gps,
-      evidence: incident.evidence,
-      origin: incident.origin,
+  // --- changes ----------------------------------------------------------------
+
+  /// Moves an incident on. On the server in a server session, which checks
+  /// the move, the note and your authority there; locally otherwise.
+  Future<void> changeIncidentStatus(
+    String incidentId,
+    IncidentStatus status, {
+    String note = '',
+  }) async {
+    final server = _server;
+    if (server == null) {
+      updateIncidentStatus(incidentId, status);
+    } else {
+      _replaceIncident(await server.changeStatus(incidentId, status, note: note));
+    }
+  }
+
+  /// Gives a response team the incident.
+  Future<void> assignIncident(String incidentId, String team, {String note = ''}) async {
+    final server = _server;
+    if (server != null) {
+      _replaceIncident(await server.assign(incidentId, team: team, note: note));
+      return;
+    }
+    final incident = _incidents.where((item) => item.id == incidentId).firstOrNull;
+    if (incident == null) return;
+    _replaceIncident(
+      _incidentWith(incident, status: IncidentStatus.assigned, assignedTeam: team.trim()),
     );
+  }
+
+  /// Accepts or rejects a field report (a reason is needed to reject).
+  Future<void> reviewReport(String reportId, {required bool accepted, String reason = ''}) async {
+    final server = _server;
+    if (server != null) {
+      _replaceReport(await server.review(reportId, accepted: accepted, reason: reason));
+      return;
+    }
+    final report = _reports.where((item) => item.id == reportId).firstOrNull;
+    if (report == null) return;
+    _replaceReport(FieldReport(
+      id: report.id,
+      category: report.category,
+      summary: report.summary,
+      scope: report.scope,
+      reporterId: report.reporterId,
+      reportedAt: report.reportedAt,
+      status: accepted ? RecordStatus.verified : RecordStatus.rejected,
+      incidentId: report.incidentId,
+      gps: report.gps,
+      evidence: report.evidence,
+      origin: report.origin,
+      clientId: report.clientId,
+    ));
+  }
+
+  /// Every step taken on the incident, from the server (none in presentation mode).
+  Future<List<IncidentHistoryEntry>> incidentHistory(String incidentId) async =>
+      await _server?.history(incidentId) ?? const [];
+
+  void updateIncidentStatus(String incidentId, IncidentStatus status) {
+    final incident = _incidents.where((item) => item.id == incidentId).firstOrNull;
+    if (incident == null) return;
+    _replaceIncident(_incidentWith(incident, status: status));
+  }
+
+  FieldIncident _incidentWith(
+    FieldIncident incident, {
+    required IncidentStatus status,
+    String? assignedTeam,
+  }) =>
+      FieldIncident(
+        id: incident.id,
+        title: incident.title,
+        category: incident.category,
+        severity: incident.severity,
+        status: status,
+        scope: incident.scope,
+        reportedAt: incident.reportedAt,
+        reporterId: incident.reporterId,
+        summary: incident.summary,
+        assignedTeam: assignedTeam ?? incident.assignedTeam,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
+        gps: incident.gps,
+        evidence: incident.evidence,
+        origin: incident.origin,
+        clientId: incident.clientId,
+      );
+
+  void _replaceIncident(FieldIncident incident) {
+    final index = _incidents.indexWhere((item) => item.id == incident.id);
+    if (index < 0) return;
+    _incidents[index] = incident;
     notifyListeners();
+  }
+
+  void _replaceReport(FieldReport report) {
+    final index = _reports.indexWhere((item) => item.id == report.id);
+    if (index < 0) return;
+    _reports[index] = report;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    if (_server != null) _persistence?.removeListener(_onOutboxChanged);
+    super.dispose();
   }
 
   bool _within(GeographicScope parent, GeographicScope child) {

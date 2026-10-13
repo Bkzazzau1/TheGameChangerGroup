@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'access_repository.dart';
 import 'api_client.dart';
 import 'auth_repository.dart';
+import 'field_repository.dart';
 import 'member_admin_repository.dart';
 import 'mapping_repository.dart';
 import 'member_repository.dart';
@@ -18,6 +19,7 @@ class BackendServices {
         mapping = MappingRepository(client),
         member = MemberRepository(client),
         tracking = TrackingRepository(client),
+        field = FieldRepository(client),
         access = AccessRepository(client),
         members = MemberAdminRepository(client);
 
@@ -44,6 +46,9 @@ class BackendServices {
 
   /// Live agent positions and check-in coverage.
   final TrackingRepository tracking;
+
+  /// Incidents and field reports: the Situation Room and Field Monitoring.
+  final FieldRepository field;
 
   /// Roles, appointments, delegation and administrator approvals.
   final AccessRepository access;

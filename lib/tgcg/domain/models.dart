@@ -274,6 +274,7 @@ class FieldIncident {
     this.gps,
     this.evidence = const [],
     this.origin = RecordOrigin.localEntry,
+    this.clientId,
   });
 
   final String id;
@@ -291,6 +292,9 @@ class FieldIncident {
   final GpsFix? gps;
   final List<EvidenceAttachment> evidence;
   final RecordOrigin origin;
+
+  /// The id the device uploaded it with (the server's `client_id`).
+  final String? clientId;
 }
 
 class FieldReport {
@@ -306,6 +310,7 @@ class FieldReport {
     this.gps,
     this.evidence = const [],
     this.origin = RecordOrigin.localEntry,
+    this.clientId,
   });
 
   final String id;
@@ -319,6 +324,9 @@ class FieldReport {
   final GpsFix? gps;
   final List<EvidenceAttachment> evidence;
   final RecordOrigin origin;
+
+  /// The id the device uploaded it with (the server's `client_id`).
+  final String? clientId;
 }
 
 class ResultValidationSummary {

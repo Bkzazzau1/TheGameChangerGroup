@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../access/access_widgets.dart' show promptText, showDone;
+
 import '../domain/permissions.dart';
 import '../location/gps_prompt.dart';
-import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
+import 'incident_actions.dart';
 
 class FieldMonitoringPage extends StatefulWidget {
   const FieldMonitoringPage({super.key});
@@ -14,7 +16,7 @@ class FieldMonitoringPage extends StatefulWidget {
   State<FieldMonitoringPage> createState() => _FieldMonitoringPageState();
 }
 
-class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
+class _FieldMonitoringPageState extends State<FieldMonitoringPage> with FieldAutoRefresh {
   String? selectedIncidentId;
   IncidentStatus? statusFilter;
   IncidentSeverity? severityFilter;
@@ -27,9 +29,6 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
     final reports = store.reportsForScope(session.scope);
     final canCreateIncident = session.can(TgcgCapability.createIncident);
     final canSubmitFieldReport = session.can(TgcgCapability.submitFieldReport);
-    final canAcknowledge = session.can(TgcgCapability.acknowledgeIncident);
-    final canAssign = session.can(TgcgCapability.assignIncident);
-    final canClose = session.can(TgcgCapability.closeIncident);
 
     if (statusFilter != null) {
       incidents = incidents
@@ -82,7 +81,9 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
           trailing: Wrap(
             spacing: 8,
             runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              const FieldFeedStatus(),
               if (canSubmitFieldReport)
                 OutlinedButton.icon(
                   onPressed: () => _showFieldReportDialog(context),
@@ -98,6 +99,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
             ],
           ),
         ),
+        const FieldLoadNotice(),
         const SizedBox(height: 18),
         _Metrics(
           openIncidents: open,
@@ -127,16 +129,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
               selectedId: selected?.id,
               onSelect: (id) => setState(() => selectedIncidentId = id),
             );
-            final inspector = _IncidentInspector(
-              incident: selected,
-              canAcknowledge: canAcknowledge,
-              canAssign: canAssign,
-              canClose: canClose,
-              onStatusChanged: (status) {
-                if (selected == null) return;
-                store.updateIncidentStatus(selected.id, status);
-              },
-            );
+            final inspector = _IncidentInspector(incident: selected);
             if (constraints.maxWidth < 1050) {
               return Column(
                 children: [
@@ -156,6 +149,10 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
             );
           },
         ),
+        if (session.can(TgcgCapability.verifyFieldReport)) ...[
+          const SizedBox(height: 16),
+          _ReportReview(reports: reports),
+        ],
         const SizedBox(height: 16),
         _FieldActivityFeed(incidents: allScoped, reports: reports),
       ],
@@ -164,14 +161,14 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
 
   Future<void> _showIncidentDialog(BuildContext context) async {
     final session = TgcgSession.of(context, listen: false);
-    final membership = MembershipOperations.of(context, listen: false);
     final store = FieldOperations.of(context, listen: false);
+    final locations = await fieldLocations(context);
+    if (!context.mounted) return;
     final title = TextEditingController();
     final summary = TextEditingController();
     var category = _incidentCategories.first;
     var severity = IncidentSeverity.medium;
-    final units = membership.geography.pollingUnitsWithin(session.scope);
-    GeographicScope scope = units.isEmpty ? session.scope : units.first.scope;
+    var scope = locations.first;
 
     final created = await showDialog<FieldIncident>(
       context: context,
@@ -236,9 +233,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
                     initialValue: scope,
                     decoration: const InputDecoration(labelText: 'Field location'),
                     isExpanded: true,
-                    items: (units.isEmpty
-                            ? <GeographicScope>[session.scope]
-                            : units.map((unit) => unit.scope).toList())
+                    items: locations
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
@@ -311,7 +306,10 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${created.id} encrypted locally and queued for sync. Media/GPS capture will attach when device integrations are connected.',
+            store.isLive
+                ? 'Incident saved on this device. It uploads to the server automatically; '
+                    'photos and video cannot be attached yet.'
+                : '${created.id} encrypted locally and queued for sync. Media/GPS capture will attach when device integrations are connected.',
           ),
         ),
       );
@@ -320,19 +318,21 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
 
   Future<void> _showFieldReportDialog(BuildContext context) async {
     final session = TgcgSession.of(context, listen: false);
-    final membership = MembershipOperations.of(context, listen: false);
     final store = FieldOperations.of(context, listen: false);
+    final locations = await fieldLocations(context);
+    if (!context.mounted) return;
     final summary = TextEditingController();
     var category = _reportCategories.first;
-    final units = membership.geography.pollingUnitsWithin(session.scope);
-    GeographicScope scope = units.isEmpty ? session.scope : units.first.scope;
+    var scope = locations.first;
     String? incidentId;
+    // Only incidents the server holds can be linked to.
     final availableIncidents = store
         .incidentsForScope(session.scope)
         .where(
           (item) =>
               item.status != IncidentStatus.closed &&
-              item.status != IncidentStatus.resolved,
+              item.status != IncidentStatus.resolved &&
+              !store.isOnDevice(item.id),
         )
         .toList(growable: false);
 
@@ -367,9 +367,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
                     initialValue: scope,
                     decoration: const InputDecoration(labelText: 'Field location'),
                     isExpanded: true,
-                    items: (units.isEmpty
-                            ? <GeographicScope>[session.scope]
-                            : units.map((unit) => unit.scope).toList())
+                    items: locations
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
@@ -450,7 +448,11 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> {
     if (created != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${created.id} encrypted locally and queued for sync.'),
+          content: Text(
+            store.isLive
+                ? 'Report saved on this device. It uploads to the server automatically.'
+                : '${created.id} encrypted locally and queued for sync.',
+          ),
         ),
       );
     }
@@ -670,13 +672,17 @@ class _Filters extends StatelessWidget {
               width: 210,
               child: DropdownButtonFormField<IncidentStatus?>(
                 initialValue: status,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('All statuses')),
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All statuses', overflow: TextOverflow.ellipsis),
+                  ),
                   ...IncidentStatus.values.map(
                     (value) => DropdownMenuItem(
                       value: value,
-                      child: Text(_label(value.name)),
+                      child: Text(_label(value.name), overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -687,13 +693,17 @@ class _Filters extends StatelessWidget {
               width: 210,
               child: DropdownButtonFormField<IncidentSeverity?>(
                 initialValue: severity,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Severity'),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('All severities')),
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All severities', overflow: TextOverflow.ellipsis),
+                  ),
                   ...IncidentSeverity.values.map(
                     (value) => DropdownMenuItem(
                       value: value,
-                      child: Text(_label(value.name)),
+                      child: Text(_label(value.name), overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -831,6 +841,14 @@ class _IncidentRow extends StatelessWidget {
                       fontSize: 9,
                     ),
                   ),
+                  if (FieldOperations.of(context).isOnDevice(incident.id)) ...[
+                    const SizedBox(height: 5),
+                    const TgcgStatusPill(
+                      label: 'ON THIS DEVICE',
+                      color: TgcgColors.accentDeep,
+                      compact: true,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -842,19 +860,9 @@ class _IncidentRow extends StatelessWidget {
 }
 
 class _IncidentInspector extends StatelessWidget {
-  const _IncidentInspector({
-    required this.incident,
-    required this.canAcknowledge,
-    required this.canAssign,
-    required this.canClose,
-    required this.onStatusChanged,
-  });
+  const _IncidentInspector({required this.incident});
 
   final FieldIncident? incident;
-  final bool canAcknowledge;
-  final bool canAssign;
-  final bool canClose;
-  final ValueChanged<IncidentStatus> onStatusChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -872,6 +880,8 @@ class _IncidentInspector extends StatelessWidget {
     }
 
     final severityColor = _severityColor(current.severity);
+    final store = FieldOperations.of(context);
+    final history = store.isLive && !store.isOnDevice(current.id);
     return TgcgSectionCard(
       title: 'Incident inspector',
       subtitle: 'Field evidence and response workflow remain traceable to the source record.',
@@ -945,46 +955,12 @@ class _IncidentInspector extends StatelessWidget {
           const SizedBox(height: 14),
           _EvidencePanel(evidence: current.evidence),
           const SizedBox(height: 14),
-          _ResponseTimeline(incident: current),
-          if (canAcknowledge || canAssign || canClose) ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (canAcknowledge && current.status == IncidentStatus.reported)
-                  OutlinedButton.icon(
-                    onPressed: () => onStatusChanged(IncidentStatus.acknowledged),
-                    icon: const Icon(Icons.done_rounded),
-                    label: const Text('Acknowledge'),
-                  ),
-                if (canAssign &&
-                    current.status != IncidentStatus.resolved &&
-                    current.status != IncidentStatus.closed)
-                  OutlinedButton.icon(
-                    onPressed: () => onStatusChanged(IncidentStatus.investigating),
-                    icon: const Icon(Icons.manage_search_rounded),
-                    label: const Text('Investigate'),
-                  ),
-                if (canAssign &&
-                    current.status != IncidentStatus.resolved &&
-                    current.status != IncidentStatus.closed)
-                  OutlinedButton.icon(
-                    onPressed: () => onStatusChanged(IncidentStatus.escalated),
-                    icon: const Icon(Icons.north_east_rounded),
-                    label: const Text('Escalate'),
-                  ),
-                if (canClose &&
-                    current.status != IncidentStatus.resolved &&
-                    current.status != IncidentStatus.closed)
-                  FilledButton.icon(
-                    onPressed: () => onStatusChanged(IncidentStatus.resolved),
-                    icon: const Icon(Icons.check_circle_outline_rounded),
-                    label: const Text('Resolve'),
-                  ),
-              ],
-            ),
-          ],
+          if (history)
+            IncidentHistoryPanel(key: ValueKey(current.id), incident: current)
+          else
+            _ResponseTimeline(incident: current),
+          const SizedBox(height: 14),
+          IncidentCommandPanel(incident: current),
         ],
       ),
     );
@@ -1149,6 +1125,143 @@ class _ResponseTimeline extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Field reports from your areas waiting for someone to review them (never
+/// your own: the server refuses that too).
+class _ReportReview extends StatelessWidget {
+  const _ReportReview({required this.reports});
+
+  final List<FieldReport> reports;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = TgcgSession.of(context);
+    final store = FieldOperations.of(context);
+    final waiting = reports
+        .where(
+          (item) =>
+              (item.status == RecordStatus.submitted || item.status == RecordStatus.underReview) &&
+              item.reporterId != session.accessId &&
+              !store.isOnDevice(item.id),
+        )
+        .toList(growable: false);
+    return TgcgSectionCard(
+      title: 'Reports to review',
+      subtitle: 'Accept what you can confirm. Rejecting needs a reason.',
+      child: waiting.isEmpty
+          ? const TgcgEmptyState(
+              icon: Icons.fact_check_outlined,
+              title: 'Nothing to review',
+              message: 'Field reports from your areas appear here when they arrive.',
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final report in waiting.take(10)) _ReportReviewRow(report: report),
+                if (waiting.length > 10)
+                  Text(
+                    '${waiting.length - 10} more waiting.',
+                    style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ReportReviewRow extends StatefulWidget {
+  const _ReportReviewRow({required this.report});
+
+  final FieldReport report;
+
+  @override
+  State<_ReportReviewRow> createState() => _ReportReviewRowState();
+}
+
+class _ReportReviewRowState extends State<_ReportReviewRow> {
+  bool _busy = false;
+
+  Future<void> _review({required bool accepted}) async {
+    final report = widget.report;
+    var reason = '';
+    if (!accepted) {
+      final written = await promptText(
+        context,
+        title: 'Reject ${report.id}',
+        label: 'Reason',
+        message: 'Say why the report cannot be accepted. It is kept with the report.',
+        action: 'Reject',
+        required: true,
+        destructive: true,
+      );
+      if (written == null || !mounted) return;
+      reason = written;
+    }
+    final store = FieldOperations.of(context, listen: false);
+    setState(() => _busy = true);
+    try {
+      await store.reviewReport(report.id, accepted: accepted, reason: reason);
+      if (mounted) showDone(context, '${report.id} ${accepted ? 'accepted' : 'rejected'}.');
+    } catch (error) {
+      if (mounted) showFieldFailure(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final report = widget.report;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: TgcgColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: TgcgColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            report.category,
+            style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(report.summary, style: const TextStyle(color: TgcgColors.ink, height: 1.4)),
+          const SizedBox(height: 4),
+          Text(
+            '${report.id} • ${report.reporterId} • ${report.scope.label} • '
+            '${_fullTime(report.reportedAt)}',
+            style: const TextStyle(color: TgcgColors.muted, fontSize: 10),
+          ),
+          if (report.incidentId != null)
+            Text(
+              'About incident ${report.incidentId}',
+              style: const TextStyle(color: TgcgColors.muted, fontSize: 10),
+            ),
+          const SizedBox(height: 9),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: _busy ? null : () => _review(accepted: true),
+                icon: const Icon(Icons.check_rounded, size: 17),
+                label: const Text('Accept'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _review(accepted: false),
+                icon: const Icon(Icons.close_rounded, size: 17),
+                label: const Text('Reject'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

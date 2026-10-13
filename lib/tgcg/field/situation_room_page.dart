@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
 import '../geography/nigeria_map.dart';
 import '../geography/state_lga_map_dialog.dart';
@@ -10,6 +9,7 @@ import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
+import 'incident_actions.dart';
 
 class SituationRoomPage extends StatefulWidget {
   const SituationRoomPage({super.key});
@@ -18,7 +18,7 @@ class SituationRoomPage extends StatefulWidget {
   State<SituationRoomPage> createState() => _SituationRoomPageState();
 }
 
-class _SituationRoomPageState extends State<SituationRoomPage> {
+class _SituationRoomPageState extends State<SituationRoomPage> with FieldAutoRefresh {
   String? selectedIncidentId;
 
   @override
@@ -71,23 +71,9 @@ class _SituationRoomPageState extends State<SituationRoomPage> {
           title: 'Situation Room',
           subtitle:
               '${session.scope.label}: real-time incident command, evidence review and field coordination.',
-          trailing: const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              TgcgStatusPill(
-                label: 'LIVE COMMAND',
-                color: TgcgColors.success,
-                icon: Icons.circle,
-              ),
-              TgcgStatusPill(
-                label: 'DEMO FEED',
-                color: TgcgColors.warning,
-                icon: Icons.science_outlined,
-              ),
-            ],
-          ),
+          trailing: const FieldFeedStatus(),
         ),
+        const FieldLoadNotice(),
         const SizedBox(height: 20),
         _MetricsStrip(
           open: open.length,
@@ -126,10 +112,7 @@ class _SituationRoomPageState extends State<SituationRoomPage> {
               selectedIncidentId: selectedIncidentId,
               onSelect: (id) => setState(() => selectedIncidentId = id),
             );
-            final inspector = _IncidentInspector(
-              incident: selected,
-              role: session.actor,
-            );
+            final inspector = _IncidentInspector(incident: selected);
 
             // The map takes the full width; queue and inspector sit below it.
             return Column(
@@ -394,6 +377,12 @@ class _PriorityItem extends StatelessWidget {
                             color: TgcgColors.primaryMid,
                             compact: true,
                           ),
+                          if (FieldOperations.of(context).isOnDevice(incident.id))
+                            const TgcgStatusPill(
+                              label: 'On this device',
+                              color: TgcgColors.accentDeep,
+                              compact: true,
+                            ),
                         ],
                       ),
                     ],
@@ -765,10 +754,9 @@ class _MapLegend extends StatelessWidget {
 }
 
 class _IncidentInspector extends StatelessWidget {
-  const _IncidentInspector({required this.incident, required this.role});
+  const _IncidentInspector({required this.incident});
 
   final FieldIncident? incident;
-  final TgcgActor role;
 
   @override
   Widget build(BuildContext context) {
@@ -786,9 +774,7 @@ class _IncidentInspector extends StatelessWidget {
     }
 
     final color = _severityColor(item.severity);
-    final canAcknowledge = role.can(TgcgCapability.acknowledgeIncident);
-    final canAssign = role.can(TgcgCapability.assignIncident);
-    final canClose = role.can(TgcgCapability.closeIncident);
+    final store = FieldOperations.of(context);
 
     return TgcgSectionCard(
       title: 'Incident inspector',
@@ -881,73 +867,13 @@ class _IncidentInspector extends StatelessWidget {
             )
           else
             ...item.evidence.map((evidence) => _EvidenceTile(evidence: evidence)),
-          if (canAcknowledge || canAssign || canClose) ...[
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          IncidentCommandPanel(incident: item),
+          if (store.isLive && !store.isOnDevice(item.id)) ...[
             const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-            const Text(
-              'Command actions',
-              style: TextStyle(
-                color: TgcgColors.ink,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 9),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (canAcknowledge && item.status == IncidentStatus.reported)
-                  FilledButton.icon(
-                    onPressed: () => FieldOperations.of(context, listen: false)
-                        .updateIncidentStatus(
-                      item.id,
-                      IncidentStatus.acknowledged,
-                    ),
-                    icon: const Icon(Icons.done_rounded, size: 17),
-                    label: const Text('Acknowledge'),
-                  ),
-                if (canAssign &&
-                    item.status != IncidentStatus.investigating &&
-                    item.status != IncidentStatus.resolved &&
-                    item.status != IncidentStatus.closed)
-                  OutlinedButton.icon(
-                    onPressed: () => FieldOperations.of(context, listen: false)
-                        .updateIncidentStatus(
-                      item.id,
-                      IncidentStatus.investigating,
-                    ),
-                    icon: const Icon(Icons.manage_search_rounded, size: 17),
-                    label: const Text('Investigate'),
-                  ),
-                if (canAssign &&
-                    (item.severity == IncidentSeverity.high ||
-                        item.severity == IncidentSeverity.critical) &&
-                    item.status != IncidentStatus.escalated)
-                  OutlinedButton.icon(
-                    onPressed: () => FieldOperations.of(context, listen: false)
-                        .updateIncidentStatus(
-                      item.id,
-                      IncidentStatus.escalated,
-                    ),
-                    icon: const Icon(Icons.arrow_upward_rounded, size: 17),
-                    label: const Text('Escalate'),
-                  ),
-                if (canClose &&
-                    item.status != IncidentStatus.resolved &&
-                    item.status != IncidentStatus.closed)
-                  OutlinedButton.icon(
-                    onPressed: () => FieldOperations.of(context, listen: false)
-                        .updateIncidentStatus(
-                      item.id,
-                      IncidentStatus.resolved,
-                    ),
-                    icon: const Icon(Icons.task_alt_rounded, size: 17),
-                    label: const Text('Resolve'),
-                  ),
-              ],
-            ),
+            IncidentHistoryPanel(key: ValueKey(item.id), incident: item),
           ],
         ],
       ),

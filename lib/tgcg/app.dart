@@ -123,9 +123,20 @@ class _TgcgAppState extends State<TgcgApp> {
       GeographyRegistry.prototypeSeed(),
     );
     governanceOperationsController = GovernanceOperationsController.prototypeSeed();
-    fieldOperationsController = FieldOperationsController.prototypeSeed(
+    final field = fieldOperationsController = FieldOperationsController.prototypeSeed(
       persistence: offlinePersistenceController,
     );
+    if (services != null) {
+      // Staff sessions see the server's incidents and reports, and act on them there.
+      final session = sessionController;
+      session.addListener(() {
+        if (session.isServerSession && session.isOperator) {
+          field.connect(services.field, account: session.accessId);
+        } else {
+          field.disconnect();
+        }
+      });
+    }
     resultOperationsController = ResultOperationsController.prototypeSeed(
       persistence: offlinePersistenceController,
     );
