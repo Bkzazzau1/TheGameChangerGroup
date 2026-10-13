@@ -1,13 +1,17 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/api/meetings_repository.dart';
 import 'package:tgcg_emcop/tgcg/meeting/meeting_room_page.dart';
+import 'package:tgcg_emcop/tgcg/meeting/meeting_call_page.dart';
 import 'package:tgcg_emcop/tgcg/meeting/server_meetings_view.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 
@@ -100,7 +104,212 @@ class _MeetingsServer {
       );
 }
 
+/// No microphone, camera or network: only the room events used by the call UI.
+class _CallRoom extends ChangeNotifier
+    with lk.EventsEmittable<lk.RoomEvent>
+    implements lk.Room {
+  final participant = _CallParticipant();
+
+  @override
+  _CallParticipant get localParticipant => participant;
+
+  @override
+  UnmodifiableMapView<String, lk.RemoteParticipant> get remoteParticipants =>
+      UnmodifiableMapView(const {});
+
+  @override
+  Future<void> connect(
+    String url,
+    String token, {
+    lk.ConnectOptions? connectOptions,
+    lk.RoomOptions? roomOptions,
+    lk.FastConnectOptions? fastConnectOptions,
+  }) async {}
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
+  Future<bool> dispose() async {
+    super.dispose();
+    await events.dispose();
+    await participant.dispose();
+    return true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CallParticipant extends ChangeNotifier implements lk.LocalParticipant {
+  @override
+  String get name => 'Meeting host';
+  @override
+  String get identity => 'SC-KD';
+  @override
+  bool get isSpeaking => false;
+  @override
+  bool get isMuted => false;
+  @override
+  List<lk.LocalTrackPublication<lk.LocalVideoTrack>>
+  get videoTrackPublications => const [];
+  @override
+  bool isMicrophoneEnabled() => true;
+  @override
+  Future<lk.LocalTrackPublication?> setMicrophoneEnabled(
+    bool enabled, {
+    lk.AudioCaptureOptions? audioCaptureOptions,
+  }) async => null;
+
+  @override
+  Future<bool> dispose() async {
+    super.dispose();
+    return true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NavigationObserver extends NavigatorObserver {
+  final popped = <String?>[];
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    popped.add(route.settings.name);
+  }
+}
+
 void main() {
+  group('ending a call', () {
+    late _CallRoom room;
+    late Completer<http.Response> ended;
+    late GlobalKey<NavigatorState> navigator;
+    late _NavigationObserver navigation;
+
+    Future<void> openCall(WidgetTester tester) async {
+      room = _CallRoom();
+      ended = Completer<http.Response>();
+      navigator = GlobalKey<NavigatorState>();
+      navigation = _NavigationObserver();
+      final backend = BackendServices.connect(
+        'https://api.tgcg.test',
+        tokens: MemoryTokenStore(),
+        httpClient: MockClient((request) => ended.future),
+      );
+      await tester.pumpWidget(
+        TgcgBackend(
+          services: backend,
+          child: MaterialApp(
+            navigatorKey: navigator,
+            navigatorObservers: [navigation],
+            home: const Scaffold(body: Text('Home page')),
+          ),
+        ),
+      );
+      unawaited(
+        navigator.currentState!.push<void>(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'meetings'),
+            builder: (_) => const Scaffold(body: Text('Meeting list')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      unawaited(
+        navigator.currentState!.push<String>(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'call'),
+            builder: (_) => MeetingCallPage(
+              meeting: ServerMeeting.fromJson(_meeting('MTG-000001')),
+              pass: JoinPass(
+                url: 'wss://tgcg.test',
+                token: 'test-pass',
+                room: 'test-room',
+                expiresAt: DateTime.utc(2027),
+              ),
+              createRoom: () => room,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    for (final disconnectFirst in [true, false]) {
+      testWidgets(
+        '${disconnectFirst ? 'disconnect before end response' : 'end response before disconnect'} closes only the call',
+        (tester) async {
+          await openCall(tester);
+          await tester.tap(find.text('End for everyone'));
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.widgetWithText(FilledButton, 'End for everyone'),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          void disconnected() => room.events.streamCtrl.add(
+            lk.RoomDisconnectedEvent(reason: lk.DisconnectReason.roomDeleted),
+          );
+          void response() =>
+              ended.complete(_json(_meeting('MTG-000001', status: 'ended')));
+          if (disconnectFirst) {
+            disconnected();
+            await tester
+                .pump(); // Keep the call mounted during its exit animation.
+            response();
+          } else {
+            response();
+            await tester.pump();
+            disconnected();
+          }
+          await tester.pumpAndSettle();
+          expect(
+            navigation.popped.where((name) => name == 'call'),
+            hasLength(1),
+          );
+          expect(navigation.popped, isNot(contains('meetings')));
+          expect(find.text('Meeting list'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets('Back followed by a disconnect keeps the meeting list open', (
+      tester,
+    ) async {
+      await openCall(tester);
+      await tester.pageBack();
+      await tester.pump();
+      room.events.streamCtrl.add(
+        lk.RoomDisconnectedEvent(reason: lk.DisconnectReason.roomDeleted),
+      );
+      await tester.pumpAndSettle();
+      expect(navigation.popped.where((name) => name == 'call'), hasLength(1));
+      expect(navigation.popped, isNot(contains('meetings')));
+      expect(find.text('Meeting list'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('disconnect during end confirmation closes the dialog and call', (tester) async {
+      await openCall(tester);
+      await tester.tap(find.text('End for everyone'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      room.events.streamCtrl.add(
+        lk.RoomDisconnectedEvent(reason: lk.DisconnectReason.roomDeleted),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Meeting list'), findsOneWidget);
+      expect(navigation.popped.where((name) => name == 'call'), hasLength(1));
+      expect(navigation.popped, isNot(contains('meetings')));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   test('meetings and join passes read from the server', () {
     final meeting = ServerMeeting.fromJson(
       _meeting('MTG-000001', kind: 'video', audience: 'invited', invitees: ['NCO-1']),

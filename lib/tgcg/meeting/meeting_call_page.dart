@@ -9,25 +9,36 @@ import '../api/backend.dart';
 import '../api/meetings_repository.dart';
 import '../ui/tgcg_design.dart';
 
+Room _createRoom() =>
+    Room(roomOptions: const RoomOptions(adaptiveStream: true, dynacast: true));
+
 /// One meeting's call, on LiveKit. Audio first: the microphone starts on and
 /// the camera off; in a video meeting the camera can be turned on.
 ///
 /// Pops with a message to show when the call ended other than by leaving.
 class MeetingCallPage extends StatefulWidget {
-  const MeetingCallPage({super.key, required this.meeting, required this.pass});
+  const MeetingCallPage({
+    super.key,
+    required this.meeting,
+    required this.pass,
+    this.createRoom = _createRoom,
+  });
 
   final ServerMeeting meeting;
   final JoinPass pass;
+  final Room Function() createRoom;
 
   @override
   State<MeetingCallPage> createState() => _MeetingCallPageState();
 }
 
 class _MeetingCallPageState extends State<MeetingCallPage> {
-  final _room = Room(roomOptions: const RoomOptions(adaptiveStream: true, dynacast: true));
+  late final _room = widget.createRoom();
   late final EventsListener<RoomEvent> _events = _room.createListener();
   bool _connecting = true;
   bool _busy = false;
+  bool _exiting = false;
+  bool _confirmingEnd = false;
   String? _error;
 
   @override
@@ -41,6 +52,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
   Future<void> _connect() async {
     try {
       await _room.connect(widget.pass.url, widget.pass.token);
+      if (!mounted || _exiting) return;
       await _room.localParticipant?.setMicrophoneEnabled(true);
     } catch (error) {
       if (mounted) setState(() => _error = 'The call could not start: $error');
@@ -50,7 +62,21 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (mounted && !_exiting) setState(() {});
+  }
+
+  void _leave([String? message]) {
+    // LiveKit can disconnect before or after the end API response, while
+    // this page remains mounted for the navigation transition.
+    if (!mounted || _exiting) return;
+    _exiting = true;
+    final navigator = Navigator.of(context);
+    // A disconnect can also arrive while the confirmation dialog is open.
+    // Close that boolean-result dialog before returning the call's message.
+    if (_confirmingEnd && ModalRoute.of(context)?.isCurrent == false) {
+      navigator.pop(false);
+    }
+    navigator.pop(message);
   }
 
   void _disconnected(RoomDisconnectedEvent event) {
@@ -62,7 +88,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
       DisconnectReason.participantRemoved => 'You were removed from the meeting.',
       _ => 'The call was cut off. Join again from the meeting list.',
     };
-    Navigator.of(context).pop(message);
+    _leave(message);
   }
 
   Future<void> _toggleMicrophone() async {
@@ -80,17 +106,23 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
   Future<void> _endForEveryone() async {
     final services = TgcgBackend.of(context);
     if (services == null) return;
-    final confirmed = await confirmAction(
-      context,
-      title: 'End ${widget.meeting.title}?',
-      message: 'Everyone in the call is disconnected and nobody can join again.',
-      action: 'End for everyone',
-      destructive: true,
-    );
-    if (!confirmed || !mounted) return;
+    _confirmingEnd = true;
+    final bool confirmed;
+    try {
+      confirmed = await confirmAction(
+        context,
+        title: 'End ${widget.meeting.title}?',
+        message: 'Everyone in the call is disconnected and nobody can join again.',
+        action: 'End for everyone',
+        destructive: true,
+      );
+    } finally {
+      _confirmingEnd = false;
+    }
+    if (!confirmed || !mounted || _exiting) return;
     await _guard(() async {
       await services.meetings.end(widget.meeting.reference);
-      if (mounted) Navigator.of(context).pop('The meeting has ended.');
+      _leave('The meeting has ended.');
     });
   }
 
@@ -111,6 +143,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
 
   @override
   void dispose() {
+    _exiting = true;
     _room.removeListener(_changed);
     unawaited(_events.dispose());
     unawaited(_room.disconnect().whenComplete(_room.dispose));
@@ -126,7 +159,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
         ..sort((a, b) => a.name.compareTo(b.name)),
     ];
     final video = widget.meeting.kind == MeetingKind.video;
-    return Scaffold(
+    final call = Scaffold(
       backgroundColor: TgcgColors.primaryDark,
       appBar: AppBar(
         backgroundColor: TgcgColors.primaryDark,
@@ -145,7 +178,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
         ],
       ),
       body: _error != null
-          ? _Message(text: _error!, onBack: () => Navigator.of(context).pop())
+          ? _Message(text: _error!, onBack: () => _leave())
           : _connecting
               ? const Center(child: CircularProgressIndicator(color: Colors.white))
               : LayoutBuilder(
@@ -195,7 +228,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
                       icon: Icons.call_end_rounded,
                       label: 'Leave',
                       color: TgcgColors.danger,
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => _leave(),
                     ),
                     if (widget.meeting.canManage)
                       _Control(
@@ -208,6 +241,12 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
                 ),
               ),
             ),
+    );
+    return PopScope<String>(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _exiting = true;
+      },
+      child: call,
     );
   }
 }
