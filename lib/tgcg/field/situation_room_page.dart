@@ -873,6 +873,7 @@ class _IncidentInspector extends StatelessWidget {
             )
           else
             ...item.evidence.map((evidence) => _EvidenceTile(evidence: evidence)),
+          IncidentPhotoButton(incident: item),
           const SizedBox(height: 14),
           const Divider(height: 1),
           const SizedBox(height: 14),
@@ -893,69 +894,8 @@ class _EvidenceTile extends StatelessWidget {
   final EvidenceAttachment evidence;
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: TgcgColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: TgcgColors.border),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: TgcgColors.primaryDark,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(
-                _evidenceIcon(evidence.type),
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    evidence.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: TgcgColors.ink,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    _label(evidence.type.name),
-                    style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
-                  ),
-                  if (evidence.contentHash != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      evidence.contentHash!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: TgcgColors.success,
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) =>
+      EvidenceRow(evidence: evidence, icon: _evidenceIcon(evidence.type));
 }
 
 class _InspectorLine extends StatelessWidget {

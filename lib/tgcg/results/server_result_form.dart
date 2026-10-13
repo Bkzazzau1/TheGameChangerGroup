@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/reference_repository.dart';
+import '../evidence/evidence_upload.dart';
+import '../evidence/evidence_viewer.dart';
 import '../location/gps_prompt.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -28,6 +30,7 @@ class _ServerResultFormState extends State<ServerResultForm> {
   final _rejected = TextEditingController();
   final _accredited = TextEditingController();
   final _registered = TextEditingController();
+  var _sheet = <PendingEvidence>[];
   bool _saving = false;
   bool _started = false;
 
@@ -153,12 +156,14 @@ class _ServerResultFormState extends State<ServerResultForm> {
         registeredVoters: _n(_registered),
         gps: gps,
         electionCode: _election!.code,
+        sheetPhoto: _sheet.firstOrNull,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Result for ${unit.code} saved on this device. It uploads automatically'
+            'Result for ${unit.code}${_sheet.isEmpty ? '' : ' and its sheet photo'} saved on this '
+            'device. It uploads automatically'
             '${saved.validation?.requiresHumanReview == true ? ' and will be reviewed' : ''}.',
           ),
         ),
@@ -167,6 +172,7 @@ class _ServerResultFormState extends State<ServerResultForm> {
         for (final c in [..._votes.values, _total, _rejected, _accredited]) {
           c.clear();
         }
+        _sheet = [];
       });
     } catch (error) {
       if (!mounted) return;
@@ -286,6 +292,15 @@ class _ServerResultFormState extends State<ServerResultForm> {
               SizedBox(width: 190, child: _NumberInput(controller: _accredited, label: 'Accredited voters')),
               SizedBox(width: 190, child: _NumberInput(controller: _registered, label: 'Registered voters')),
             ],
+          ),
+          const SizedBox(height: 16),
+          EvidencePhotoPicker(
+            type: EvidenceType.resultForm,
+            photos: _sheet,
+            max: 1,
+            label: 'Photo of the signed result sheet (EC8A)',
+            hint: 'Reviewers compare your figures with it before they verify.',
+            onChanged: (value) => setState(() => _sheet = value),
           ),
           const SizedBox(height: 14),
           if (problems.isNotEmpty)

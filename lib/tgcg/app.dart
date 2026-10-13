@@ -111,9 +111,14 @@ class _TgcgAppState extends State<TgcgApp> {
     final services = backend;
     if (services != null) {
       final session = sessionController;
+      final offline = offlinePersistenceController = OfflinePersistenceController();
       final sync = syncController = SyncController(
-        persistence: offlinePersistenceController = OfflinePersistenceController(),
-        transport: HttpSyncTransport(services.client, accessId: () => session.accessId),
+        persistence: offline,
+        transport: HttpSyncTransport(
+          services.client,
+          accessId: () => session.accessId,
+          outbox: offline,
+        ),
       );
       // Members have no field records to upload.
       session.addListener(() => sync.setEnabled(session.isServerSession && !session.isMember));

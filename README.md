@@ -115,5 +115,7 @@ server, which checks each one. Collation shows the server's unofficial totals
 of verified results for each election, area by area. Meeting calls run on
 LiveKit; the server decides who may join and hands out the join pass (see the
 server's docs/meetings.md). New incidents, reports and results are saved on
-the device first and upload when there is a connection. Other screens still
-show sample records and carry a "Demo data" notice.
+the device first and upload when there is a connection; photos taken with
+them (incident photos, the signed result sheet) upload after their record,
+and reviewers open them from the record. Other screens still show sample
+records and carry a "Demo data" notice.

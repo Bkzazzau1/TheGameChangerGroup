@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../api/results_repository.dart';
 import '../domain/models.dart';
 import '../domain/permissions.dart';
+import '../evidence/evidence_upload.dart';
 import '../offline/offline_payloads.dart';
 import '../offline/offline_persistence.dart';
 import '../sync/server_records.dart';
@@ -308,6 +309,7 @@ class ResultOperationsController extends ChangeNotifier with ServerRecords<Resul
     double? ocrConfidence,
     GpsFix? gps,
     String? electionCode,
+    PendingEvidence? sheetPhoto,
   }) async {
     if (source == SubmissionSource.app && gps == null) {
       throw ArgumentError('Results submitted from the app need a GPS reading.');
@@ -317,11 +319,12 @@ class ResultOperationsController extends ChangeNotifier with ServerRecords<Resul
         existing.status != RecordStatus.rejected &&
         existing.status != RecordStatus.archived);
 
+    final id = isLive
+        // Unique on this device; the server gives the result its reference.
+        ? 'NEW-${DateTime.now().microsecondsSinceEpoch.toRadixString(36).toUpperCase()}'
+        : 'RES-${(_submissions.length + 1).toString().padLeft(4, '0')}';
     final base = ElectionResultSubmission(
-      id: isLive
-          // Unique on this device; the server gives the result its reference.
-          ? 'NEW-${DateTime.now().microsecondsSinceEpoch.toRadixString(36).toUpperCase()}'
-          : 'RES-${(_submissions.length + 1).toString().padLeft(4, '0')}',
+      id: id,
       pollingUnitScope: pollingUnitScope,
       submittedBy: submittedBy,
       submittedAt: DateTime.now().toUtc(),
@@ -332,7 +335,7 @@ class ResultOperationsController extends ChangeNotifier with ServerRecords<Resul
       accreditedVoters: accreditedVoters,
       rejectedVotes: rejectedVotes,
       registeredVoters: registeredVoters,
-      resultForm: resultForm,
+      resultForm: resultForm ?? sheetPhoto?.toAttachment(id: '$id-SHEET', uploaderId: submittedBy),
       gps: gps,
       electionCode: electionCode,
       origin: RecordOrigin.localEntry,
@@ -356,7 +359,19 @@ class ResultOperationsController extends ChangeNotifier with ServerRecords<Resul
       scopeKey: scopeStorageKey(saved.pollingUnitScope),
       ownerId: submittedBy,
     );
-    if (receipt != null) keepUntilUploaded(saved.id, receipt.outbox.id);
+    if (receipt != null) {
+      keepUntilUploaded(saved.id, receipt.outbox.id);
+      // The sheet photo uploads after the result, to its server reference.
+      if (sheetPhoto != null) {
+        await queueEvidence(
+          _persistence!,
+          parent: EvidenceParent.result,
+          recordOutboxId: receipt.outbox.id,
+          evidence: sheetPhoto,
+          ownerId: submittedBy,
+        );
+      }
+    }
     _submissions.insert(0, saved);
     notifyListeners();
     return saved;

@@ -7,6 +7,8 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/field_repository.dart';
 import '../domain/permissions.dart';
+import '../evidence/evidence_upload.dart';
+import '../evidence/evidence_viewer.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/server_feed.dart';
@@ -461,5 +463,153 @@ Future<List<GeographicScope>> fieldLocations(BuildContext context) async {
   } on ApiException {
     // Offline: the area itself still works, and the record uploads later.
     return [scope];
+  }
+}
+
+/// Adds a photo to an incident on the server: the reporter's own, or any in
+/// the areas where one may manage evidence. It is saved on this device and
+/// uploads with the rest; the server checks the uploader again.
+class IncidentPhotoButton extends StatefulWidget {
+  const IncidentPhotoButton({super.key, required this.incident, this.pick = pickEvidencePhoto});
+
+  final FieldIncident incident;
+  final PickPhoto pick;
+
+  @override
+  State<IncidentPhotoButton> createState() => _IncidentPhotoButtonState();
+}
+
+class _IncidentPhotoButtonState extends State<IncidentPhotoButton> {
+  bool _busy = false;
+
+  Future<void> _add({required bool camera}) async {
+    final store = FieldOperations.of(context, listen: false);
+    final session = TgcgSession.of(context, listen: false);
+    setState(() => _busy = true);
+    try {
+      final photo = await widget.pick(type: EvidenceType.photo, camera: camera);
+      if (photo == null || !mounted) return;
+      await store.addIncidentPhoto(widget.incident.id, photo, uploaderId: session.accessId);
+      if (mounted) {
+        showDone(
+          context,
+          'Photo saved. It uploads automatically and shows here once it is on the server.',
+        );
+      }
+    } catch (error) {
+      if (mounted) showFieldFailure(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final incident = widget.incident;
+    final store = FieldOperations.of(context);
+    final session = TgcgSession.of(context);
+    final allowed = store.isLive &&
+        !store.isOnDevice(incident.id) &&
+        incident.status != IncidentStatus.closed &&
+        (incident.reporterId == session.accessId ||
+            session.can(TgcgCapability.manageEvidence));
+    if (!allowed) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _busy ? null : () => _add(camera: true),
+            icon: const Icon(Icons.add_a_photo_outlined, size: 17),
+            label: const Text('Take photo'),
+          ),
+          TextButton.icon(
+            onPressed: _busy ? null : () => _add(camera: false),
+            icon: const Icon(Icons.photo_library_outlined, size: 17),
+            label: const Text('Choose photo'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One piece of an incident's evidence; pictures on the server open when tapped.
+class EvidenceRow extends StatelessWidget {
+  const EvidenceRow({super.key, required this.evidence, required this.icon});
+
+  final EvidenceAttachment evidence;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final viewable = canShowEvidence(evidence);
+    final onDevice = !viewable && evidence.contentHash?.startsWith('sha256:') == true &&
+        evidence.id.contains('-PHOTO-');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Material(
+        color: TgcgColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: viewable ? () => showEvidence(context, evidence) : null,
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: TgcgColors.border),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: TgcgColors.primary, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        evidence.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: TgcgColors.ink,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        onDevice
+                            ? 'On this device; uploads after the incident.'
+                            : 'By ${evidence.uploaderId}',
+                        style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
+                      ),
+                    ],
+                  ),
+                ),
+                if (viewable)
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_outlined, size: 16, color: TgcgColors.primaryMid),
+                      SizedBox(width: 4),
+                      Text(
+                        'View',
+                        style: TextStyle(
+                          color: TgcgColors.primaryMid,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

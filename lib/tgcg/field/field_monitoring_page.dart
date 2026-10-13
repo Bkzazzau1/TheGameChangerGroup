@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../access/access_widgets.dart' show promptText, showDone;
 
 import '../domain/permissions.dart';
+import '../evidence/evidence_upload.dart';
+import '../evidence/evidence_viewer.dart';
 import '../location/gps_prompt.dart';
 import '../session.dart';
 import '../sync/server_records.dart';
@@ -175,6 +177,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
     var category = _incidentCategories.first;
     var severity = IncidentSeverity.medium;
     var scope = locations.first;
+    var photos = <PendingEvidence>[];
 
     final created = await showDialog<FieldIncident>(
       context: context,
@@ -264,7 +267,15 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const _DeviceCaptureIntegrationPanel(),
+                  if (store.isLive)
+                    EvidencePhotoPicker(
+                      photos: photos,
+                      label: 'Photos (optional)',
+                      hint: 'They upload after the incident and are kept as taken.',
+                      onChanged: (value) => setDialogState(() => photos = value),
+                    )
+                  else
+                    const _DeviceCaptureIntegrationPanel(),
                 ],
               ),
             ),
@@ -293,6 +304,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
                       : session.accessId,
                   summary: summary.text,
                   gps: gps,
+                  photos: photos,
                 );
                 if (dialogContext.mounted) {
                   Navigator.pop(dialogContext, incident);
@@ -313,8 +325,9 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
         SnackBar(
           content: Text(
             store.isLive
-                ? 'Incident saved on this device. It uploads to the server automatically; '
-                    'photos and video cannot be attached yet.'
+                ? 'Incident saved on this device'
+                    '${photos.isEmpty ? '' : ' with ${photos.length} photo${photos.length == 1 ? '' : 's'}'}'
+                    '. It uploads to the server automatically.'
                 : '${created.id} encrypted locally and queued for sync. Media/GPS capture will attach when device integrations are connected.',
           ),
         ),
@@ -548,74 +561,79 @@ class _Metrics extends StatelessWidget {
 
 class _CaptureReadinessBanner extends StatelessWidget {
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: TgcgColors.primaryDark,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final text = Column(
+  Widget build(BuildContext context) {
+    final live = FieldOperations.of(context).isLive;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: TgcgColors.primaryDark,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final text = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'FIELD CAPTURE',
+                style: TextStyle(
+                  color: TgcgColors.accent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.05,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                live
+                    ? 'Incidents carry GPS and photos; video and voice notes come next.'
+                    : 'Incidents carry GPS; photos attach when signed in to the server.',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Photos and coordinates are never fabricated. A record shows when capture data is unavailable.',
+                style: TextStyle(
+                  color: Color(0xFFB8BDCA),
+                  fontSize: 10.5,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          );
+          final chips = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              const _DarkPill('TEXT RECORDS', Icons.check_circle_outline_rounded),
+              const _DarkPill('GPS', Icons.my_location_rounded),
+              _DarkPill(live ? 'PHOTOS' : 'PHOTOS ON SERVER', Icons.photo_camera_outlined),
+              const _DarkPill('VIDEO PENDING', Icons.videocam_outlined),
+              const _DarkPill('AUDIO PENDING', Icons.mic_none_rounded),
+            ],
+          );
+          if (constraints.maxWidth < 820) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'FIELD CAPTURE READINESS',
-                  style: TextStyle(
-                    color: TgcgColors.accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.05,
-                  ),
-                ),
-                SizedBox(height: 7),
-                Text(
-                  'Structured records are live; native media and GPS services are next integrations.',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    height: 1.25,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Photo, video, audio and coordinates are never fabricated. A record explicitly shows when capture data is unavailable.',
-                  style: TextStyle(
-                    color: Color(0xFFB8BDCA),
-                    fontSize: 10.5,
-                    height: 1.4,
-                  ),
-                ),
-              ],
+              children: [text, const SizedBox(height: 14), chips],
             );
-            final chips = Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: const [
-                _DarkPill('TEXT RECORDS', Icons.check_circle_outline_rounded),
-                _DarkPill('PHOTO PENDING', Icons.photo_camera_outlined),
-                _DarkPill('VIDEO PENDING', Icons.videocam_outlined),
-                _DarkPill('AUDIO PENDING', Icons.mic_none_rounded),
-                _DarkPill('GPS PENDING', Icons.my_location_rounded),
-              ],
-            );
-            if (constraints.maxWidth < 820) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [text, const SizedBox(height: 14), chips],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(flex: 6, child: text),
-                const SizedBox(width: 20),
-                Expanded(flex: 5, child: chips),
-              ],
-            );
-          },
-        ),
-      );
+          }
+          return Row(
+            children: [
+              Expanded(flex: 6, child: text),
+              const SizedBox(width: 20),
+              Expanded(flex: 5, child: chips),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _DarkPill extends StatelessWidget {
@@ -960,6 +978,7 @@ class _IncidentInspector extends StatelessWidget {
           ],
           const SizedBox(height: 14),
           _EvidencePanel(evidence: current.evidence),
+          IncidentPhotoButton(incident: current),
           const SizedBox(height: 14),
           if (history)
             IncidentHistoryPanel(key: ValueKey(current.id), incident: current)
@@ -996,52 +1015,7 @@ class _EvidencePanel extends StatelessWidget {
               style: TextStyle(color: TgcgColors.muted, fontSize: 10.5),
             )
           else
-            ...evidence.map(
-              (item) => Container(
-                margin: const EdgeInsets.only(bottom: 7),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: TgcgColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: TgcgColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _evidenceIcon(item.type),
-                      color: TgcgColors.primary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.fileName,
-                            style: const TextStyle(
-                              color: TgcgColors.ink,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            item.contentHash ?? 'Hash unavailable',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: TgcgColors.muted,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            for (final item in evidence) EvidenceRow(evidence: item, icon: _evidenceIcon(item.type)),
         ],
       );
 }

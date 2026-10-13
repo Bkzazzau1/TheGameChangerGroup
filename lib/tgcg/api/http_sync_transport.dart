@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 import '../offline/offline_persistence.dart';
 import '../sync/sync_worker.dart';
 import 'api_client.dart';
@@ -14,12 +18,16 @@ String syncClientId(String accessId, String outboxId) {
 /// Each upload carries a stable `client_id` derived from the outbox entry,
 /// so a retry after a dropped connection never creates a duplicate.
 class HttpSyncTransport implements SyncTransport {
-  HttpSyncTransport(this.client, {required this.accessId});
+  HttpSyncTransport(this.client, {required this.accessId, this.outbox});
 
   final ApiClient client;
 
   /// The signed-in account; prefixes client ids so devices never collide.
   final String Function() accessId;
+
+  /// The outbox being uploaded: evidence finds its record's server
+  /// reference there, once the record has uploaded.
+  final OfflinePersistenceController? outbox;
 
   static const _handlers = {
     'field_incident',
@@ -28,6 +36,7 @@ class HttpSyncTransport implements SyncTransport {
     'duty_start',
     'duty_stop',
     'location_ping',
+    'evidence_upload',
   };
 
   @override
@@ -61,6 +70,7 @@ class HttpSyncTransport implements SyncTransport {
             body: {'on_duty': false, 'at': payload['ended_at']},
           ),
         'location_ping' => client.post('tracking/pings/', body: {'pings': [payload]}),
+        'evidence_upload' => _evidence(payload, clientId),
         _ => throw StateError('Unsupported ${mutation.entityType}'),
       };
       return SyncPushResult.acknowledged(
@@ -69,13 +79,62 @@ class HttpSyncTransport implements SyncTransport {
       );
     } on _MissingData catch (error) {
       return SyncPushResult.failed(message: error.message);
+    } on _NotYet catch (error) {
+      return SyncPushResult.retryLater(message: error.message);
     } on ApiException catch (error) {
       if (error.isOffline || error.isUnauthorized || error.statusCode >= 500 || error.statusCode == 429) {
         return SyncPushResult.retryLater(message: error.message);
       }
       if (error.statusCode == 409) return SyncPushResult.conflict(message: error.message);
+      if (error.statusCode == 413) {
+        return const SyncPushResult.failed(message: 'The file is too large for the server.');
+      }
       return SyncPushResult.failed(message: error.message);
     }
+  }
+
+  static const _evidencePaths = {
+    'incident': 'incidents',
+    'fieldReport': 'field-reports',
+    'result': 'results',
+  };
+
+  /// A photo or file for a record, sent once the record is on the server.
+  Future<dynamic> _evidence(Map<String, Object?> p, String clientId) async {
+    final records = _evidencePaths[p['parent']];
+    if (records == null) throw const _MissingData('This evidence is not attached to a record.');
+    final reference =
+        p['reference'] as String? ?? await _uploadedRecord(p['recordOutboxId'] as String?);
+    final bytes = base64Decode(p['bytes'] as String);
+    return client.postMultipart(
+      '$records/$reference/evidence/',
+      fields: {
+        'type': p['type'],
+        'captured_at': p['takenAt'],
+        'content_hash': p['sha256'],
+        'client_id': clientId,
+      },
+      files: () async => [
+        http.MultipartFile.fromBytes('file', bytes, filename: p['fileName'] as String),
+      ],
+      requestTimeout: const Duration(minutes: 3),
+    );
+  }
+
+  /// The server reference of the record that [outboxId] uploads.
+  Future<String> _uploadedRecord(String? outboxId) async {
+    final outbox = this.outbox;
+    if (outboxId == null || outbox == null) {
+      throw const _MissingData('This evidence is not attached to a record.');
+    }
+    final reference = (await outbox.receiptFor(outboxId))?.serverReference;
+    if (reference != null) return reference;
+    final record = outbox.outbox.where((item) => item.id == outboxId).firstOrNull;
+    if (record == null) throw const _MissingData('Its record is no longer on this device.');
+    if (record.state == SyncState.failed || record.state == SyncState.conflict) {
+      throw const _MissingData('The server refused its record, so this file was not sent.');
+    }
+    throw const _NotYet('Waiting for its record to upload first.');
   }
 
   String _clientId(SyncOutboxItem mutation) => syncClientId(accessId(), mutation.id);
@@ -161,5 +220,11 @@ class HttpSyncTransport implements SyncTransport {
 
 class _MissingData implements Exception {
   const _MissingData(this.message);
+  final String message;
+}
+
+/// Not yet: something it depends on has still to upload.
+class _NotYet implements Exception {
+  const _NotYet(this.message);
   final String message;
 }

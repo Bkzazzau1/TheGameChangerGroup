@@ -4,6 +4,7 @@ import '../access/access_widgets.dart' show promptText, showDone;
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../domain/permissions.dart';
+import '../evidence/evidence_viewer.dart';
 import '../geography/geography_registry.dart';
 import '../location/gps_prompt.dart';
 import '../membership/membership_store.dart';
@@ -1272,6 +1273,7 @@ class _SubmissionTile extends StatelessWidget {
                 ),
             ],
           ),
+          if (submission.resultForm != null) _SheetLink(sheet: submission.resultForm!),
           if (submission.status == RecordStatus.verified && submission.verifiedBy != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -1398,6 +1400,7 @@ class _ReviewTile extends StatelessWidget {
               ),
             ],
           ),
+          if (item.resultForm != null) _SheetLink(sheet: item.resultForm!),
           if (item.disputeReason != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -1597,6 +1600,35 @@ class _ResultActionsState extends State<_ResultActions> {
         icon: Icon(icon, size: 17),
         label: Text(label),
       );
+}
+
+/// The photo of the signed result sheet: opens when it is on the server.
+class _SheetLink extends StatelessWidget {
+  const _SheetLink({required this.sheet});
+
+  final EvidenceAttachment sheet;
+
+  @override
+  Widget build(BuildContext context) {
+    if (canShowEvidence(sheet)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: TextButton.icon(
+          onPressed: () => showEvidence(context, sheet),
+          icon: const Icon(Icons.document_scanner_outlined, size: 18),
+          label: const Text('View result sheet'),
+        ),
+      );
+    }
+    // Taken on this device with a result that has not uploaded yet.
+    if (sheet.id.endsWith('-SHEET')) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 6),
+        child: _Note('The result sheet photo is on this device and uploads after the result.'),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 }
 
 class _Note extends StatelessWidget {

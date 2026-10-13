@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/field_repository.dart';
 import '../domain/models.dart';
+import '../evidence/evidence_upload.dart';
 import '../offline/offline_payloads.dart';
 import '../offline/offline_persistence.dart';
 import '../sync/server_records.dart';
@@ -310,9 +311,11 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
     double? longitude,
     GpsFix? gps,
     List<EvidenceAttachment> evidence = const [],
+    List<PendingEvidence> photos = const [],
   }) async {
+    final id = _newId('INC');
     final incident = FieldIncident(
-      id: _newId('INC'),
+      id: id,
       title: title.trim(),
       category: category.trim(),
       severity: severity,
@@ -324,7 +327,11 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
       latitude: gps?.latitude ?? latitude,
       longitude: gps?.longitude ?? longitude,
       gps: gps,
-      evidence: List.unmodifiable(evidence),
+      evidence: List.unmodifiable([
+        ...evidence,
+        for (final (index, photo) in photos.indexed)
+          photo.toAttachment(id: '$id-PHOTO-${index + 1}', uploaderId: reporterId),
+      ]),
       origin: RecordOrigin.localEntry,
     );
     final receipt = await _persistence?.persistMutation(
@@ -335,7 +342,19 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
       scopeKey: scopeStorageKey(scope),
       ownerId: reporterId,
     );
-    if (receipt != null) keepUntilUploaded(incident.id, receipt.outbox.id);
+    if (receipt != null) {
+      keepUntilUploaded(incident.id, receipt.outbox.id);
+      // Each photo uploads after the incident, to its server reference.
+      for (final photo in photos) {
+        await queueEvidence(
+          _persistence!,
+          parent: EvidenceParent.incident,
+          recordOutboxId: receipt.outbox.id,
+          evidence: photo,
+          ownerId: reporterId,
+        );
+      }
+    }
     _incidents.insert(0, incident);
     notifyListeners();
     return incident;
@@ -375,6 +394,26 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
     _reports.insert(0, report);
     notifyListeners();
     return report;
+  }
+
+  /// Adds a photo to an incident already on the server. It is saved on this
+  /// device and uploads with the rest; the server checks the uploader may.
+  Future<void> addIncidentPhoto(
+    String incidentId,
+    PendingEvidence photo, {
+    required String uploaderId,
+  }) async {
+    final persistence = _persistence;
+    if (persistence == null || !isLive || isOnDevice(incidentId)) {
+      throw StateError('Photos can be added to incidents on the server only.');
+    }
+    await queueEvidence(
+      persistence,
+      parent: EvidenceParent.incident,
+      reference: incidentId,
+      evidence: photo,
+      ownerId: uploaderId,
+    );
   }
 
   // --- changes ----------------------------------------------------------------
