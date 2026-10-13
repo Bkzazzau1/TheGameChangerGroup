@@ -103,13 +103,17 @@ The connection code lives in `lib/tgcg/api/`:
 - `field_repository.dart` reads incidents and field reports, and changes them.
 - `results_repository.dart` reads results, elections and collation, and records
   review decisions.
+- `meetings_repository.dart` lists, calls, ends and cancels meetings, and gets
+  the pass to join a meeting's call.
 
 Signed in to a server, these screens work on server records: Role
 Management, Member Review, Unit Mapping, Agents on the Ground, the Situation
-Room, Field Monitoring, Result Capture and Collation. Incident actions
-(acknowledge, assign, escalate, resolve, close, reopen), field report reviews
-and result decisions (verify, dispute, reject) go to the server, which checks
-each one. Collation shows the server's unofficial totals of verified results
-for each election, area by area. New incidents, reports and results are saved
-on the device first and upload when there is a connection. Other screens still
+Room, Field Monitoring, Result Capture, Collation and the Meeting Room.
+Incident actions (acknowledge, assign, escalate, resolve, close, reopen),
+field report reviews and result decisions (verify, dispute, reject) go to the
+server, which checks each one. Collation shows the server's unofficial totals
+of verified results for each election, area by area. Meeting calls run on
+LiveKit; the server decides who may join and hands out the join pass (see the
+server's docs/meetings.md). New incidents, reports and results are saved on
+the device first and upload when there is a connection. Other screens still
 show sample records and carry a "Demo data" notice.

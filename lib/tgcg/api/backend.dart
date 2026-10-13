@@ -7,6 +7,7 @@ import 'auth_repository.dart';
 import 'field_repository.dart';
 import 'member_admin_repository.dart';
 import 'mapping_repository.dart';
+import 'meetings_repository.dart';
 import 'member_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
@@ -22,6 +23,7 @@ class BackendServices {
         tracking = TrackingRepository(client),
         field = FieldRepository(client),
         results = ResultsRepository(client),
+        meetings = MeetingsRepository(client),
         access = AccessRepository(client),
         members = MemberAdminRepository(client);
 
@@ -54,6 +56,9 @@ class BackendServices {
 
   /// Polling-unit results, their review, and collation.
   final ResultsRepository results;
+
+  /// Meetings, and passes to join their calls (which run on LiveKit).
+  final MeetingsRepository meetings;
 
   /// Roles, appointments, delegation and administrator approvals.
   final AccessRepository access;

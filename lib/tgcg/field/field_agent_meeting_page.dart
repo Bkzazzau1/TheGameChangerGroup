@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../api/backend.dart';
 import '../media/local_camera_view.dart';
+import '../meeting/server_meetings_view.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 
@@ -23,6 +25,10 @@ class _FieldAgentMeetingPageState extends State<FieldAgentMeetingPage> {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
+    // Signed in to a server: its meetings, with calls on LiveKit.
+    if (session.isServerSession && TgcgBackend.of(context) != null) {
+      return const ServerMeetingsView();
+    }
     if (inCall) {
       return _CallStage(
         title: activeTitle,

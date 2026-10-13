@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../api/backend.dart';
 import '../domain/permissions.dart';
 import '../media/local_camera_view.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'server_meetings_view.dart';
 
 enum _MeetingKind { audio, video, conference }
 enum _MeetingStatus { live, scheduled, completed }
@@ -119,6 +121,10 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
+    // Signed in to a server: its meetings, with calls on LiveKit.
+    if (session.isServerSession && TgcgBackend.of(context) != null) {
+      return const ServerMeetingsView();
+    }
     final canStart = session.can(TgcgCapability.startMeeting);
     final canJoin = session.can(TgcgCapability.joinMeeting);
 
