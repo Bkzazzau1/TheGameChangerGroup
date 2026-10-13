@@ -9,6 +9,7 @@ import 'member_admin_repository.dart';
 import 'mapping_repository.dart';
 import 'member_repository.dart';
 import 'reference_repository.dart';
+import 'results_repository.dart';
 import 'tracking_repository.dart';
 
 /// Everything that talks to the TGCG server.
@@ -20,6 +21,7 @@ class BackendServices {
         member = MemberRepository(client),
         tracking = TrackingRepository(client),
         field = FieldRepository(client),
+        results = ResultsRepository(client),
         access = AccessRepository(client),
         members = MemberAdminRepository(client);
 
@@ -49,6 +51,9 @@ class BackendServices {
 
   /// Incidents and field reports: the Situation Room and Field Monitoring.
   final FieldRepository field;
+
+  /// Polling-unit results, their review, and collation.
+  final ResultsRepository results;
 
   /// Roles, appointments, delegation and administrator approvals.
   final AccessRepository access;

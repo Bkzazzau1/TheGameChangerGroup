@@ -378,6 +378,7 @@ class ElectionResultSubmission {
     this.gps,
     this.electionCode,
     this.origin = RecordOrigin.localEntry,
+    this.clientId,
   });
 
   final String id;
@@ -402,6 +403,9 @@ class ElectionResultSubmission {
   /// Server election code (e.g. 2027-kd-governorship); set in server mode.
   final String? electionCode;
   final RecordOrigin origin;
+
+  /// The id the device uploaded it with (the server's `client_id`).
+  final String? clientId;
 
   int get calculatedPartyVotes =>
       partyVotes.values.fold<int>(0, (total, votes) => total + votes);

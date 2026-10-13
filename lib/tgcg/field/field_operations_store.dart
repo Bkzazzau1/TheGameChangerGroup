@@ -2,21 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api_client.dart';
 import '../api/field_repository.dart';
-import '../api/http_sync_transport.dart' show syncClientId;
 import '../domain/models.dart';
 import '../offline/offline_payloads.dart';
 import '../offline/offline_persistence.dart';
+import '../sync/server_records.dart';
 
 /// Incidents and field reports for every screen that shows them.
 ///
 /// In presentation mode it holds sample records and changes them locally. In
 /// a server session ([connect]) it holds what the server returns, and every
-/// change is made on the server, which checks it. New records are always
-/// saved on the device first and uploaded by the sync controller, so they can
-/// be made offline; each stays on the list until the server's copy replaces it.
-class FieldOperationsController extends ChangeNotifier {
+/// change is made on the server, which checks it. New records are saved on
+/// the device first and stay on the list until the server's copy replaces
+/// them (see [ServerRecords]).
+class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldSnapshot> {
   FieldOperationsController._({
     required List<FieldIncident> incidents,
     required List<FieldReport> reports,
@@ -205,35 +204,7 @@ class FieldOperationsController extends ChangeNotifier {
   // --- server session ---------------------------------------------------------
 
   FieldRepository? _server;
-  String _account = '';
-
-  /// Counts connections, so a load started for an earlier one is dropped.
-  int _session = 0;
-  Future<void>? _running;
-  bool _loadAgain = false;
-  bool _disposed = false;
-  String? _loadError;
-  DateTime? _loadedAt;
   int _openOnServer = 0;
-
-  /// Records made on this device while connected, by id, with the outbox
-  /// entry that uploads each. They have no server reference yet.
-  final Map<String, String> _local = {};
-
-  /// Outbox entries whose upload has already prompted a refresh.
-  final Set<String> _refreshedFor = {};
-
-  /// True in a server session: the records come from the server.
-  bool get isLive => _server != null;
-
-  /// Loading from the server now.
-  bool get loading => _running != null;
-
-  /// Why the last load failed, if it did.
-  String? get loadError => _loadError;
-
-  /// When the server's records were last loaded.
-  DateTime? get loadedAt => _loadedAt;
 
   /// Every open incident on the server in your areas. The list holds the
   /// most urgent of them when there are more than it loads.
@@ -242,102 +213,33 @@ class FieldOperationsController extends ChangeNotifier {
   /// Read from and act on the server, as [account] (the signed-in access ID,
   /// which the uploads also carry).
   void connect(FieldRepository server, {required String account}) {
-    if (identical(server, _server) && account == _account) return;
-    if (_server == null) _persistence?.addListener(_onOutboxChanged);
+    if (identical(server, _server) && account == serverAccount) return;
     _server = server;
-    _account = account;
-    _clearLive();
-    _incidents.clear();
-    _reports.clear();
-    notifyListeners();
-    unawaited(refresh());
+    connectServer(account);
   }
 
   /// Back to presentation mode and its sample records.
   void disconnect() {
-    if (_server == null) return;
-    _persistence?.removeListener(_onOutboxChanged);
     _server = null;
-    _account = '';
-    _clearLive();
-    _incidents
-      ..clear()
-      ..addAll(_sampleIncidents());
-    _reports
-      ..clear()
-      ..addAll(_sampleReports());
-    notifyListeners();
+    disconnectServer();
   }
 
-  void _clearLive() {
-    _session++;
-    _local.clear();
-    _refreshedFor.clear();
-    _running = null;
-    _loadAgain = false;
-    _loadError = null;
-    _loadedAt = null;
-    _openOnServer = 0;
-  }
+  @override
+  OfflinePersistenceController? get offlineStore => _persistence;
 
-  /// Loads what the server holds now. While a load runs, asking again
-  /// loads once more when it ends.
-  Future<void> refresh() {
-    final server = _server;
-    if (server == null) return Future.value();
-    final running = _running;
-    if (running != null) {
-      _loadAgain = true;
-      return running;
-    }
-    late final Future<void> run;
-    run = _load(server, _session).whenComplete(() {
-      if (!identical(_running, run)) return;
-      _running = null;
-      if (!_disposed) notifyListeners();
-    });
-    _running = run;
-    notifyListeners();
-    return run;
-  }
+  @override
+  Future<FieldSnapshot> fetchServerRecords() => _server!.load();
 
-  Future<void> _load(FieldRepository server, int session) async {
-    try {
-      do {
-        _loadAgain = false;
-        final snapshot = await server.load();
-        if (session != _session) return;
-        _apply(snapshot);
-        _loadError = null;
-        _loadedAt = DateTime.now();
-      } while (_loadAgain);
-    } on ApiException catch (error) {
-      if (session == _session) _loadError = error.message;
-    } catch (_) {
-      if (session == _session) {
-        _loadError = 'The server sent records this app cannot read. Update the app.';
-      }
-    }
-  }
+  @override
+  Iterable<String?> clientIdsOf(FieldSnapshot snapshot) => [
+        for (final item in snapshot.incidents) item.clientId,
+        for (final item in snapshot.reports) item.clientId,
+      ];
 
-  /// Loads again unless the records are newer than [age] or loading now.
-  Future<void> refreshIfOlderThan(Duration age) {
-    final running = _running;
-    if (running != null) return running;
-    final loadedAt = _loadedAt;
-    if (loadedAt != null && DateTime.now().difference(loadedAt) < age) return Future.value();
-    return refresh();
-  }
-
-  void _apply(FieldSnapshot snapshot) {
-    final onServer = {
-      for (final item in snapshot.incidents) ?item.clientId,
-      for (final item in snapshot.reports) ?item.clientId,
-    };
-    // The server's copy replaces the one made here.
-    _local.removeWhere((_, outbox) => onServer.contains(syncClientId(_account, outbox)));
-    final incidents = _incidents.where((item) => _local.containsKey(item.id)).toList();
-    final reports = _reports.where((item) => _local.containsKey(item.id)).toList();
+  @override
+  void showServerRecords(FieldSnapshot snapshot) {
+    final incidents = _incidents.where((item) => isOnDevice(item.id)).toList();
+    final reports = _reports.where((item) => isOnDevice(item.id)).toList();
     _incidents
       ..clear()
       ..addAll(incidents)
@@ -349,39 +251,22 @@ class FieldOperationsController extends ChangeNotifier {
     _openOnServer = snapshot.openIncidents;
   }
 
-  SyncOutboxItem? _outboxFor(String id) {
-    final outbox = _local[id];
-    if (outbox == null) return null;
-    return _persistence?.outbox.where((item) => item.id == outbox).firstOrNull;
+  @override
+  void showSampleRecords() {
+    _openOnServer = 0;
+    _incidents
+      ..clear()
+      ..addAll(_sampleIncidents());
+    _reports
+      ..clear()
+      ..addAll(_sampleReports());
   }
 
-  bool _uploaded(String outbox) {
-    final item = _persistence?.outbox.where((entry) => entry.id == outbox).firstOrNull;
-    return item == null || item.state == SyncState.synced;
-  }
-
-  void _onOutboxChanged() {
-    var uploaded = false;
-    for (final outbox in _local.values) {
-      if (_uploaded(outbox) && _refreshedFor.add(outbox)) uploaded = true;
-    }
-    if (uploaded) unawaited(refresh());
-  }
-
-  /// Made on this device and not yet replaced by the server's copy: it has
-  /// no server reference, so it cannot be acted on yet.
-  bool isOnDevice(String id) => _local.containsKey(id);
-
-  /// Where a record made on this device stands, for showing it.
-  String? uploadStatus(String id) {
-    if (!_local.containsKey(id)) return null;
-    final item = _outboxFor(id);
-    if (item == null || item.state == SyncState.synced) return 'Uploaded to the server.';
-    if (item.state == SyncState.failed || item.state == SyncState.conflict) {
-      final why = (item.lastError ?? 'see Sync status').trim();
-      return 'The server refused the upload: ${why.endsWith('.') ? why : '$why.'}';
-    }
-    return 'Saved on this device. It uploads automatically when there is a connection.';
+  @override
+  void clearRecords() {
+    _openOnServer = 0;
+    _incidents.clear();
+    _reports.clear();
   }
 
   // --- records ----------------------------------------------------------------
@@ -450,7 +335,7 @@ class FieldOperationsController extends ChangeNotifier {
       scopeKey: scopeStorageKey(scope),
       ownerId: reporterId,
     );
-    if (isLive && receipt != null) _local[incident.id] = receipt.outbox.id;
+    if (receipt != null) keepUntilUploaded(incident.id, receipt.outbox.id);
     _incidents.insert(0, incident);
     notifyListeners();
     return incident;
@@ -486,7 +371,7 @@ class FieldOperationsController extends ChangeNotifier {
       scopeKey: scopeStorageKey(scope),
       ownerId: reporterId,
     );
-    if (isLive && receipt != null) _local[report.id] = receipt.outbox.id;
+    if (receipt != null) keepUntilUploaded(report.id, receipt.outbox.id);
     _reports.insert(0, report);
     notifyListeners();
     return report;
@@ -594,13 +479,6 @@ class FieldOperationsController extends ChangeNotifier {
     if (index < 0) return;
     _reports[index] = report;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    if (_server != null) _persistence?.removeListener(_onOutboxChanged);
-    super.dispose();
   }
 
   bool _within(GeographicScope parent, GeographicScope child) {

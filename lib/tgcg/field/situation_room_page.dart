@@ -7,6 +7,8 @@ import '../geography/nigeria_map.dart';
 import '../geography/state_lga_map_dialog.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
+import '../sync/server_records.dart';
+import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
 import 'incident_actions.dart';
@@ -18,7 +20,11 @@ class SituationRoomPage extends StatefulWidget {
   State<SituationRoomPage> createState() => _SituationRoomPageState();
 }
 
-class _SituationRoomPageState extends State<SituationRoomPage> with FieldAutoRefresh {
+class _SituationRoomPageState extends State<SituationRoomPage> with ServerAutoRefresh {
+  @override
+  List<ServerRecords<Object?>> refreshedRecords(BuildContext context) =>
+      [FieldOperations.of(context, listen: false)];
+
   String? selectedIncidentId;
 
   @override

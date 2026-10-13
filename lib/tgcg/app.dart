@@ -126,20 +126,22 @@ class _TgcgAppState extends State<TgcgApp> {
     final field = fieldOperationsController = FieldOperationsController.prototypeSeed(
       persistence: offlinePersistenceController,
     );
+    final results = resultOperationsController = ResultOperationsController.prototypeSeed(
+      persistence: offlinePersistenceController,
+    );
     if (services != null) {
-      // Staff sessions see the server's incidents and reports, and act on them there.
+      // Staff sessions see the server's incidents, reports and results, and act on them there.
       final session = sessionController;
       session.addListener(() {
         if (session.isServerSession && session.isOperator) {
           field.connect(services.field, account: session.accessId);
+          results.connect(services.results, account: session.accessId);
         } else {
           field.disconnect();
+          results.disconnect();
         }
       });
     }
-    resultOperationsController = ResultOperationsController.prototypeSeed(
-      persistence: offlinePersistenceController,
-    );
     communicationsController =
         CommunicationsController.prototypeSeed(governanceOperationsController);
     bulkCommunicationsController =

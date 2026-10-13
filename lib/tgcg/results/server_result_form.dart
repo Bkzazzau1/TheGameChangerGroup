@@ -158,7 +158,7 @@ class _ServerResultFormState extends State<ServerResultForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${saved.id} saved for ${unit.code}. It uploads automatically'
+            'Result for ${unit.code} saved on this device. It uploads automatically'
             '${saved.validation?.requiresHumanReview == true ? ' and will be reviewed' : ''}.',
           ),
         ),

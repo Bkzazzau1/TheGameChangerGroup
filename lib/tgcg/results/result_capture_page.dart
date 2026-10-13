@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../access/access_widgets.dart' show promptText, showDone;
+import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../domain/permissions.dart';
 import '../geography/geography_registry.dart';
@@ -7,6 +9,8 @@ import '../location/gps_prompt.dart';
 import '../membership/membership_store.dart';
 import '../offline/offline_persistence.dart';
 import '../session.dart';
+import '../sync/server_records.dart';
+import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 import 'result_operations_store.dart';
 import 'server_result_form.dart';
@@ -18,7 +22,11 @@ class ResultCapturePage extends StatefulWidget {
   State<ResultCapturePage> createState() => _ResultCapturePageState();
 }
 
-class _ResultCapturePageState extends State<ResultCapturePage> {
+class _ResultCapturePageState extends State<ResultCapturePage> with ServerAutoRefresh {
+  @override
+  List<ServerRecords<Object?>> refreshedRecords(BuildContext context) =>
+      [ResultOperations.of(context, listen: false)];
+
   RecordStatus? statusFilter;
   SubmissionSource? sourceFilter;
 
@@ -41,7 +49,10 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
           .toList(growable: false);
     }
 
-    final review = store.reviewQueueForScope(session.scope);
+    final awaiting = store.awaitingDecisionForScope(session.scope);
+    final awaitingLoaded = store.submissions
+        .where((item) => ResultOperationsController.awaitsDecision(item) && !store.isOnDevice(item.id))
+        .length;
     final canSubmit = session.can(TgcgCapability.submitElectionResult);
 
     return ListView(
@@ -55,7 +66,9 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
           trailing: Wrap(
             spacing: 8,
             runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              ServerFeedStatus(records: store),
               const TgcgStatusPill(
                 label: 'UNOFFICIAL FIELD DATA',
                 color: TgcgColors.warning,
@@ -65,10 +78,20 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
             ],
           ),
         ),
+        ServerLoadError(records: store, what: 'Results'),
+        if (store.isLive && store.awaitingOnServer > awaitingLoaded)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: ServerNote(
+              icon: Icons.filter_list_rounded,
+              text: 'Showing the oldest $awaitingLoaded of ${store.awaitingOnServer} results '
+                  'awaiting a decision in your areas.',
+            ),
+          ),
         const SizedBox(height: 18),
         _Metrics(
           submissions: allScoped.length,
-          review: review.length,
+          review: awaiting.length,
           verified: allScoped
               .where((item) => item.status == RecordStatus.verified)
               .length,
@@ -100,7 +123,7 @@ class _ResultCapturePageState extends State<ResultCapturePage> {
         LayoutBuilder(
           builder: (context, constraints) {
             final ledger = _SubmissionLedger(submissions: submissions);
-            final queue = _ReviewQueue(submissions: review);
+            final queue = _ReviewQueue(submissions: awaiting);
             if (constraints.maxWidth < 1060) {
               return Column(
                 children: [
@@ -199,9 +222,9 @@ class _Metrics extends StatelessWidget {
               ),
               TgcgMetricCard(
                 width: width,
-                label: 'Human review',
+                label: 'Awaiting decision',
                 value: '$review',
-                detail: 'Validation or reconciliation attention',
+                detail: 'Verify, dispute or reject',
                 icon: Icons.fact_check_outlined,
                 tone: TgcgMetricTone.ai,
               ),
@@ -1095,13 +1118,17 @@ class _FilterBar extends StatelessWidget {
               width: 190,
               child: DropdownButtonFormField<RecordStatus?>(
                 initialValue: status,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('All statuses')),
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All statuses', overflow: TextOverflow.ellipsis),
+                  ),
                   ...RecordStatus.values.map(
                     (value) => DropdownMenuItem(
                       value: value,
-                      child: Text(_label(value.name)),
+                      child: Text(_label(value.name), overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -1112,13 +1139,17 @@ class _FilterBar extends StatelessWidget {
               width: 180,
               child: DropdownButtonFormField<SubmissionSource?>(
                 initialValue: source,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Source'),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('All sources')),
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All sources', overflow: TextOverflow.ellipsis),
+                  ),
                   ...SubmissionSource.values.map(
                     (value) => DropdownMenuItem(
                       value: value,
-                      child: Text(value.name.toUpperCase()),
+                      child: Text(value.name.toUpperCase(), overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -1233,8 +1264,37 @@ class _SubmissionTile extends StatelessWidget {
                   color: TgcgColors.ai,
                   compact: true,
                 ),
+              if (ResultOperations.of(context).isOnDevice(submission.id))
+                const TgcgStatusPill(
+                  label: 'ON THIS DEVICE',
+                  color: TgcgColors.accentDeep,
+                  compact: true,
+                ),
             ],
           ),
+          if (submission.status == RecordStatus.verified && submission.verifiedBy != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Verified by ${submission.verifiedBy}',
+                style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+              ),
+            ),
+          if (submission.disputeReason != null &&
+              (submission.status == RecordStatus.disputed ||
+                  submission.status == RecordStatus.rejected))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '${submission.status == RecordStatus.rejected ? 'Rejected' : 'Disputed'}: '
+                '${submission.disputeReason}',
+                style: const TextStyle(color: TgcgColors.danger, fontSize: 10.5),
+              ),
+            ),
+          if (submission.status == RecordStatus.verified) ...[
+            const SizedBox(height: 8),
+            _ResultActions(item: submission, onlyDispute: true),
+          ],
         ],
       ),
     );
@@ -1247,74 +1307,49 @@ class _ReviewQueue extends StatelessWidget {
   final List<ElectionResultSubmission> submissions;
 
   @override
-  Widget build(BuildContext context) {
-    final session = TgcgSession.of(context);
-    final canVerify = session.can(TgcgCapability.verifyElectionResult);
-    final canDispute = session.can(TgcgCapability.disputeElectionResult);
-
-    return TgcgSectionCard(
-      title: 'Human review queue',
-      subtitle:
-          'Automated checks identify concerns; authorized reviewers make the verification decision.',
-      trailing: TgcgStatusPill(
-        label: '${submissions.length} PENDING',
-        color: submissions.isEmpty ? TgcgColors.success : TgcgColors.ai,
-        icon: Icons.fact_check_outlined,
-        compact: true,
-      ),
-      child: submissions.isEmpty
-          ? const TgcgEmptyState(
-              icon: Icons.verified_outlined,
-              title: 'Review queue is clear',
-              message: 'No submission in this scope currently needs reviewer action.',
-            )
-          : Column(
-              children: submissions
-                  .map(
-                    (item) => _ReviewTile(
-                      item: item,
-                      canVerify: canVerify,
-                      canDispute: canDispute,
-                      session: session,
-                    ),
-                  )
-                  .toList(),
-            ),
-    );
-  }
+  Widget build(BuildContext context) => TgcgSectionCard(
+        title: 'Verification queue',
+        subtitle:
+            'Only verified results count in collation. Results flagged by the checks come first; '
+            'compare each with its result sheet before deciding.',
+        trailing: TgcgStatusPill(
+          label: '${submissions.length} AWAITING',
+          color: submissions.isEmpty ? TgcgColors.success : TgcgColors.ai,
+          icon: Icons.fact_check_outlined,
+          compact: true,
+        ),
+        child: submissions.isEmpty
+            ? const TgcgEmptyState(
+                icon: Icons.verified_outlined,
+                title: 'Nothing awaiting a decision',
+                message: 'No result in this area is waiting to be verified.',
+              )
+            : Column(
+                children: [for (final item in submissions) _ReviewTile(item: item)],
+              ),
+      );
 }
 
-class _ReviewTile extends StatefulWidget {
-  const _ReviewTile({
-    required this.item,
-    required this.canVerify,
-    required this.canDispute,
-    required this.session,
-  });
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.item});
 
   final ElectionResultSubmission item;
-  final bool canVerify;
-  final bool canDispute;
-  final TgcgSessionController session;
-
-  @override
-  State<_ReviewTile> createState() => _ReviewTileState();
-}
-
-class _ReviewTileState extends State<_ReviewTile> {
-  bool busy = false;
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final notes = item.validation?.notes ?? const <String>[];
+    final flagged = item.status == RecordStatus.underReview ||
+        item.status == RecordStatus.disputed ||
+        item.validation?.requiresHumanReview == true;
+    final parties = item.partyVotes.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final accent = flagged ? TgcgColors.ai : TgcgColors.info;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: TgcgColors.ai.withValues(alpha: .045),
+        color: accent.withValues(alpha: .045),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: TgcgColors.ai.withValues(alpha: .16)),
+        border: Border.all(color: accent.withValues(alpha: .16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1336,108 +1371,244 @@ class _ReviewTileState extends State<_ReviewTile> {
             item.pollingUnitScope.label,
             style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
           ),
+          Text(
+            'From ${item.submittedBy} by ${item.source.name.toUpperCase()}',
+            style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final entry in parties)
+                TgcgStatusPill(
+                  label: '${entry.key}: ${entry.value}',
+                  color: TgcgColors.primary,
+                  compact: true,
+                ),
+              TgcgStatusPill(
+                label: 'VALID ${item.totalVotesRecorded}',
+                color: TgcgColors.info,
+                compact: true,
+              ),
+              TgcgStatusPill(
+                label: 'ACCREDITED ${item.accreditedVoters}',
+                color: TgcgColors.muted,
+                compact: true,
+              ),
+            ],
+          ),
+          if (item.disputeReason != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Disputed: ${item.disputeReason}',
+              style: const TextStyle(color: TgcgColors.danger, fontSize: 10.5),
+            ),
+          ],
           if (notes.isNotEmpty) ...[
-            const SizedBox(height: 9),
-            ...notes.map(
-              (note) => Padding(
+            const SizedBox(height: 8),
+            for (final note in notes)
+              Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   '• $note',
                   style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
                 ),
               ),
-            ),
           ],
-          if (widget.canVerify || widget.canDispute) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (widget.canVerify)
-                  FilledButton.icon(
-                    onPressed: busy ? null : _verify,
-                    icon: const Icon(Icons.verified_outlined, size: 17),
-                    label: const Text('Verify'),
-                  ),
-                if (widget.canDispute)
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : _dispute,
-                    icon: const Icon(Icons.flag_outlined, size: 17),
-                    label: const Text('Dispute'),
-                  ),
-              ],
-            ),
-          ],
+          const SizedBox(height: 10),
+          _ResultActions(item: item),
         ],
       ),
     );
   }
+}
 
-  Future<void> _verify() async {
-    setState(() => busy = true);
+// What the server allows from each status (tgcg_backend apps/results/services.py).
+const _verifiableFrom = {RecordStatus.submitted, RecordStatus.underReview, RecordStatus.disputed};
+const _disputableFrom = {RecordStatus.submitted, RecordStatus.underReview, RecordStatus.verified};
+const _rejectableFrom = {RecordStatus.submitted, RecordStatus.underReview, RecordStatus.disputed};
+
+/// The decisions the session may take on a result now. The server checks
+/// each one again, in the result's area.
+class _ResultActions extends StatefulWidget {
+  const _ResultActions({required this.item, this.onlyDispute = false});
+
+  final ElectionResultSubmission item;
+
+  /// Offer only "Dispute" (for results already verified).
+  final bool onlyDispute;
+
+  @override
+  State<_ResultActions> createState() => _ResultActionsState();
+}
+
+class _ResultActionsState extends State<_ResultActions> {
+  bool _busy = false;
+
+  Future<void> _decide(
+    Future<bool> Function(ResultOperationsController store, TgcgSessionController session) change,
+    String done,
+  ) async {
+    final store = ResultOperations.of(context, listen: false);
+    final session = TgcgSession.of(context, listen: false);
+    setState(() => _busy = true);
     try {
-      final session = widget.session;
-      final ok = await ResultOperations.of(context, listen: false).verify(
-        submissionId: widget.item.id,
-        verifierId: session.accessId.isEmpty ? session.operatorName : session.accessId,
-        role: session.actor,
-        userScope: session.scope,
-      );
+      final ok = await change(store, session);
       if (!mounted) return;
-      if (!ok) _showDenied(context);
+      if (ok) {
+        showDone(context, done);
+      } else {
+        _showDenied(context);
+      }
     } catch (error) {
       if (mounted) _showError(context, error);
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _actor(TgcgSessionController session) =>
+      session.accessId.isEmpty ? session.operatorName : session.accessId;
+
+  Future<void> _verify() async {
+    final item = widget.item;
+    final note = await promptText(
+      context,
+      title: 'Verify ${item.id}',
+      label: 'Note',
+      message: 'Compare the figures with the signed result sheet first. '
+          'Verified results count in collation.',
+      action: 'Verify',
+    );
+    if (note == null || !mounted) return;
+    await _decide(
+      (store, session) => store.verify(
+        submissionId: item.id,
+        verifierId: _actor(session),
+        role: session.actor,
+        userScope: session.scope,
+        note: note,
+      ),
+      '${item.id} verified.',
+    );
   }
 
   Future<void> _dispute() async {
-    final controller = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Dispute ${widget.item.id}'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Review reason'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Flag dispute'),
-          ),
-        ],
-      ),
+    final item = widget.item;
+    final reason = await promptText(
+      context,
+      title: 'Dispute ${item.id}',
+      label: 'Reason',
+      message: 'Say what is contested. A disputed result does not count until it is decided.',
+      action: 'Dispute',
+      required: true,
     );
-    controller.dispose();
     if (reason == null || !mounted) return;
-
-    setState(() => busy = true);
-    try {
-      final session = widget.session;
-      final ok = await ResultOperations.of(context, listen: false).dispute(
-        submissionId: widget.item.id,
-        reviewerId: session.accessId.isEmpty ? session.operatorName : session.accessId,
+    await _decide(
+      (store, session) => store.dispute(
+        submissionId: item.id,
+        reviewerId: _actor(session),
         reason: reason,
         role: session.actor,
         userScope: session.scope,
-      );
-      if (!mounted) return;
-      if (!ok) _showDenied(context);
-    } catch (error) {
-      if (mounted) _showError(context, error);
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
+      ),
+      '${item.id} disputed.',
+    );
   }
+
+  Future<void> _reject() async {
+    final item = widget.item;
+    final reason = await promptText(
+      context,
+      title: 'Reject ${item.id}',
+      label: 'Reason',
+      message: 'The result will not count. Say why, so a corrected result can be sent.',
+      action: 'Reject',
+      required: true,
+      destructive: true,
+    );
+    if (reason == null || !mounted) return;
+    await _decide(
+      (store, session) => store.reject(
+        submissionId: item.id,
+        reviewerId: _actor(session),
+        reason: reason,
+        role: session.actor,
+        userScope: session.scope,
+      ),
+      '${item.id} rejected.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final store = ResultOperations.of(context);
+    final upload = store.uploadStatus(item.id);
+    if (upload != null) return _Note(upload);
+
+    final session = TgcgSession.of(context);
+    final own = item.submittedBy.isNotEmpty && item.submittedBy == session.accessId;
+    final addsUp = item.validation?.arithmeticValid != false;
+    final canVerify = session.can(TgcgCapability.verifyElectionResult);
+    final canDispute = session.can(TgcgCapability.disputeElectionResult);
+    final dispute = canDispute && _disputableFrom.contains(item.status);
+    if (widget.onlyDispute) {
+      return dispute ? _button('Dispute', Icons.flag_outlined, _dispute) : const SizedBox.shrink();
+    }
+    final verify = canVerify && _verifiableFrom.contains(item.status) && !own && addsUp;
+    final reject = canVerify && _rejectableFrom.contains(item.status);
+    final notes = [
+      if (canVerify && own) 'You sent this result, so someone else must verify it.',
+      if (canVerify && !addsUp && _verifiableFrom.contains(item.status))
+        'The figures do not add up, so it cannot be verified. '
+            'Reject it so a corrected result is sent.',
+    ];
+    if (!verify && !reject && !dispute && notes.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final note in notes) ...[_Note(note), const SizedBox(height: 8)],
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (verify)
+              FilledButton.icon(
+                onPressed: _busy ? null : _verify,
+                icon: const Icon(Icons.verified_outlined, size: 17),
+                label: const Text('Verify'),
+              ),
+            if (dispute) _button('Dispute', Icons.flag_outlined, _dispute),
+            if (reject) _button('Reject', Icons.block_rounded, _reject),
+            if (_busy)
+              const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _button(String label, IconData icon, Future<void> Function() onPressed) =>
+      OutlinedButton.icon(
+        onPressed: _busy ? null : onPressed,
+        icon: Icon(icon, size: 17),
+        label: Text(label),
+      );
+}
+
+class _Note extends StatelessWidget {
+  const _Note(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5, height: 1.4),
+      );
 }
 
 void _showDenied(BuildContext context) {
@@ -1449,8 +1620,14 @@ void _showDenied(BuildContext context) {
 }
 
 void _showError(BuildContext context, Object error) {
+  final message = switch (error) {
+    ApiException(isOffline: true) =>
+      'The server cannot be reached. Reviewing results needs a connection.',
+    ApiException(:final message) => message,
+    _ => 'Something went wrong: $error',
+  };
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Local persistence failed: $error')),
+    SnackBar(content: Text(message), backgroundColor: TgcgColors.danger),
   );
 }
 

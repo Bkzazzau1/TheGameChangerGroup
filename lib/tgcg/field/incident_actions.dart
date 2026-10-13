@@ -9,6 +9,7 @@ import '../api/field_repository.dart';
 import '../domain/permissions.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
+import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
 
@@ -191,7 +192,7 @@ class _IncidentCommandPanelState extends State<IncidentCommandPanel> {
     final incident = widget.incident;
     final store = FieldOperations.of(context);
     final upload = store.uploadStatus(incident.id);
-    if (upload != null) return _Note(icon: Icons.cloud_upload_outlined, text: upload);
+    if (upload != null) return ServerNote(icon: Icons.cloud_upload_outlined, text: upload);
 
     final actor = TgcgSession.of(context).actor;
     final moves = incidentMovesFor(incident, actor);
@@ -287,7 +288,7 @@ class _IncidentHistoryPanelState extends State<IncidentHistoryPanel> {
             future: _history,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return _Note(
+                return ServerNote(
                   icon: Icons.history_toggle_off_rounded,
                   text: 'The history could not be loaded. ${fieldFailureMessage(snapshot.error!)}',
                 );
@@ -379,78 +380,13 @@ String incidentStatusLabel(IncidentStatus status) => switch (status) {
       IncidentStatus.closed => 'Closed',
     };
 
-class _Note extends StatelessWidget {
-  const _Note({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: TgcgColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: TgcgColors.border),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 17, color: TgcgColors.primaryMid),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(color: TgcgColors.ink, fontSize: 10.5, height: 1.4),
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
 /// Where the incidents on a page come from, and a way to load them again.
 class FieldFeedStatus extends StatelessWidget {
   const FieldFeedStatus({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final store = FieldOperations.of(context);
-    if (!store.isLive) {
-      return const TgcgStatusPill(
-        label: 'DEMO FEED',
-        color: TgcgColors.warning,
-        icon: Icons.science_outlined,
-      );
-    }
-    final loadedAt = store.loadedAt;
-    final failed = store.loadError != null;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        TgcgStatusPill(
-          label: failed ? 'NOT UPDATED' : 'LIVE FROM SERVER',
-          color: failed ? TgcgColors.danger : TgcgColors.success,
-          icon: failed ? Icons.cloud_off_rounded : Icons.circle,
-        ),
-        if (loadedAt != null)
-          Text(
-            'Updated ${formatMoment(loadedAt)}',
-            style: const TextStyle(color: TgcgColors.muted, fontSize: 11),
-          ),
-        IconButton(
-          tooltip: 'Load again',
-          onPressed: store.loading ? null : () => unawaited(store.refresh()),
-          icon: store.loading
-              ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.refresh_rounded),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) =>
+      ServerFeedStatus(records: FieldOperations.of(context, listen: false));
 }
 
 /// Says when the server's records could not be loaded, or when an area has
@@ -477,39 +413,11 @@ class FieldLoadNotice extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.only(top: 14),
-      child: _Note(
+      child: ServerNote(
         icon: error != null ? Icons.cloud_off_rounded : Icons.filter_list_rounded,
         text: text,
       ),
     );
-  }
-}
-
-/// Keeps a page's incidents current while it is open: loads them when the
-/// page opens (unless they are fresh) and every minute after.
-mixin FieldAutoRefresh<T extends StatefulWidget> on State<T> {
-  Timer? _refreshTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshField(const Duration(seconds: 20)));
-    _refreshTimer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _refreshField(const Duration(seconds: 50)),
-    );
-  }
-
-  void _refreshField(Duration age) {
-    if (!mounted) return;
-    final store = FieldOperations.of(context, listen: false);
-    if (store.isLive) unawaited(store.refreshIfOlderThan(age));
-  }
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
   }
 }
 

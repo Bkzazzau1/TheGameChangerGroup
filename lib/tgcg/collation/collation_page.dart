@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../api/backend.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'collation_engine.dart';
+import 'server_collation_view.dart';
 
 class CollationPage extends StatefulWidget {
   const CollationPage({super.key});
@@ -26,6 +28,10 @@ class _CollationPageState extends State<CollationPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Signed in to a server: its collation of verified results.
+    if (TgcgSession.of(context).isServerSession && TgcgBackend.of(context) != null) {
+      return const ServerCollationView();
+    }
     final resultStore = ResultOperations.of(context);
     final scope = path.last;
     final summary = engine.summarize(scope, resultStore.submissions);

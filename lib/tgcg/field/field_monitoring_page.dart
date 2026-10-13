@@ -5,6 +5,8 @@ import '../access/access_widgets.dart' show promptText, showDone;
 import '../domain/permissions.dart';
 import '../location/gps_prompt.dart';
 import '../session.dart';
+import '../sync/server_records.dart';
+import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
 import 'incident_actions.dart';
@@ -16,7 +18,11 @@ class FieldMonitoringPage extends StatefulWidget {
   State<FieldMonitoringPage> createState() => _FieldMonitoringPageState();
 }
 
-class _FieldMonitoringPageState extends State<FieldMonitoringPage> with FieldAutoRefresh {
+class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAutoRefresh {
+  @override
+  List<ServerRecords<Object?>> refreshedRecords(BuildContext context) =>
+      [FieldOperations.of(context, listen: false)];
+
   String? selectedIncidentId;
   IncidentStatus? statusFilter;
   IncidentSeverity? severityFilter;

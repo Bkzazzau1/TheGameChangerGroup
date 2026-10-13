@@ -70,25 +70,21 @@ class TgcgDemoDataPage extends StatelessWidget {
 
   static String? _messageFor(TgcgModule module) => switch (module) {
     TgcgModule.overview =>
-      'Membership, agent and result counts include sample records. Incident and field-report counts come from the server.',
+      'Membership and agent counts include sample records. Incident, report and result counts come from the server.',
     TgcgModule.membershipNetwork =>
       'Members, agent profiles and totals on this page are sample or local records, not the server member register.',
     TgcgModule.accreditation =>
       'Enrollment and agent profiles on this page use sample or local records. Polling-unit lookup uses the live API.',
     TgcgModule.geography =>
-      'Membership, agent and result counts include sample records; incident counts come from the server. Geographic boundaries are shown for navigation.',
+      'Membership and agent counts include sample records; incident and result counts come from the server. Geographic boundaries are shown for navigation.',
     TgcgModule.liveOperations =>
-      'Agent, result and response activity on this page include sample records. Incidents and field reports come from the server.',
+      'Agent and response activity on this page include sample records. Incidents, field reports and results come from the server.',
     TgcgModule.evidenceCapture =>
       'Evidence lists and linked incidents include sample records. This view is not the server evidence register.',
-    TgcgModule.resultCapture =>
-      'Result totals and review lists include sample records. New result submissions use the live API.',
-    TgcgModule.collation =>
-      'Vote totals and collation summaries include sample results. They are not live server results.',
     TgcgModule.aiVerification =>
       'The review examples and verification activity are demonstrations, not server verification decisions.',
     TgcgModule.aiAnalytics =>
-      'Charts, forecasts and analysis on this page include sample data. Only incident and field-report figures come from the server.',
+      'Charts, forecasts and analysis on this page include sample data. Incident, report and result figures come from the server.',
     TgcgModule.alertCenter =>
       'Alerts and activity shown here include sample records, not live server alerts.',
     TgcgModule.securityResponse =>
@@ -115,6 +111,8 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.unitMapping ||
     TgcgModule.agentTracking ||
     TgcgModule.situationRoom ||
-    TgcgModule.fieldMonitoring => null,
+    TgcgModule.fieldMonitoring ||
+    TgcgModule.resultCapture ||
+    TgcgModule.collation => null,
   };
 }

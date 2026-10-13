@@ -1,12 +1,21 @@
 import 'package:flutter/widgets.dart';
 
+import '../api/results_repository.dart';
 import '../domain/models.dart';
 import '../domain/permissions.dart';
 import '../offline/offline_payloads.dart';
 import '../offline/offline_persistence.dart';
+import '../sync/server_records.dart';
 import 'result_integrity.dart';
 
-class ResultOperationsController extends ChangeNotifier {
+/// Polling-unit results for every screen that shows them.
+///
+/// In presentation mode it holds sample results and reviews them locally. In
+/// a server session ([connect]) it holds what the server returns, and every
+/// review decision is made on the server, which checks it. New results are
+/// saved on the device first and stay on the list until the server's copy
+/// replaces them (see [ServerRecords]).
+class ResultOperationsController extends ChangeNotifier with ServerRecords<ResultsSnapshot> {
   ResultOperationsController._({
     required List<ElectionResultSubmission> submissions,
     OfflinePersistenceController? persistence,
@@ -15,36 +24,39 @@ class ResultOperationsController extends ChangeNotifier {
 
   factory ResultOperationsController.prototypeSeed({
     OfflinePersistenceController? persistence,
-  }) {
+  }) =>
+      ResultOperationsController._(persistence: persistence, submissions: _sampleSubmissions());
+
+  static GeographicScope _pollingUnit({
+    required String zoneId,
+    required String zoneName,
+    required String stateId,
+    required String stateName,
+    required String lgaId,
+    required String lgaName,
+    required String wardId,
+    required String wardName,
+    required String pollingUnitId,
+    required String pollingUnitName,
+  }) =>
+      GeographicScope(
+        level: GeographyLevel.pollingUnit,
+        country: 'Nigeria',
+        zoneId: zoneId,
+        zoneName: zoneName,
+        stateId: stateId,
+        stateName: stateName,
+        lgaId: lgaId,
+        lgaName: lgaName,
+        wardId: wardId,
+        wardName: wardName,
+        pollingUnitId: pollingUnitId,
+        pollingUnitName: pollingUnitName,
+      );
+
+  static List<ElectionResultSubmission> _sampleSubmissions() {
     final now = DateTime.utc(2026, 9, 27, 6, 45);
-
-    GeographicScope pollingUnit({
-      required String zoneId,
-      required String zoneName,
-      required String stateId,
-      required String stateName,
-      required String lgaId,
-      required String lgaName,
-      required String wardId,
-      required String wardName,
-      required String pollingUnitId,
-      required String pollingUnitName,
-    }) => GeographicScope(
-          level: GeographyLevel.pollingUnit,
-          country: 'Nigeria',
-          zoneId: zoneId,
-          zoneName: zoneName,
-          stateId: stateId,
-          stateName: stateName,
-          lgaId: lgaId,
-          lgaName: lgaName,
-          wardId: wardId,
-          wardName: wardName,
-          pollingUnitId: pollingUnitId,
-          pollingUnitName: pollingUnitName,
-        );
-
-    final puKaduna = pollingUnit(
+    final puKaduna = _pollingUnit(
       zoneId: 'NW',
       zoneName: 'North West',
       stateId: 'KD',
@@ -56,7 +68,7 @@ class ResultOperationsController extends ChangeNotifier {
       pollingUnitId: 'KD-KN-W01-PU001',
       pollingUnitName: 'PU 001',
     );
-    final puBenue = pollingUnit(
+    final puBenue = _pollingUnit(
       zoneId: 'NC',
       zoneName: 'North Central',
       stateId: 'BN',
@@ -68,7 +80,7 @@ class ResultOperationsController extends ChangeNotifier {
       pollingUnitId: 'BN-MK-W01-PU004',
       pollingUnitName: 'PU 004',
     );
-    final puLagos = pollingUnit(
+    final puLagos = _pollingUnit(
       zoneId: 'SW',
       zoneName: 'South West',
       stateId: 'LA',
@@ -81,8 +93,7 @@ class ResultOperationsController extends ChangeNotifier {
       pollingUnitName: 'PU 012',
     );
 
-    EvidenceAttachment form(String id, String uploader, DateTime at) =>
-        EvidenceAttachment(
+    EvidenceAttachment form(String id, String uploader, DateTime at) => EvidenceAttachment(
           id: id,
           type: EvidenceType.resultForm,
           fileName: '$id.jpg',
@@ -133,78 +144,150 @@ class ResultOperationsController extends ChangeNotifier {
       return _with(base, validation: validation);
     }
 
-    return ResultOperationsController._(
-      persistence: persistence,
-      submissions: [
-        validated(
-          id: 'RES-0001',
-          scope: puKaduna,
-          agent: 'AG-KD-001',
-          source: SubmissionSource.app,
-          votes: const {'P1': 118, 'P2': 81, 'P3': 37, 'P4': 14},
-          total: 250,
-          accredited: 263,
-          rejected: 13,
-          status: RecordStatus.verified,
-          at: now.subtract(const Duration(minutes: 18)),
-          ocrVotes: const {'P1': 118, 'P2': 81, 'P3': 37, 'P4': 14},
-          ocrConfidence: .97,
-          evidence: form('FORM-0001', 'AG-KD-001', now.subtract(const Duration(minutes: 18))),
-        ),
-        validated(
-          id: 'RES-0002',
-          scope: puBenue,
-          agent: 'AG-BN-014',
-          source: SubmissionSource.app,
-          votes: const {'P1': 96, 'P2': 104, 'P3': 41, 'P4': 12},
-          total: 253,
-          accredited: 268,
-          rejected: 15,
-          status: RecordStatus.underReview,
-          at: now.subtract(const Duration(minutes: 34)),
-          ocrVotes: const {'P1': 96, 'P2': 101, 'P3': 41, 'P4': 12},
-          ocrConfidence: .82,
-          evidence: form('FORM-0002', 'AG-BN-014', now.subtract(const Duration(minutes: 34))),
-        ),
-        validated(
-          id: 'RES-0003',
-          scope: puLagos,
-          agent: 'AG-LA-032',
-          source: SubmissionSource.sms,
-          votes: const {'P1': 140, 'P2': 74, 'P3': 52, 'P4': 19},
-          total: 285,
-          accredited: 297,
-          rejected: 12,
-          status: RecordStatus.submitted,
-          at: now.subtract(const Duration(minutes: 49)),
-        ),
-        validated(
-          id: 'RES-0004',
-          scope: puKaduna,
-          agent: 'AG-KD-009',
-          source: SubmissionSource.ussd,
-          votes: const {'P1': 118, 'P2': 81, 'P3': 37, 'P4': 14},
-          total: 250,
-          accredited: 263,
-          rejected: 13,
-          status: RecordStatus.underReview,
-          at: now.subtract(const Duration(minutes: 12)),
-          duplicate: true,
-        ),
-      ],
-    );
+    return [
+      validated(
+        id: 'RES-0001',
+        scope: puKaduna,
+        agent: 'AG-KD-001',
+        source: SubmissionSource.app,
+        votes: const {'P1': 118, 'P2': 81, 'P3': 37, 'P4': 14},
+        total: 250,
+        accredited: 263,
+        rejected: 13,
+        status: RecordStatus.verified,
+        at: now.subtract(const Duration(minutes: 18)),
+        ocrVotes: const {'P1': 118, 'P2': 81, 'P3': 37, 'P4': 14},
+        ocrConfidence: .97,
+        evidence: form('FORM-0001', 'AG-KD-001', now.subtract(const Duration(minutes: 18))),
+      ),
+      validated(
+        id: 'RES-0002',
+        scope: puBenue,
+        agent: 'AG-BN-014',
+        source: SubmissionSource.app,
+        votes: const {'P1': 96, 'P2': 104, 'P3': 41, 'P4': 12},
+        total: 253,
+        accredited: 268,
+        rejected: 15,
+        status: RecordStatus.underReview,
+        at: now.subtract(const Duration(minutes: 34)),
+        ocrVotes: const {'P1': 96, 'P2': 101, 'P3': 41, 'P4': 12},
+        ocrConfidence: .82,
+        evidence: form('FORM-0002', 'AG-BN-014', now.subtract(const Duration(minutes: 34))),
+      ),
+      validated(
+        id: 'RES-0003',
+        scope: puLagos,
+        agent: 'AG-LA-032',
+        source: SubmissionSource.sms,
+        votes: const {'P1': 140, 'P2': 74, 'P3': 52, 'P4': 19},
+        total: 285,
+        accredited: 297,
+        rejected: 12,
+        status: RecordStatus.submitted,
+        at: now.subtract(const Duration(minutes: 49)),
+      ),
+      validated(
+        id: 'RES-0004',
+        scope: puKaduna,
+        agent: 'AG-KD-009',
+        source: SubmissionSource.ussd,
+        votes: const {'P1': 118, 'P2': 81, 'P3': 37, 'P4': 14},
+        total: 250,
+        accredited: 263,
+        rejected: 13,
+        status: RecordStatus.underReview,
+        at: now.subtract(const Duration(minutes: 12)),
+        duplicate: true,
+      ),
+    ];
   }
 
   final List<ElectionResultSubmission> _submissions;
   final OfflinePersistenceController? _persistence;
+
+  // --- server session ---------------------------------------------------------
+
+  ResultsRepository? _server;
+  int _awaitingOnServer = 0;
+
+  /// Every result awaiting a decision on the server in your areas. The list
+  /// holds the oldest of them when there are more than it loads.
+  int get awaitingOnServer => _awaitingOnServer;
+
+  /// Read from and decide on the server, as [account] (the signed-in access
+  /// ID, which the uploads also carry).
+  void connect(ResultsRepository server, {required String account}) {
+    if (identical(server, _server) && account == serverAccount) return;
+    _server = server;
+    connectServer(account);
+  }
+
+  /// Back to presentation mode and its sample results.
+  void disconnect() {
+    _server = null;
+    disconnectServer();
+  }
+
+  @override
+  OfflinePersistenceController? get offlineStore => _persistence;
+
+  @override
+  Future<ResultsSnapshot> fetchServerRecords() => _server!.load();
+
+  @override
+  Iterable<String?> clientIdsOf(ResultsSnapshot snapshot) =>
+      snapshot.results.map((item) => item.clientId);
+
+  @override
+  void showServerRecords(ResultsSnapshot snapshot) {
+    final local = _submissions.where((item) => isOnDevice(item.id)).toList();
+    _submissions
+      ..clear()
+      ..addAll(local)
+      ..addAll(snapshot.results);
+    _awaitingOnServer = snapshot.awaitingDecision;
+  }
+
+  @override
+  void showSampleRecords() {
+    _awaitingOnServer = 0;
+    _submissions
+      ..clear()
+      ..addAll(_sampleSubmissions());
+  }
+
+  @override
+  void clearRecords() {
+    _awaitingOnServer = 0;
+    _submissions.clear();
+  }
+
+  // --- results ----------------------------------------------------------------
 
   List<ElectionResultSubmission> get submissions => List.unmodifiable(_submissions);
 
   List<ElectionResultSubmission> submissionsForScope(GeographicScope scope) =>
       _submissions.where((item) => _within(scope, item.pollingUnitScope)).toList(growable: false);
 
+  /// Flagged results that need a person to look closely.
   List<ElectionResultSubmission> reviewQueueForScope(GeographicScope scope) =>
       submissionsForScope(scope).where(_needsReview).toList(growable: false);
+
+  /// Results still waiting for a decision (only verified results count in
+  /// collation): flagged ones first, then the oldest.
+  List<ElectionResultSubmission> awaitingDecisionForScope(GeographicScope scope) =>
+      submissionsForScope(scope).where(awaitsDecision).toList()
+        ..sort((a, b) {
+          final flagged = (_needsReview(a) ? 0 : 1).compareTo(_needsReview(b) ? 0 : 1);
+          return flagged != 0 ? flagged : a.submittedAt.compareTo(b.submittedAt);
+        });
+
+  /// Not yet verified or rejected.
+  static bool awaitsDecision(ElectionResultSubmission item) =>
+      item.status == RecordStatus.submitted ||
+      item.status == RecordStatus.underReview ||
+      item.status == RecordStatus.disputed;
 
   int get pendingReviewCount => _submissions.where(_needsReview).length;
 
@@ -235,7 +318,10 @@ class ResultOperationsController extends ChangeNotifier {
         existing.status != RecordStatus.archived);
 
     final base = ElectionResultSubmission(
-      id: 'RES-${(_submissions.length + 1).toString().padLeft(4, '0')}',
+      id: isLive
+          // Unique on this device; the server gives the result its reference.
+          ? 'NEW-${DateTime.now().microsecondsSinceEpoch.toRadixString(36).toUpperCase()}'
+          : 'RES-${(_submissions.length + 1).toString().padLeft(4, '0')}',
       pollingUnitScope: pollingUnitScope,
       submittedBy: submittedBy,
       submittedAt: DateTime.now().toUtc(),
@@ -262,7 +348,7 @@ class ResultOperationsController extends ChangeNotifier {
         ? RecordStatus.underReview
         : RecordStatus.submitted;
     final saved = _with(base, validation: validation, status: status);
-    await _persistence?.persistMutation(
+    final receipt = await _persistence?.persistMutation(
       entityType: 'election_result',
       entityId: saved.id,
       mutationType: SyncMutationType.create,
@@ -270,17 +356,31 @@ class ResultOperationsController extends ChangeNotifier {
       scopeKey: scopeStorageKey(saved.pollingUnitScope),
       ownerId: submittedBy,
     );
+    if (receipt != null) keepUntilUploaded(saved.id, receipt.outbox.id);
     _submissions.insert(0, saved);
     notifyListeners();
     return saved;
   }
 
+  // --- decisions --------------------------------------------------------------
+  //
+  // In a server session the server decides who may do what, area by area,
+  // and these return true or throw its refusal. In presentation mode the
+  // built-in permissions decide, and false means refused.
+
+  /// Confirms a result; only verified results count in collation.
   Future<bool> verify({
     required String submissionId,
     required String verifierId,
     required TgcgActor role,
     required GeographicScope userScope,
+    String note = '',
   }) async {
+    final server = _server;
+    if (server != null) {
+      _replace(await server.verify(submissionId, note: note));
+      return true;
+    }
     final index = _submissions.indexWhere((item) => item.id == submissionId);
     if (index < 0) return false;
     final current = _submissions[index];
@@ -300,19 +400,13 @@ class ResultOperationsController extends ChangeNotifier {
       verifiedAt: DateTime.now().toUtc(),
       disputeReason: null,
     );
-    await _persistence?.persistMutation(
-      entityType: 'election_result',
-      entityId: updated.id,
-      mutationType: SyncMutationType.update,
-      payload: resultSubmissionToJson(updated),
-      scopeKey: scopeStorageKey(updated.pollingUnitScope),
-      ownerId: verifierId,
-    );
+    await _persistLocal(updated, verifierId);
     _submissions[index] = updated;
     notifyListeners();
     return true;
   }
 
+  /// Flags a result as contested; a reason is required.
   Future<bool> dispute({
     required String submissionId,
     required String reviewerId,
@@ -320,6 +414,11 @@ class ResultOperationsController extends ChangeNotifier {
     required TgcgActor role,
     required GeographicScope userScope,
   }) async {
+    final server = _server;
+    if (server != null) {
+      _replace(await server.dispute(submissionId, reason: reason));
+      return true;
+    }
     final index = _submissions.indexWhere((item) => item.id == submissionId);
     if (index < 0) return false;
     final current = _submissions[index];
@@ -339,17 +438,63 @@ class ResultOperationsController extends ChangeNotifier {
       verifiedBy: reviewerId,
       verifiedAt: DateTime.now().toUtc(),
     );
+    await _persistLocal(updated, reviewerId);
+    _submissions[index] = updated;
+    notifyListeners();
+    return true;
+  }
+
+  /// Refuses a result, so the agent submits a corrected one; a reason is required.
+  Future<bool> reject({
+    required String submissionId,
+    required String reviewerId,
+    required String reason,
+    required TgcgActor role,
+    required GeographicScope userScope,
+  }) async {
+    final server = _server;
+    if (server != null) {
+      _replace(await server.reject(submissionId, reason: reason));
+      return true;
+    }
+    final index = _submissions.indexWhere((item) => item.id == submissionId);
+    if (index < 0) return false;
+    final current = _submissions[index];
+    if (!TgcgPermissionPolicy.may(
+      role,
+      userScope,
+      TgcgCapability.verifyElectionResult,
+      targetScope: current.pollingUnitScope,
+    )) {
+      return false;
+    }
+    final updated = _with(current, status: RecordStatus.rejected, disputeReason: reason.trim());
+    await _persistLocal(updated, reviewerId);
+    _submissions[index] = updated;
+    notifyListeners();
+    return true;
+  }
+
+  /// Every decision on the result, from the server (none in presentation mode).
+  Future<List<ResultHistoryEntry>> resultHistory(String submissionId) async =>
+      await _server?.history(submissionId) ?? const [];
+
+  Future<void> _persistLocal(ElectionResultSubmission updated, String actorId) async {
     await _persistence?.persistMutation(
       entityType: 'election_result',
       entityId: updated.id,
       mutationType: SyncMutationType.update,
       payload: resultSubmissionToJson(updated),
       scopeKey: scopeStorageKey(updated.pollingUnitScope),
-      ownerId: reviewerId,
+      ownerId: actorId,
     );
+  }
+
+  void _replace(ElectionResultSubmission updated) {
+    final index = _submissions.indexWhere((item) => item.id == updated.id);
+    if (index < 0) return;
     _submissions[index] = updated;
     notifyListeners();
-    return true;
   }
 
   static bool _needsReview(ElectionResultSubmission item) {
@@ -392,6 +537,7 @@ class ResultOperationsController extends ChangeNotifier {
         gps: current.gps,
         electionCode: current.electionCode,
         origin: current.origin,
+        clientId: current.clientId,
       );
 
   static bool _within(GeographicScope parent, GeographicScope child) {
