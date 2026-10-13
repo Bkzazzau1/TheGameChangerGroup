@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Configured and verified on 12 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest release verified on 13 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Configured and verified on 12 October 2026 (Africa/Lagos).
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `ee7c2661ec721eac65312057a49f6aaff8c33e13`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `e5f5d722a1c4d696fe608c44b44e457aefd8e350`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,15 +32,15 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261012-163806-9a87bb5d70ea`.
-- Frontend source: committed `main` from `Bkzazzau1/TheGameChangerGroup`, including the OCR timeout changes and their tests. The exact commit is recorded in the release metadata.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261012-135705-cb2320b76d59`.
+- Published release: `/var/www/tgcg/releases/web-20261013-205026-b259a9ee2cb3`.
+- Frontend build source: `1564f4050f2f7ae3dc8e3776526129045c66ecbc` from `Bkzazzau1/TheGameChangerGroup`. Later documentation and ignore-file commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261013-122745-a3cbb36d5073`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `9a87bb5d70ea94b628c3c5c1036fae268282c21aa9ee95e75c5b3d9177a33107`.
-- Build: 855 files, 53,968,804 uncompressed bytes. The served main bundle matches the compiled release.
+- Main JavaScript SHA256: `b259a9ee2cb3f28539d3a7a76a61f3b2b07e4f4156fc9c55e0306351a243ee24`.
+- Build: 855 files, 54,542,568 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
-The app was published with the user's approved demo labels. Local and mixed operational views show a page-specific notice before their statistics. Mixed result and report views distinguish live submissions from sample totals. Role Management, Member Review, Unit Mapping, Agent Tracking and API-backed member tabs keep their live data views. The polling-agent assignment selector and sample Digital Agent ID also carry explicit notices.
+The app was published with the user's approved demo labels. Situation Room, Field Monitoring, Result Capture, Collation and Meetings now use their server repositories after server login. Local demonstrations retain page-specific notices. Role Management, Member Review, Unit Mapping, Agent Tracking and API-backed member tabs keep their live data views. The polling-agent assignment selector and sample Digital Agent ID also carry explicit notices.
 
 The browser version keeps its offline queue in memory, so pending work does not survive a reload. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web, and unintegrated dashboards remain demonstrations. Compilation and public HTTP checks passed; browser UI automation was unavailable in this session.
 
@@ -119,6 +119,18 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Latest feature release (13 October 2026)
+
+Published the committed frontend updates for server-backed incidents, field reports, results, collation, meetings and the agreed role menus, with matching backend permission and scoped identity-review changes. The meetings schema migration `meetings.0001_initial` was applied; migration hooks refreshed system-role definitions. Source from both GitHub `main` branches was checked out on the VPS. Existing private runtime settings and USSD callback configuration were preserved.
+
+Review found and fixed meeting navigation races: disconnects, end responses, Back navigation and a disconnect during confirmation now close the call route once. The backend now rejects invalid/blank meeting date filters with HTTP 400 and locks/reloads a meeting before admission, so a concurrent closure cannot issue a stale pass. Full PostgreSQL testing also exposed nullable outer joins in member administration and administrator recovery; row locks now cover the affected records without locking nullable joins. Polling-unit decisions retain their member lock. An oversized incident test reference was corrected without changing the schema.
+
+Validation: the original full Flutter suite passed 179 tests and static analysis passed. After the navigation fix, all 10 meeting tests passed, including four reproduced regressions. The updated backend's full suite passed **394 tests on an isolated PostgreSQL database**, including real meeting and USSD concurrency checks and native Tesseract. Production Django checks, migration, Nginx configuration and API/database health passed. The previous release was retained, and backups ran before deployment and after verification.
+
+Read-only public checks passed: authentication/profile and access payloads; authenticated meeting, incident, field-report, result and election lists; unauthenticated rejection (401); invalid meeting date rejection (400); USSD menu, membership lookup and wrong-service responses plus wrong-token 404. No Member, User, Meeting, Admission or USSD progress records were created. Collation content could not be checked because no election is configured. Results are recorded in `/opt/tgcg/deployment/latest-release-checks.json`.
+
+Meeting planning is live. Audio/video is awaiting the project's `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`; they are not configured on the VPS yet. The browser host has no restrictive camera/microphone Permissions-Policy or CSP. API tests use mocked LiveKit; real audio/video still needs verification after credentials are configured. See backend `docs/meetings.md`. The restricted local `build/livekit-private.env` is Git ignored; participant tokens cannot replace the API secret used to issue per-user passes. Media uploads, recordings and remaining demonstration dashboards retain their documented limits.
 
 Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server environment before enabling phone verification. Nginx currently returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`. After the real provider is configured and verified, remove those temporary locations, restart the API, test Nginx configuration and reload Nginx. No administrator phone or email was supplied.
 
