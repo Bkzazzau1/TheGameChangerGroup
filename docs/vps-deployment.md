@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest release verified on 13 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest web release verified on 14 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -32,23 +32,25 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261013-205026-b259a9ee2cb3`.
-- Frontend build source: `1564f4050f2f7ae3dc8e3776526129045c66ecbc` from `Bkzazzau1/TheGameChangerGroup`. Later documentation and ignore-file commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261013-122745-a3cbb36d5073`.
+- Published release: `/var/www/tgcg/releases/web-20261013-234832-aeb1b7f8c708` (release directory timestamps use UTC).
+- Frontend build source: `1c0f0399141984fd267375e5a04ecb4b1598095a` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261013-205026-b259a9ee2cb3`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `b259a9ee2cb3f28539d3a7a76a61f3b2b07e4f4156fc9c55e0306351a243ee24`.
-- Build: 855 files, 54,542,568 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
+- Main JavaScript SHA256: `aeb1b7f8c7081dd258c576b399393d572c6885983a53f25d830606daa0ecc624`.
+- Build: 855 files, 54,516,876 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
-The app was published with the user's approved demo labels. Situation Room, Field Monitoring, Result Capture, Collation and Meetings now use their server repositories after server login. Local demonstrations retain page-specific notices. Role Management, Member Review, Unit Mapping, Agent Tracking and API-backed member tabs keep their live data views. The polling-agent assignment selector and sample Digital Agent ID also carry explicit notices.
+Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. Without the API URL the app displays "Not connected". Demo and presentation sign-in routes were removed.
 
-The browser version keeps its offline queue in memory, so pending work does not survive a reload. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web, and unintegrated dashboards remain demonstrations. Compilation and public HTTP checks passed; browser UI automation was unavailable in this session.
+The browser version keeps its offline queue in memory, so pending work does not survive a reload. Incident and result photos use authenticated multipart evidence uploads and can be opened for review. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web; unsupported screens are hidden. The published desktop welcome/poster/sign-in screen was verified in the browser.
 
 The release was built with:
 
 ```powershell
 flutter build web --release --dart-define=TGCG_API_URL=https://api.tgcg.online --base-href=/ --pwa-strategy=none
 ```
+
+Every production APK build must also include `--dart-define=TGCG_API_URL=https://api.tgcg.online`, as documented in README. No APK was built for this web release.
 
 Web entrypoints and JavaScript use `no-store`; missing assets return 404 rather than HTML. Nginx serves renderer `.wasm` files as `application/wasm`.
 
@@ -119,6 +121,12 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Frontend-only release (14 October 2026)
+
+Pulled `main` at `1c0f039`, rebuilt with the documented production command and published the welcome/poster, server-backed dashboard/agent home and photo-evidence updates. All 195 Flutter tests passed, analysis reported no issues, and the build contained the production API URL and welcome poster. All 855 uploaded files matched their manifest. Public JavaScript checksum, bootstrap and poster requests passed, as did API/database health. The desktop welcome and sign-in layout was visually verified. Backups ran before publication and after verification; the previous web release is retained.
+
+This release changed frontend source and static web assets only. Backend commit `e5f5d72` was preserved, with no migrations, runtime-setting changes or API restart; the API service start timestamp was checked before and after publication. Local/GitHub/VPS frontend source is synchronized, including the deployment notes. Existing SMS, LiveKit and election-configuration requirements remain as recorded below.
 
 ### Latest feature release (13 October 2026)
 
