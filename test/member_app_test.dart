@@ -738,6 +738,103 @@ void main() {
     expect(find.text('Offer to help'), findsOneWidget);
   });
 
+  group('what a member adds after joining', () {
+    http.Response? memberHome(String path) => switch (path) {
+          'me/member/photo/' => http.Response.bytes(_pixel, 200, headers: {'content-type': 'image/png'}),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 1, 'members_in_ward': 2}),
+          'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
+          'me/volunteer/' => _json(<Object>[]),
+          _ => null,
+        };
+
+    /// The add or change button in a row of the card's details.
+    Finder action(String label) => find.descendant(
+          of: find.ancestor(of: find.text(label), matching: find.byType(Row)).first,
+          matching: find.byType(TextButton),
+        );
+
+    testWidgets('the occupation, a selfie and a card photo', (tester) async {
+      var card = <String, dynamic>{
+        ..._card(verification: 'pendingReview'),
+        'occupation': '',
+        'has_card_photo': false,
+      };
+      final server = _Server((request) => switch ((request.method, _path(request))) {
+            ('GET', 'me/member/') => _json(card),
+            ('PATCH', 'me/member/') =>
+              _json(card = {...card, ...jsonDecode(request.body) as Map<String, dynamic>}),
+            ('POST', 'me/member/photo/') =>
+              _json(card = {...card, 'photo_url': 'https://api.tgcg.test/api/v1/me/member/photo/'}),
+            ('POST', 'me/member/card-photo/') => _json(card = {...card, 'has_card_photo': true}),
+            (_, final path) => memberHome(path),
+          });
+      final checks = [const SelfieCheck.failed('No face found.'), const SelfieCheck.passed()];
+      final scans = <bool>[];
+      await _pump(
+        tester,
+        server.connect(),
+        MemberShell(
+          scanPvc: ({required camera}) async {
+            scans.add(camera);
+            return PvcScan(photo: (bytes: _pixel, name: 'pvc.png'));
+          },
+          takeSelfie: () async => XFile.fromData(_pixel, name: 'me.jpg'),
+          checkSelfie: (_) async => checks.removeAt(0),
+        ),
+        member: true,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Not added'), findsNWidgets(4)); // email, occupation and both photos
+
+      await tester.tap(action('Occupation'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'What you do for a living'), 'Trader');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(jsonDecode(server.bodies['PATCH /api/v1/me/member/']!), {'occupation': 'Trader'});
+      expect(find.text('Trader'), findsWidgets);
+
+      // The face check finds a problem: take it again rather than keep it.
+      await tester.tap(action('Photo of you'));
+      await tester.pumpAndSettle();
+      expect(find.text('No face found.'), findsOneWidget);
+      await tester.tap(find.text('Take again'));
+      await tester.pumpAndSettle();
+      final selfie = server.requests
+          .lastWhere((r) => r.method == 'POST' && r.url.path.endsWith('/me/member/photo/'));
+      expect((selfie as http.MultipartRequest).files.single.field, 'photo');
+      expect(find.text('Your photo was saved.'), findsOneWidget);
+
+      await tester.tap(action('Photo of your PVC'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose from gallery'));
+      await tester.pumpAndSettle();
+      expect(scans, [false]);
+      final pvc = server.requests.lastWhere((r) => r.url.path.endsWith('/card-photo/'));
+      expect((pvc as http.MultipartRequest).files.single.field, 'pvc_image');
+      expect(find.text('Added'), findsNWidgets(2));
+      // Until their identity is checked, the member may still change them.
+      expect(action('Photo of you'), findsOneWidget);
+    });
+
+    testWidgets("once the identity is checked, a photo on record is a coordinator's to change",
+        (tester) async {
+      final server = _Server((request) => switch (_path(request)) {
+            'me/member/' => _json({
+                ..._card(),
+                'photo_url': 'https://api.tgcg.test/api/v1/me/member/photo/',
+                'has_card_photo': false,
+              }),
+            final path => memberHome(path),
+          });
+      await _pump(tester, server.connect(), const MemberShell(), member: true);
+      await tester.pumpAndSettle();
+      expect(action('Photo of you'), findsNothing);
+      // A photo still missing can be added.
+      expect(action('Photo of your PVC'), findsOneWidget);
+    });
+  });
+
   testWidgets('a member signing in on the server opens the member app', (tester) async {
     tester.view.physicalSize = const Size(430, 1400);
     tester.view.devicePixelRatio = 1;

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart';
@@ -9,21 +10,35 @@ import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
 import '../location/directions.dart';
+import '../media/device_media.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
-import 'member_registration_page.dart' show ScanPvc, readScanOnServer, scanPvcWithDevice;
+import 'member_registration_page.dart'
+    show ScanPvc, TakeSelfie, readScanOnServer, scanPvcWithDevice, takeSelfieWithDevice;
 import 'membership_card_view.dart';
+import 'selfie_check.dart';
 
 /// The member app: membership card, polling unit, announcements, volunteering
 /// and the member's own appointments.
 class MemberShell extends StatefulWidget {
-  const MemberShell({super.key, this.launch = launchDirections, this.scanPvc = scanPvcWithDevice});
+  const MemberShell({
+    super.key,
+    this.launch = launchDirections,
+    this.scanPvc = scanPvcWithDevice,
+    this.takeSelfie = takeSelfieWithDevice,
+    this.checkSelfie = checkSelfieOnDevice,
+  });
 
   /// Opens the maps app (replaced in tests).
   final LaunchDirections launch;
 
-  /// Reads an updated voter card for a polling unit change (replaced in tests).
+  /// Reads a photo of the voter card: an updated one for a polling unit
+  /// change, or one left out when joining (replaced in tests).
   final ScanPvc scanPvc;
+
+  /// Takes and checks a selfie left out when joining (replaced in tests).
+  final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
 
   @override
   State<MemberShell> createState() => _MemberShellState();
@@ -95,7 +110,13 @@ class _MemberShellState extends State<MemberShell> {
       ),
       body: SafeArea(
         child: switch (_tab) {
-          0 => _CardTab(card: _card!, onEmailChanged: _refresh),
+          0 => _CardTab(
+              card: _card!,
+              onChanged: _refresh,
+              scanPvc: widget.scanPvc,
+              takeSelfie: widget.takeSelfie,
+              checkSelfie: widget.checkSelfie,
+            ),
           1 => _UnitTab(unit: _unit!, launch: widget.launch, scanPvc: widget.scanPvc),
           2 => _NewsTab(news: _news!),
           3 => _VolunteerTab(
@@ -154,9 +175,18 @@ class _Loaded<T> extends StatelessWidget {
 }
 
 class _CardTab extends StatelessWidget {
-  const _CardTab({required this.card, required this.onEmailChanged});
+  const _CardTab({
+    required this.card,
+    required this.onChanged,
+    required this.scanPvc,
+    required this.takeSelfie,
+    required this.checkSelfie,
+  });
   final Future<(MemberCard, Uint8List?)> card;
-  final VoidCallback onEmailChanged;
+  final VoidCallback onChanged;
+  final ScanPvc scanPvc;
+  final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
 
   @override
   Widget build(BuildContext context) => _Loaded(
@@ -187,7 +217,14 @@ class _CardTab extends StatelessWidget {
                       ),
                     ),
                     _Detail('PVC', card.vin ?? 'Not on record'),
-                    if (card.occupation.isNotEmpty) _Detail('Occupation', card.occupation),
+                    _Detail(
+                      'Occupation',
+                      card.occupation.isEmpty ? 'Not added' : card.occupation,
+                      action: TextButton(
+                        onPressed: () => _editOccupation(context, card),
+                        child: Text(card.occupation.isEmpty ? 'Add' : 'Change'),
+                      ),
+                    ),
                     _Detail(
                       'Membership',
                       switch (card.membershipState) {
@@ -200,10 +237,35 @@ class _CardTab extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              TgcgSectionCard(
+                title: 'My photos',
+                child: Column(
+                  children: [
+                    _Detail(
+                      'Photo of you',
+                      card.hasPhoto ? 'Added' : 'Not added',
+                      action: _photoAction(card, card.hasPhoto, () => _addSelfie(context)),
+                    ),
+                    _Detail(
+                      'Photo of your PVC',
+                      card.hasCardPhoto ? 'Added' : 'Not added',
+                      action: _photoAction(card, card.hasCardPhoto, () => _addCardPhoto(context)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           );
         },
       );
+
+  /// Adds a missing photo, or changes one until the identity is checked;
+  /// after that a coordinator changes it.
+  Widget? _photoAction(MemberCard card, bool added, VoidCallback onPressed) {
+    if (added && card.identityChecked) return null;
+    return TextButton(onPressed: onPressed, child: Text(added ? 'Change' : 'Add'));
+  }
 
   Future<void> _editEmail(BuildContext context, MemberCard card) async {
     final members = TgcgBackend.of(context)!.member;
@@ -221,9 +283,126 @@ class _CardTab extends StatelessWidget {
     if (email == null) return;
     try {
       await members.updateEmail(email);
-      onEmailChanged();
+      onChanged();
     } on ApiException catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(error.fieldError('email') ?? error.message)));
+    }
+  }
+
+  Future<void> _editOccupation(BuildContext context, MemberCard card) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    final occupation = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextPrompt(
+        title: 'Occupation',
+        label: 'What you do for a living',
+        action: 'Save',
+        initial: card.occupation,
+      ),
+    );
+    if (occupation == null) return;
+    try {
+      await members.updateOccupation(occupation);
+      onChanged();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.fieldError('occupation') ?? error.message)),
+      );
+    }
+  }
+
+  /// A selfie through the phone's face check. If the check finds a problem,
+  /// the member may take it again or keep it: a coordinator reviews it anyway.
+  Future<void> _addSelfie(BuildContext context) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      while (true) {
+        final file = await takeSelfie();
+        if (file == null) return;
+        final problem = (await _checked(file)).problem;
+        if (!context.mounted) return;
+        if (problem != null) {
+          final again = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Check your photo'),
+              content: Text(problem),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Use this photo'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Take again'),
+                ),
+              ],
+            ),
+          );
+          if (again == null) return;
+          if (again) continue;
+        }
+        final name = file.name.isEmpty ? 'selfie.jpg' : file.name;
+        await members.addPhoto((bytes: await file.readAsBytes(), name: name));
+        onChanged();
+        messenger.showSnackBar(const SnackBar(content: Text('Your photo was saved.')));
+        return;
+      }
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.fieldError('photo') ?? error.message)));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(describeDeviceError(error))));
+    }
+  }
+
+  /// The phone's face check. If the check itself breaks, the photo goes
+  /// through, as when joining.
+  Future<SelfieCheck> _checked(XFile file) async {
+    try {
+      return await checkSelfie(file);
+    } catch (_) {
+      return const SelfieCheck.notAvailable();
+    }
+  }
+
+  Future<void> _addCardPhoto(BuildContext context) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    final camera = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.document_scanner_outlined),
+              title: const Text('Take a photo of the card'),
+              onTap: () => Navigator.pop(context, true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, false),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (camera == null) return;
+    try {
+      final scan = await scanPvc(camera: camera);
+      if (scan == null) return;
+      await members.addCardPhoto(scan.photo);
+      onChanged();
+      messenger.showSnackBar(const SnackBar(content: Text('Your card photo was saved.')));
+    } on ApiException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.fieldError('pvc_image') ?? error.message)),
+      );
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(describeDeviceError(error))));
     }
   }
 }

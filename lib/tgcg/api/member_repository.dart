@@ -58,6 +58,7 @@ class MemberCard {
     this.verificationStatus = '',
     this.pollingUnit,
     this.hasPhoto = false,
+    this.hasCardPhoto = false,
   });
 
   final String membershipNumber;
@@ -80,7 +81,10 @@ class MemberCard {
   final String verificationStatus;
   final MemberUnit? pollingUnit;
   final DateTime memberSince;
+
+  /// A selfie, and a photo of the PVC, are on record.
   final bool hasPhoto;
+  final bool hasCardPhoto;
 
   bool get identityChecked => verificationStatus == 'verified';
 
@@ -104,6 +108,7 @@ class MemberCard {
       pollingUnit: unit is Map<String, dynamic> ? MemberUnit.fromJson(unit) : null,
       memberSince: DateTime.parse(json['member_since'] as String),
       hasPhoto: json['photo_url'] != null,
+      hasCardPhoto: json['has_card_photo'] as bool? ?? false,
       qrToken: json['qr_token'] as String,
     );
   }
@@ -352,7 +357,33 @@ class MemberRepository {
         await client.patch('me/member/', body: {'email': email}) as Map<String, dynamic>,
       );
 
+  Future<MemberCard> updateOccupation(String occupation) async => MemberCard.fromJson(
+        await client.patch('me/member/', body: {'occupation': occupation}) as Map<String, dynamic>,
+      );
+
   Future<Uint8List> photo() => client.getBytes('me/member/photo/');
+
+  /// Adds the selfie left out when joining. It can be replaced until the
+  /// member's identity is checked; after that a coordinator changes it.
+  Future<MemberCard> addPhoto(({Uint8List bytes, String name}) photo) =>
+      _addOwnPhoto('me/member/photo/', 'photo', photo);
+
+  /// Adds a photo of the front of the PVC, on the same terms as [addPhoto].
+  Future<MemberCard> addCardPhoto(({Uint8List bytes, String name}) photo) =>
+      _addOwnPhoto('me/member/card-photo/', 'pvc_image', photo);
+
+  Future<MemberCard> _addOwnPhoto(
+    String path,
+    String field,
+    ({Uint8List bytes, String name}) photo,
+  ) async =>
+      MemberCard.fromJson(
+        await client.postMultipart(
+          path,
+          fields: const {},
+          files: () async => [http.MultipartFile.fromBytes(field, photo.bytes, filename: photo.name)],
+        ) as Map<String, dynamic>,
+      );
 
   Future<MyPollingUnit> pollingUnit() async =>
       MyPollingUnit.fromJson(await client.get('me/polling-unit/') as Map<String, dynamic>);

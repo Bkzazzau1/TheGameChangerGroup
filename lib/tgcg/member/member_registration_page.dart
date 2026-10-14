@@ -98,7 +98,8 @@ Future<PvcScan?> scanPvcWithDevice({required bool camera}) async {
   );
 }
 
-Future<XFile?> _selfieWithDevice() => ImagePicker().pickImage(
+/// Takes a selfie with the front camera.
+Future<XFile?> takeSelfieWithDevice() => ImagePicker().pickImage(
       source: ImageSource.camera,
       preferredCameraDevice: CameraDevice.front,
       imageQuality: 85,
@@ -132,7 +133,7 @@ class MemberRegistrationPage extends StatefulWidget {
   const MemberRegistrationPage({
     super.key,
     this.scanPvc = scanPvcWithDevice,
-    this.takeSelfie = _selfieWithDevice,
+    this.takeSelfie = takeSelfieWithDevice,
     this.checkSelfie = checkSelfieOnDevice,
     this.readPvcText,
   });
