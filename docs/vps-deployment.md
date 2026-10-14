@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest web release verified on 14 October 2026
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `194ea18e60d68bea6ffe0ad6da04320eecb35558`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `aa3788ce00075cf67db65f5a9b33153c6257f63e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,12 +32,12 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261014-080116-fcfd68e3228e` (release directory timestamps use UTC).
-- Frontend build source: `4ae479d8f3b8e4a93978753581b39c211b646973` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261013-234832-aeb1b7f8c708`.
+- Published release: `/var/www/tgcg/releases/web-20261014-113850-24526e839521` (release directory timestamps use UTC).
+- Frontend build source: `44fbfc3f927830a926b243c99e71c38ef59f4536` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261014-080116-fcfd68e3228e`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `fcfd68e3228ed1a4213d88e941537bd884d54bf7669683551db43e52cdafd7d1`.
-- Build: 854 files, 54,504,608 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
+- Main JavaScript SHA256: `24526e83952161efab125787cdc41dd56db3d0af116e3780fe4c8388340b6352`.
+- Build: 854 files, 54,549,975 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -122,7 +122,35 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
-### Member-registration release and Android version 3 (14 October 2026)
+### Member profile and PVC-scan web release (14 October 2026)
+
+Published the member profile, optional selfie, occupation, gender and date-of-birth changes, plus the member's single PVC scan and coordinator review. Frontend feature commit `f5ed2e6` is included in build `44fbfc3`; backend feature commit `67ec44d` is included in deployed `aa3788c`. Migration `membership.0010_pvc_update` created the PVC-update record and its one-pending-update-per-member constraint. It was the only pending migration. No dependencies or runtime settings changed; the private environment remains `600:tgcg:tgcg`.
+
+Review fixed four PostgreSQL row-lock queries in the new profile, selfie, scan and approval operations. They now lock the member row without attempting to lock the nullable account join. The frontend also handles incorrectly scanned future or overly old birth years when opening the date picker; it retains the scanned value until the member confirms a correction. No UI text or notes were added.
+
+Members without a verified identity apply their checked scan details immediately. Verified members submit a pending update for an authorized coordinator's second check; approval preserves verified status and enforces the member's existing and proposed scopes. The card image is private evidence available to reviewers with identity-verification access in the member's area, following the existing polling-unit-change evidence pattern. General lists still mask VIN and restrict date-of-birth visibility.
+
+Validation: **213 Flutter tests passed** and analysis reported no issues, including four reproduced date-picker regressions. The backend's 416 existing tests passed on an isolated PostgreSQL database; six new PostgreSQL regressions passed separately after correcting their fixture. They cover profile/selfie completion, immediate scan application and verified scan approval, both with and without a linked account. The isolated databases were removed after testing. Production migration checks passed; the Django deployment check completed with one OpenAPI status-enum naming warning and no errors.
+
+Read-only public verification passed:
+
+| Check | Result |
+| --- | --- |
+| API health | 200; `status=ok`, `database=ok` |
+| Registration options and all four place lookups | 200, app-origin CORS; SMS-code requirement remains false |
+| Anonymous profile, selfie, scan-status, review-list and card requests | 401, with app-origin CORS; preflights passed |
+| Existing member profile and PVC-scan status | Authenticated 200 |
+| Coordinator PVC-update list | Authenticated 200 |
+| Missing private card | Authenticated 404 |
+| Temporary SMS-code and PIN-code endpoints | Existing 503 blocks retained |
+| Member, User and PVC-update counts | Unchanged; no production test records created |
+| Web upload and public assets | All 854 files matched; public JavaScript SHA256, bootstrap and poster passed |
+
+`tgcg-api.service` was restarted after migration. Nginx configuration passed; no Nginx changes were required. Secret-free results are in `/opt/tgcg/deployment/member-profile-release-checks.json`; web metadata is in `/opt/tgcg/deployment/web-release.json`. Sources and deployment notes are synchronized across local, GitHub and VPS checkouts. A backup succeeded before deployment.
+
+The user will build the APK separately. No APK was built or published for this release; the previous version 3 download remains available. The current source version is `0.1.0+4`. Use `flutter build apk --release --dart-define=TGCG_API_URL=https://api.tgcg.online`, preserving the existing package and signing identity. Physical-phone testing of these new flows remains with the user.
+
+### Earlier member-registration release and Android version 3 (14 October 2026)
 
 Deployed backend `194ea18`, including `50fdf1d`, and built web and Android from frontend `4ae479d`. Migration `membership.0009_member_polling_unit_from_list` added the boolean field with default `false`; it was the only pending migration. Production Django checks and migration checks passed, and `tgcg-api.service` was restarted successfully. No runtime settings were changed. The private environment remains `600:tgcg:tgcg`.
 
