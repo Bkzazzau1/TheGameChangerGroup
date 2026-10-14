@@ -12,6 +12,7 @@ import '../media/device_media.dart';
 import '../membership/pvc_recognition_service.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'polling_unit_finder_page.dart';
 import 'selfie_check.dart';
 
 /// A photo as bytes, with a file name for the upload.
@@ -166,6 +167,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   final _vin = TextEditingController();
   final _delim = TextEditingController();
   DelimUnit? _unit;
+
+  /// The unit was found by name rather than from the code on the PVC.
+  bool _unitFromList = false;
 
   /// The fields the last scan read, to say what to check and what to type.
   List<String>? _read;
@@ -332,7 +336,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           if (done.gender != null) 'gender',
           if (done.occupation != null) 'occupation',
         ];
-        _unit = null;
+        if (done.delim != null) {
+          _unit = null;
+          _unitFromList = false;
+        }
       });
       if (done.delim != null) await _lookUp();
     } catch (error) {
@@ -373,6 +380,22 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     }
   }
 
+  /// For someone who cannot read the code on their PVC: the polling unit
+  /// found by name, from the state down. The server records that it was.
+  Future<void> _findUnit() async {
+    final place = await Navigator.of(context).push<RegistrationPlace>(
+      MaterialPageRoute(builder: (_) => const PollingUnitFinderPage()),
+    );
+    if (place == null || !mounted) return;
+    setState(() {
+      _delim.text = place.code;
+      _unit = null;
+      _unitFromList = false;
+    });
+    await _lookUp();
+    if (mounted && _unit != null) setState(() => _unitFromList = true);
+  }
+
   /// Says what is missing instead of keeping Next grey; finds the polling
   /// unit when its code was typed but not looked up.
   Future<void> _pvcNext() async {
@@ -381,7 +404,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       _errors = {
         if (_name.text.trim().isEmpty) 'full_name': 'Enter your full name, as on the PVC.',
         if (!isVin(_vin.text)) 'vin': 'A VIN has 19 letters and digits.',
-        if (delim.isEmpty) 'delim': 'Enter the polling unit code from your PVC.',
+        if (delim.isEmpty)
+          'delim': 'Enter the polling unit code from your PVC, or find your polling unit.',
       };
     });
     if (_unit == null && delim.isNotEmpty) await _lookUp();
@@ -495,7 +519,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           phoneNumber: _normalizedPhone!,
           code: _codeSent ? _code.text.trim() : '',
           vin: cleanVin(_vin.text),
-          delim: _delim.text.trim(),
+          delim: _unitFromList ? '' : _delim.text.trim(),
+          pollingUnit: _unitFromList ? _unit!.code : '',
           fullName: _name.text.trim(),
           gender: _gender,
           dateOfBirth: _dateOfBirth,
@@ -519,6 +544,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       'full_name': _Step.pvc,
       'vin': _Step.pvc,
       'delim': _Step.pvc,
+      'polling_unit': _Step.pvc,
       'pvc_image': _Step.pvc,
       'gender': _Step.about,
       'date_of_birth': _Step.about,
@@ -734,17 +760,28 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             onSubmitted: (_) => _lookUp(),
             onChanged: (_) => setState(() {
               _unit = null;
-              _errors.remove('delim');
+              _unitFromList = false;
+              _errors
+                ..remove('delim')
+                ..remove('polling_unit');
             }),
             decoration: InputDecoration(
               labelText: 'Polling unit code (marked CODE on the PVC)',
               hintText: '18-23-01-001',
-              errorText: _errors['delim'],
+              errorText: _errors['delim'] ?? _errors['polling_unit'],
               suffixIcon: IconButton(
                 tooltip: 'Find polling unit',
                 onPressed: _busy ? null : _lookUp,
                 icon: const Icon(Icons.search_rounded),
               ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _busy || _readingCard ? null : _findUnit,
+              icon: const Icon(Icons.travel_explore_rounded),
+              label: const Text("Don't know the code? Find your polling unit"),
             ),
           ),
           if (_unit != null) ...[

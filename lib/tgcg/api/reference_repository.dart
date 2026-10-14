@@ -115,6 +115,18 @@ class DelimUnit {
   String get label => '$name, $ward ward, $lga LGA, $state State';
 }
 
+/// A state, LGA, ward or polling unit in the lists for finding a polling
+/// unit by name while registering.
+class RegistrationPlace {
+  const RegistrationPlace({required this.code, required this.name, this.location = ''});
+
+  final String code;
+  final String name;
+
+  /// INEC's location note; polling units only.
+  final String location;
+}
+
 /// Reference data the field screens need from the server.
 class ReferenceRepository {
   ReferenceRepository(this.client);
@@ -160,6 +172,28 @@ class ReferenceRepository {
       lga: json['lga'] as String,
       state: json['state'] as String,
     );
+  }
+
+  /// A list for finding a polling unit by name while registering: the
+  /// states, or the LGAs of [state], the wards of [lga] or the polling units
+  /// of [ward] (give at most one), sorted by name. No sign-in is needed.
+  Future<List<RegistrationPlace>> registrationPlaces({String? state, String? lga, String? ward}) async {
+    final (path, query) = switch ((state, lga, ward)) {
+      (_, _, final ward?) => ('polling-units', {'ward': ward}),
+      (_, final lga?, _) => ('wards', {'lga': lga}),
+      (final state?, _, _) => ('lgas', {'state': state}),
+      _ => ('states', null),
+    };
+    final body = await client.get('register/places/$path/', query: query, authenticated: false)
+        as List<dynamic>;
+    return [
+      for (final item in body.cast<Map<String, dynamic>>())
+        RegistrationPlace(
+          code: item['code'] as String,
+          name: item['name'] as String,
+          location: (item['location'] as String?) ?? '',
+        ),
+    ];
   }
 
   static ServerPollingUnit _unit(Map<String, dynamic> json) => ServerPollingUnit(

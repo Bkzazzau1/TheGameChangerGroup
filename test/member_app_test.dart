@@ -133,16 +133,40 @@ void main() {
     /// A server answering registration. [smsCodes]: whether joining needs an
     /// SMS code (null: a server from before that question, which always did).
     _Server server({bool? smsCodes = false, http.Response? Function(String path)? extra}) =>
-        _Server((request) => switch (_path(request)) {
-              'register/options/' when smsCodes != null => _json({'phone_code_required': smsCodes}),
-              'register/polling-unit/' => _json({
-                  ..._unit,
-                  'code': '18-23-01-001',
-                  'name': 'KWARBAI I/ PRI. SCH. MADARKACI',
-                  'navigation': null,
-                }),
-              final path => extra?.call(path),
-            });
+        _Server((request) {
+          final within = request.url.queryParameters;
+          return switch (_path(request)) {
+            'register/options/' when smsCodes != null => _json({'phone_code_required': smsCodes}),
+            'register/polling-unit/' => _json({
+                ..._unit,
+                'code': '18-23-01-001',
+                'name': 'KWARBAI I/ PRI. SCH. MADARKACI',
+                'navigation': null,
+              }),
+            // The lists for finding a polling unit by name.
+            'register/places/states/' => _json([
+                {'code': 'KD', 'name': 'Kaduna'},
+                {'code': 'KN', 'name': 'Kano'},
+              ]),
+            'register/places/lgas/' when within['state'] == 'KD' => _json([
+                {'code': 'KD-SABON-GARI', 'name': 'Sabon Gari'},
+                {'code': 'KD-ZARIA', 'name': 'Zaria'},
+              ]),
+            'register/places/wards/' when within['lga'] == 'KD-ZARIA' => _json([
+                {'code': '18-23-01', 'name': 'KWARBAI "A"'},
+                {'code': '18-23-02', 'name': 'KWARBAI "B"'},
+              ]),
+            'register/places/polling-units/' when within['ward'] == '18-23-01' => _json([
+                {'code': '18-23-01-001', 'name': 'KWARBAI I/ PRI. SCH. MADARKACI', 'location': ''},
+                {
+                  'code': '18-23-01-014',
+                  'name': 'UNG. ASKA I/ L.E.A. ANGUWAN KAHU',
+                  'location': 'NEAR THE MOSQUE',
+                },
+              ]),
+            final path => extra?.call(path),
+          };
+        });
 
     Future<TgcgSessionController> open(
       WidgetTester tester,
@@ -303,6 +327,79 @@ void main() {
       expect(find.text('The code is wrong or has expired. Request a new one.'), findsOneWidget);
     });
 
+    testWidgets('someone who cannot read the code finds the polling unit by name', (tester) async {
+      final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
+      final session = await open(tester, api);
+      await enterPhone(tester);
+      await tester.enterText(find.widgetWithText(TextField, 'Full name, as on the PVC'), 'Musa Bello');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'VIN (Voter Identification Number)'),
+        '90F5B0E8D0295847263',
+      );
+
+      await tester.tap(find.text("Don't know the code? Find your polling unit"));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose your state'), findsOneWidget);
+      await tester.tap(find.text('Kaduna'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose your LGA'), findsOneWidget);
+      await tester.tap(find.text('Zaria'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kaduna › Zaria'), findsOneWidget);
+      expect(find.text('Choose your ward'), findsOneWidget);
+
+      // Back goes up one level, without fetching the list again.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Choose your LGA'), findsOneWidget);
+      await tester.tap(find.text('Zaria'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('KWARBAI "A"'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose your polling unit'), findsOneWidget);
+      expect(find.text('NEAR THE MOSQUE · 18-23-01-014'), findsOneWidget);
+
+      // Any words of the name, in any order, without the dots.
+      await tester.enterText(find.widgetWithText(TextField, 'Type part of the name'), 'madarkaci pri sch');
+      await tester.pump();
+      expect(find.text('UNG. ASKA I/ L.E.A. ANGUWAN KAHU'), findsNothing);
+      await tester.tap(find.text('KWARBAI I/ PRI. SCH. MADARKACI'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Your PVC details'), findsOneWidget);
+      expect(find.textContaining('Your polling unit: KWARBAI I/ PRI. SCH. MADARKACI'), findsOneWidget);
+      await next(tester);
+      await next(tester);
+      await choosePin(tester);
+
+      expect(session.isMember, isTrue);
+      // Sent as found by name, so the server marks it for a coordinator to check.
+      final upload = api.requests.last as http.MultipartRequest;
+      expect(upload.fields['polling_unit'], '18-23-01-001');
+      expect(upload.fields.containsKey('delim'), isFalse);
+      expect(api.requests.where((r) => r.url.path.endsWith('register/places/lgas/')), hasLength(1));
+    });
+
+    testWidgets('a code typed after finding the unit by name is sent as the code', (tester) async {
+      final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
+      await open(tester, api);
+      await enterPhone(tester);
+      await tester.tap(find.text("Don't know the code? Find your polling unit"));
+      await tester.pumpAndSettle();
+      for (final place in ['Kaduna', 'Zaria', 'KWARBAI "A"', 'KWARBAI I/ PRI. SCH. MADARKACI']) {
+        await tester.tap(find.text(place));
+        await tester.pumpAndSettle();
+      }
+      // The member then reads the code off their card after all.
+      await typeCard(tester);
+      await next(tester);
+      await choosePin(tester);
+
+      final upload = api.requests.last as http.MultipartRequest;
+      expect(upload.fields['delim'], '18-23-01-001');
+      expect(upload.fields.containsKey('polling_unit'), isFalse);
+    });
+
     testWidgets('Next says what is missing instead of staying grey', (tester) async {
       await open(tester, server());
       await tester.enterText(find.widgetWithText(TextField, 'Phone number'), '12345');
@@ -313,7 +410,10 @@ void main() {
       await next(tester);
       expect(find.text('Enter your full name, as on the PVC.'), findsOneWidget);
       expect(find.text('A VIN has 19 letters and digits.'), findsOneWidget);
-      expect(find.text('Enter the polling unit code from your PVC.'), findsOneWidget);
+      expect(
+        find.text('Enter the polling unit code from your PVC, or find your polling unit.'),
+        findsOneWidget,
+      );
 
       // A VIN one character short is caught here, not at the very end.
       await typeCard(tester, vin: '90F5B0E8D029584726');

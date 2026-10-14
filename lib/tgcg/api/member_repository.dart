@@ -201,9 +201,10 @@ class MemberRegistration {
   const MemberRegistration({
     required this.phoneNumber,
     required this.vin,
-    required this.delim,
     required this.fullName,
     required this.pin,
+    this.delim = '',
+    this.pollingUnit = '',
     this.code = '',
     this.gender,
     this.selfie,
@@ -218,7 +219,11 @@ class MemberRegistration {
   /// The SMS code, when the server asked for one.
   final String code;
   final String vin;
+
+  /// The polling unit code from the PVC; or else [pollingUnit], the code of a
+  /// unit found by name, which the server records as such.
   final String delim;
+  final String pollingUnit;
   final String fullName;
 
   /// male or female, if given.
@@ -270,7 +275,8 @@ class MemberRepository {
         'phone_number': data.phoneNumber,
         if (data.code.isNotEmpty) 'code': data.code,
         'vin': data.vin,
-        'delim': data.delim,
+        if (data.delim.isNotEmpty) 'delim': data.delim,
+        if (data.pollingUnit.isNotEmpty) 'polling_unit': data.pollingUnit,
         'full_name': data.fullName,
         if (data.gender case final gender?) 'gender': gender,
         if (dob != null)
