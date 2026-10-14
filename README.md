@@ -106,7 +106,11 @@ flutter build apk --release --dart-define=TGCG_API_URL=https://api.tgcg.online
 [Download the connected Android APK](https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-2.apk)
 (`0.1.0`, version code `2`, Android 7 or newer). Install it as an update to the
 existing app. APK updates must use an increasing `--build-number`; the last
-distributed version code is recorded in `docs/vps-deployment.md`.
+distributed version code is recorded in `docs/vps-deployment.md`. Keep the
+build number in `pubspec.yaml` (`version: 0.1.0+N`) at least that high: Run in
+VS Code and `flutter run` build with it, and a lower number than the installed
+app makes Flutter uninstall the app first, which signs the phone out and
+deletes records it has not sent yet.
 
 The web build is in `docs/vps-deployment.md`.
 

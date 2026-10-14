@@ -1,7 +1,7 @@
 name: tgcg_emcop
 description: The Game Changer Group Election Monitoring & Collation Programme.
 publish_to: "none"
-version: 0.1.0+1
+version: 0.1.0+3
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -13,11 +13,11 @@ dependencies:
   cryptography: ^2.9.0
   flutter_secure_storage: ^11.2.0
   geolocator: ^14.0.3
-  google_mlkit_text_recognition: ^0.16.0
+  google_mlkit_text_recognition: ^0.17.1
   image_picker: ^1.2.3
   path: ^1.9.1
   path_provider: ^2.1.6
-  record: ^6.2.1
+  record: ^7.1.2
   sqlite3: ^3.6.0
   camera: ^0.12.1
   camera_windows: ^0.3.0
@@ -25,7 +25,7 @@ dependencies:
   http: ^1.6.0
   url_launcher: ^6.3.3
   qr_flutter: ^4.1.0
-  google_mlkit_face_detection: ^0.15.0
+  google_mlkit_face_detection: ^0.15.1
   livekit_client: ^2.13.1
 
 dev_dependencies:
