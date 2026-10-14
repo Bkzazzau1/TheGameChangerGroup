@@ -145,8 +145,8 @@ class ApiClient {
     return query == null ? resolved : resolved.replace(queryParameters: query);
   }
 
-  Future<dynamic> get(String path, {Map<String, String>? query}) =>
-      _send('GET', path, query: query);
+  Future<dynamic> get(String path, {Map<String, String>? query, bool authenticated = true}) =>
+      _send('GET', path, query: query, authenticated: authenticated);
 
   Future<dynamic> post(String path, {Object? body, bool authenticated = true}) =>
       _send('POST', path, body: body, authenticated: authenticated);

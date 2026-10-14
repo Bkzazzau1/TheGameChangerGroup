@@ -116,9 +116,17 @@ String? normalizeNigerianPhone(String value) {
   return '+234$digits';
 }
 
-enum _Step { pvc, details, phone, selfie, pin }
+/// A VIN as the server and USSD take it: no spaces, capital letters.
+String cleanVin(String value) => value.replaceAll(RegExp(r'\s'), '').toUpperCase();
 
-/// Self-registration: PVC first, then details, phone code, selfie and PIN.
+/// A VIN has 19 letters and digits.
+bool isVin(String value) => RegExp(r'^[A-Z0-9]{19}$').hasMatch(cleanVin(value));
+
+enum _Step { phone, pvc, about, pin }
+
+/// Joining in the app, as on USSD: the phone number first (proved by an SMS
+/// code only while the server asks for one), then the PVC's VIN, polling unit
+/// code and name, optional details and selfie, and a PIN.
 class MemberRegistrationPage extends StatefulWidget {
   const MemberRegistrationPage({
     super.key,
@@ -141,15 +149,23 @@ class MemberRegistrationPage extends StatefulWidget {
 }
 
 class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
-  _Step _step = _Step.pvc;
+  _Step _step = _Step.phone;
+  bool _busy = false;
 
-  // Step 1: PVC.
+  // Step 1: the phone, and its SMS code while the server asks for one.
+  final _phone = TextEditingController();
+  bool? _phoneCodeRequired;
+  String? _codeSentTo;
+  DateTime? _resendAfter;
+  Timer? _ticker;
+  final _code = TextEditingController();
+
+  // Step 2: the PVC.
   PhotoBytes? _pvcPhoto;
   final _name = TextEditingController();
   final _vin = TextEditingController();
   final _delim = TextEditingController();
   DelimUnit? _unit;
-  bool _busy = false;
 
   /// The fields the last scan read, to say what to check and what to type.
   List<String>? _read;
@@ -158,20 +174,11 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   bool _readingCard = false;
   String? _readProblem;
 
-  // Step 2: details.
+  // Step 3: optional details and selfie.
   String? _gender;
   DateTime? _dateOfBirth;
   final _occupation = TextEditingController();
   final _email = TextEditingController();
-  final _phone = TextEditingController();
-
-  // Step 3: phone code.
-  String? _codeSentTo;
-  DateTime? _resendAfter;
-  Timer? _ticker;
-  final _code = TextEditingController();
-
-  // Step 4 and 5.
   PhotoBytes? _selfie;
   SelfieCheck? _selfieCheck;
   bool _checkingSelfie = false;
@@ -180,6 +187,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   /// the check can be wrong, and a coordinator reviews the photo regardless.
   int _selfieFailures = 0;
   bool _keepSelfieAnyway = false;
+
+  // Step 4: the PIN.
   final _pin = TextEditingController();
   final _pinAgain = TextEditingController();
   bool _consent = false;
@@ -190,7 +199,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   @override
   void dispose() {
     _ticker?.cancel();
-    for (final controller in [_name, _vin, _delim, _occupation, _email, _phone, _code, _pin, _pinAgain]) {
+    for (final controller in [_phone, _code, _name, _vin, _delim, _occupation, _email, _pin, _pinAgain]) {
       controller.dispose();
     }
     super.dispose();
@@ -198,9 +207,88 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   MemberRepository get _members => TgcgBackend.of(context)!.member;
 
-  void _go(_Step step) => setState(() => _step = step);
+  void _go(_Step step) => setState(() {
+        _errors = {};
+        _step = step;
+      });
+
+  /// Runs [work] with the buttons off, showing server errors by their fields.
+  Future<void> _whileBusy(Future<void> Function() work) async {
+    setState(() {
+      _busy = true;
+      _errors = {};
+    });
+    try {
+      await work();
+    } on ApiException catch (error) {
+      if (mounted) _showServerErrors(error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _clearError(String field) {
+    if (_errors.containsKey(field)) setState(() => _errors.remove(field));
+  }
 
   // --- step 1 ---------------------------------------------------------------------
+
+  String? get _normalizedPhone => normalizeNigerianPhone(_phone.text);
+
+  bool get _codeSent => _codeSentTo != null && _codeSentTo == _normalizedPhone;
+
+  Future<void> _phoneNext() async {
+    final phone = _normalizedPhone;
+    if (phone == null) {
+      setState(() => _errors = {'phone_number': 'Enter a Nigerian mobile number, e.g. 0803 123 4567.'});
+      return;
+    }
+    if (_codeSent) {
+      if (!RegExp(r'^\d{6}$').hasMatch(_code.text.trim())) {
+        setState(() => _errors = {'code': 'Enter the 6-digit code from the SMS.'});
+        return;
+      }
+      _go(_Step.pvc);
+      return;
+    }
+    await _whileBusy(() async {
+      final needsCode = _phoneCodeRequired ??= await _members.phoneCodeRequired();
+      if (!mounted) return;
+      if (needsCode) {
+        await _sendCode(phone);
+      } else {
+        _go(_Step.pvc);
+      }
+    });
+  }
+
+  Future<void> _sendCode(String phone) async {
+    await _members.requestRegistrationCode(phone: phone);
+    if (!mounted) return;
+    setState(() {
+      _codeSentTo = phone;
+      _resendAfter = DateTime.now().add(const Duration(seconds: 60));
+    });
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || DateTime.now().isAfter(_resendAfter!)) timer.cancel();
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _resendCode() async {
+    final phone = _normalizedPhone;
+    if (phone != null) await _whileBusy(() => _sendCode(phone));
+  }
+
+  int get _resendIn {
+    final after = _resendAfter;
+    if (after == null) return 0;
+    final left = after.difference(DateTime.now()).inSeconds;
+    return left > 0 ? left : 0;
+  }
+
+  // --- step 2 ---------------------------------------------------------------------
 
   Future<void> _scan({required bool camera}) async {
     setState(() {
@@ -285,17 +373,23 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     }
   }
 
-  bool get _pvcDone =>
-      _pvcPhoto != null &&
-      _name.text.trim().isNotEmpty &&
-      _vin.text.trim().length >= 8 &&
-      _unit != null;
+  /// Says what is missing instead of keeping Next grey; finds the polling
+  /// unit when its code was typed but not looked up.
+  Future<void> _pvcNext() async {
+    final delim = _delim.text.trim();
+    setState(() {
+      _errors = {
+        if (_name.text.trim().isEmpty) 'full_name': 'Enter your full name, as on the PVC.',
+        if (!isVin(_vin.text)) 'vin': 'A VIN has 19 letters and digits.',
+        if (delim.isEmpty) 'delim': 'Enter the polling unit code from your PVC.',
+      };
+    });
+    if (_unit == null && delim.isNotEmpty) await _lookUp();
+    if (!mounted || _errors.isNotEmpty || _unit == null) return;
+    _go(_Step.about);
+  }
 
-  // --- step 2 ---------------------------------------------------------------------
-
-  String? get _normalizedPhone => normalizeNigerianPhone(_phone.text);
-
-  bool get _detailsDone => _gender != null && _normalizedPhone != null;
+  // --- step 3 ---------------------------------------------------------------------
 
   Future<void> _pickBirthday() async {
     final now = DateTime.now();
@@ -308,46 +402,6 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     );
     if (picked != null) setState(() => _dateOfBirth = picked);
   }
-
-  // --- step 3 ---------------------------------------------------------------------
-
-  Future<void> _sendCode() async {
-    final phone = _normalizedPhone;
-    if (phone == null) return;
-    setState(() {
-      _busy = true;
-      _errors = {};
-    });
-    try {
-      await _members.requestRegistrationCode(phone: phone, vin: _vin.text.trim());
-      if (!mounted) return;
-      setState(() {
-        _codeSentTo = phone;
-        _resendAfter = DateTime.now().add(const Duration(seconds: 60));
-      });
-      _ticker?.cancel();
-      _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted || DateTime.now().isAfter(_resendAfter!)) timer.cancel();
-        if (mounted) setState(() {});
-      });
-    } on ApiException catch (error) {
-      if (mounted) _showServerErrors(error);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  int get _resendIn {
-    final after = _resendAfter;
-    if (after == null) return 0;
-    final left = after.difference(DateTime.now()).inSeconds;
-    return left > 0 ? left : 0;
-  }
-
-  bool get _codeDone =>
-      _codeSentTo == _normalizedPhone && RegExp(r'^\d{6}$').hasMatch(_code.text.trim());
-
-  // --- step 4 ---------------------------------------------------------------------
 
   Future<void> _takeSelfie() async {
     try {
@@ -386,65 +440,91 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     }
   }
 
-  // --- step 5 ---------------------------------------------------------------------
+  /// A selfie that passed the face check, or that the member chose to keep.
+  bool get _selfieReady =>
+      _selfie != null && !_checkingSelfie && ((_selfieCheck?.passed ?? false) || _keepSelfieAnyway);
 
-  String? get _pinProblem {
+  void _removeSelfie() => setState(() {
+        _selfie = null;
+        _selfieCheck = null;
+        _keepSelfieAnyway = false;
+        _errors.remove('photo');
+      });
+
+  void _aboutNext() {
+    if (_selfie != null && !_selfieReady) {
+      setState(() => _errors = {'photo': 'Take the photo again, or remove it.'});
+      return;
+    }
+    _go(_Step.pin);
+  }
+
+  // --- step 4 ---------------------------------------------------------------------
+
+  String? get _pinError {
     final pin = _pin.text;
     if (!RegExp(r'^\d{6}$').hasMatch(pin)) return 'Choose 6 digits.';
     if (RegExp(r'^(\d)\1{5}$').hasMatch(pin) || '0123456789'.contains(pin) || '9876543210'.contains(pin)) {
       return 'This PIN is too easy to guess. Choose another.';
     }
-    if (_pinAgain.text != pin) return 'The two PINs do not match.';
     return null;
+  }
+
+  String? get _pinAgainError => _pinAgain.text == _pin.text ? null : 'The two PINs do not match.';
+
+  Future<void> _pinNext() async {
+    final pinError = _pinError;
+    final errors = {
+      if (pinError != null) 'pin': pinError,
+      if (pinError == null && _pinAgainError != null) 'pin_again': _pinAgainError!,
+      if (!_consent) 'consent': 'Tick the box to agree.',
+    };
+    if (errors.isNotEmpty) {
+      setState(() => _errors = errors);
+      return;
+    }
+    await _submit();
   }
 
   Future<void> _submit() async {
     final session = TgcgSession.of(context, listen: false);
     final navigator = Navigator.of(context);
-    setState(() {
-      _busy = true;
-      _errors = {};
-    });
-    try {
+    await _whileBusy(() async {
       final card = await _members.register(
         MemberRegistration(
           phoneNumber: _normalizedPhone!,
-          code: _code.text.trim(),
-          vin: _vin.text.trim(),
+          code: _codeSent ? _code.text.trim() : '',
+          vin: cleanVin(_vin.text),
           delim: _delim.text.trim(),
           fullName: _name.text.trim(),
-          gender: _gender!,
+          gender: _gender,
           dateOfBirth: _dateOfBirth,
           occupation: _occupation.text.trim(),
           email: _email.text.trim(),
           pin: _pin.text,
-          selfie: _selfie!,
-          pvcImage: _pvcPhoto!,
+          selfie: _selfieReady ? _selfie : null,
+          pvcImage: _pvcPhoto,
         ),
       );
       navigator.popUntil((route) => route.isFirst);
       session.signInMember(fullName: card.fullName, membershipNumber: card.membershipNumber);
-    } on ApiException catch (error) {
-      if (mounted) _showServerErrors(error);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   /// Shows server errors next to their fields and opens the first step with one.
   void _showServerErrors(ApiException error) {
     const steps = {
+      'phone_number': _Step.phone,
+      'code': _Step.phone,
       'full_name': _Step.pvc,
       'vin': _Step.pvc,
       'delim': _Step.pvc,
       'pvc_image': _Step.pvc,
-      'phone_number': _Step.details,
-      'gender': _Step.details,
-      'date_of_birth': _Step.details,
-      'occupation': _Step.details,
-      'email': _Step.details,
-      'code': _Step.phone,
-      'photo': _Step.selfie,
+      'gender': _Step.about,
+      'date_of_birth': _Step.about,
+      'occupation': _Step.about,
+      'email': _Step.about,
+      'photo': _Step.about,
       'pin': _Step.pin,
       'consent': _Step.pin,
     };
@@ -454,7 +534,13 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
         .whereType<_Step>()
         .fold<_Step?>(null, (first, s) => first == null || s.index < first.index ? s : first);
     setState(() {
-      _errors = errors.isEmpty ? {'general': error.message} : errors;
+      _errors = {
+        ...errors,
+        // A message for no field on these screens goes at the top.
+        if (step == null) 'general': errors.isEmpty ? error.message : errors.values.first,
+      };
+      // The server wants the phone proved by SMS after all.
+      if (errors.containsKey('code')) _phoneCodeRequired = true;
       if (step != null) _step = step;
     });
   }
@@ -464,10 +550,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   @override
   Widget build(BuildContext context) {
     final titles = {
-      _Step.pvc: 'Scan your PVC',
-      _Step.details: 'Your details',
-      _Step.phone: 'Confirm your phone',
-      _Step.selfie: 'Take a selfie',
+      _Step.phone: 'Your phone number',
+      _Step.pvc: 'Your PVC details',
+      _Step.about: 'About you (optional)',
       _Step.pin: 'Choose your PIN',
     };
     return Scaffold(
@@ -498,10 +583,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             const SizedBox(height: 18),
             if (_errors['general'] != null) _ErrorBox(_errors['general']!),
             switch (_step) {
-              _Step.pvc => _pvcStep(),
-              _Step.details => _detailsStep(),
               _Step.phone => _phoneStep(),
-              _Step.selfie => _selfieStep(),
+              _Step.pvc => _pvcStep(),
+              _Step.about => _aboutStep(),
               _Step.pin => _pinStep(),
             },
           ],
@@ -510,12 +594,11 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     );
   }
 
-  Widget _nav({required bool canContinue, required VoidCallback onNext, String label = 'Next'}) =>
-      Padding(
+  Widget _nav({required VoidCallback onNext, String label = 'Next'}) => Padding(
         padding: const EdgeInsets.only(top: 20),
         child: Row(
           children: [
-            if (_step != _Step.pvc) ...[
+            if (_step != _Step.phone) ...[
               OutlinedButton(
                 onPressed: _busy ? null : () => _go(_Step.values[_step.index - 1]),
                 child: const Text('Back'),
@@ -524,7 +607,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             ],
             Expanded(
               child: FilledButton(
-                onPressed: canContinue && !_busy ? onNext : null,
+                onPressed: _busy || _readingCard || _checkingSelfie ? null : onNext,
                 child: _busy
                     ? const SizedBox.square(
                         dimension: 18,
@@ -537,13 +620,55 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
         ),
       );
 
+  Widget _phoneStep() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _phone,
+            keyboardType: TextInputType.phone,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            onChanged: (_) => setState(() => _errors.remove('phone_number')),
+            decoration: InputDecoration(
+              labelText: 'Phone number',
+              hintText: '0803 123 4567',
+              helperText: 'You sign in with this number.',
+              errorText: _errors['phone_number'],
+            ),
+          ),
+          if (_codeSent) ...[
+            const SizedBox(height: 14),
+            Text(
+              'We sent a 6-digit code to $_codeSentTo. Enter it below.',
+              style: const TextStyle(color: TgcgColors.muted, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _code,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => _clearError('code'),
+              decoration: InputDecoration(labelText: 'Code from the SMS', errorText: _errors['code']),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: _busy || _resendIn > 0 ? null : _resendCode,
+                child: Text(_resendIn > 0 ? 'Send a new code in ${_resendIn}s' : 'Send a new code'),
+              ),
+            ),
+          ] else if (_errors['code'] != null)
+            _FieldError(_errors['code']!),
+          _nav(onNext: _phoneNext),
+        ],
+      );
+
   Widget _pvcStep() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Have your Permanent Voter Card (PVC) with you. Scan the front of the card or '
-            'choose a photo of it: your name, VIN, polling unit code and other details are '
-            'read from it. Check each one, and type anything that is missing.',
+            'Type the name, VIN and polling unit code from your Permanent Voter Card (PVC), '
+            'or scan the card to fill them in. Check each one against the card.',
             style: TextStyle(color: TgcgColors.muted, height: 1.4),
           ),
           const SizedBox(height: 14),
@@ -587,7 +712,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           TextField(
             controller: _name,
             textCapitalization: TextCapitalization.words,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => _clearError('full_name'),
             decoration: InputDecoration(
               labelText: 'Full name, as on the PVC',
               errorText: _errors['full_name'],
@@ -597,7 +722,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           TextField(
             controller: _vin,
             textCapitalization: TextCapitalization.characters,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => _clearError('vin'),
             decoration: InputDecoration(
               labelText: 'VIN (Voter Identification Number)',
               errorText: _errors['vin'],
@@ -607,7 +732,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           TextField(
             controller: _delim,
             onSubmitted: (_) => _lookUp(),
-            onChanged: (_) => setState(() => _unit = null),
+            onChanged: (_) => setState(() {
+              _unit = null;
+              _errors.remove('delim');
+            }),
             decoration: InputDecoration(
               labelText: 'Polling unit code (marked CODE on the PVC)',
               hintText: '18-23-01-001',
@@ -641,7 +769,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
               ),
             ),
           ],
-          _nav(canContinue: _pvcDone, onNext: () => _go(_Step.details)),
+          _nav(onNext: _pvcNext),
         ],
       );
 
@@ -677,120 +805,55 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     ];
   }
 
-  Widget _detailsStep() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('Gender', style: TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          SegmentedButton<String>(
-            emptySelectionAllowed: true,
-            segments: const [
-              ButtonSegment(value: 'male', label: Text('Male')),
-              ButtonSegment(value: 'female', label: Text('Female')),
-            ],
-            selected: {?_gender},
-            onSelectionChanged: (value) => setState(() => _gender = value.firstOrNull),
-          ),
-          if (_errors['gender'] != null) _FieldError(_errors['gender']!),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: 'Phone number',
-              hintText: '0803 123 4567',
-              helperText: 'Your login. We will text a code to it.',
-              errorText: _errors['phone_number'] ??
-                  (_phone.text.trim().isNotEmpty && _normalizedPhone == null
-                      ? 'Enter a Nigerian mobile number, e.g. 0803 123 4567.'
-                      : null),
-            ),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _pickBirthday,
-            icon: const Icon(Icons.cake_outlined),
-            label: Text(
-              _dateOfBirth == null
-                  ? 'Date of birth (optional)'
-                  : 'Born ${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}',
-            ),
-          ),
-          if (_errors['date_of_birth'] != null) _FieldError(_errors['date_of_birth']!),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _occupation,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              labelText: 'Occupation (optional)',
-              errorText: _errors['occupation'],
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(labelText: 'Email (optional)', errorText: _errors['email']),
-          ),
-          _nav(canContinue: _detailsDone, onNext: () => _go(_Step.phone)),
-        ],
-      );
-
-  Widget _phoneStep() {
-    final phone = _normalizedPhone ?? '';
-    final sent = _codeSentTo == phone;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          sent
-              ? 'We sent a 6-digit code to $phone. Enter it below.'
-              : 'We will text a 6-digit code to $phone to confirm it is yours.',
-          style: const TextStyle(color: TgcgColors.muted, height: 1.4),
-        ),
-        const SizedBox(height: 14),
-        if (!sent)
-          FilledButton.icon(
-            onPressed: _busy ? null : _sendCode,
-            icon: const Icon(Icons.sms_outlined),
-            label: const Text('Send code'),
-          )
-        else ...[
-          TextField(
-            controller: _code,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(labelText: 'Code from the SMS', errorText: _errors['code']),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: _busy || _resendIn > 0 ? null : _sendCode,
-              child: Text(_resendIn > 0 ? 'Send a new code in ${_resendIn}s' : 'Send a new code'),
-            ),
-          ),
-        ],
-        if (_errors['phone_number'] != null) _FieldError(_errors['phone_number']!),
-        _nav(canContinue: _codeDone, onNext: () => _go(_Step.selfie)),
-      ],
-    );
-  }
-
-  Widget _selfieStep() {
+  Widget _aboutStep() {
     final check = _selfieCheck;
     final problem = check?.problem;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Text('Gender', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          emptySelectionAllowed: true,
+          segments: const [
+            ButtonSegment(value: 'male', label: Text('Male')),
+            ButtonSegment(value: 'female', label: Text('Female')),
+          ],
+          selected: {?_gender},
+          onSelectionChanged: (value) => setState(() => _gender = value.firstOrNull),
+        ),
+        if (_errors['gender'] != null) _FieldError(_errors['gender']!),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: _pickBirthday,
+          icon: const Icon(Icons.cake_outlined),
+          label: Text(
+            _dateOfBirth == null
+                ? 'Date of birth'
+                : 'Born ${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}',
+          ),
+        ),
+        if (_errors['date_of_birth'] != null) _FieldError(_errors['date_of_birth']!),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _occupation,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(labelText: 'Occupation', errorText: _errors['occupation']),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _email,
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(labelText: 'Email', errorText: _errors['email']),
+        ),
+        const SizedBox(height: 18),
+        const Text('Photo of you', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
         const Text(
-          'Take a clear photo of your face, like a passport photo. It goes on your '
-          'membership card.',
+          'A clear photo of your face, like a passport photo. It goes on your membership card.',
           style: TextStyle(color: TgcgColors.muted, height: 1.4),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         if (_selfie != null)
           Center(
             child: ClipRRect(
@@ -810,7 +873,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: () => setState(() => _keepSelfieAnyway = true),
+                onPressed: () => setState(() {
+                  _keepSelfieAnyway = true;
+                  _errors.remove('photo');
+                }),
                 child: const Text('Use this photo anyway'),
               ),
             ),
@@ -821,24 +887,32 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             text: 'Clear photo: one face, looking at the camera.',
           ),
         const SizedBox(height: 10),
-        FilledButton.icon(
-          onPressed: _checkingSelfie ? null : _takeSelfie,
-          icon: const Icon(Icons.camera_front_outlined),
-          label: Text(_selfie == null ? 'Take selfie' : 'Take again'),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _checkingSelfie ? null : _takeSelfie,
+                icon: const Icon(Icons.camera_front_outlined),
+                label: Text(_selfie == null ? 'Take selfie' : 'Take again'),
+              ),
+            ),
+            if (_selfie != null) ...[
+              const SizedBox(width: 10),
+              TextButton(
+                onPressed: _checkingSelfie ? null : _removeSelfie,
+                child: const Text('Remove photo'),
+              ),
+            ],
+          ],
         ),
         if (_errors['photo'] != null) _FieldError(_errors['photo']!),
-        _nav(
-          canContinue: _selfie != null &&
-              !_checkingSelfie &&
-              ((check?.passed ?? false) || _keepSelfieAnyway),
-          onNext: () => _go(_Step.pin),
-        ),
+        _nav(onNext: _aboutNext),
       ],
     );
   }
 
   Widget _pinStep() {
-    final problem = _pin.text.isEmpty ? null : _pinProblem;
+    final typedBoth = _pin.text.isNotEmpty && _pinAgain.text.length == 6;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -853,7 +927,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           keyboardType: TextInputType.number,
           maxLength: 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) => setState(() => _errors.remove('pin')),
           decoration: InputDecoration(labelText: 'PIN', errorText: _errors['pin']),
         ),
         TextField(
@@ -862,10 +936,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           keyboardType: TextInputType.number,
           maxLength: 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) => setState(() => _errors.remove('pin_again')),
           decoration: InputDecoration(
             labelText: 'PIN again',
-            errorText: _pinAgain.text.length == 6 ? problem : null,
+            errorText: _errors['pin_again'] ?? (typedBoth ? _pinError ?? _pinAgainError : null),
           ),
         ),
         const SizedBox(height: 6),
@@ -873,7 +947,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           value: _consent,
-          onChanged: (value) => setState(() => _consent = value ?? false),
+          onChanged: (value) => setState(() {
+            _consent = value ?? false;
+            _errors.remove('consent');
+          }),
           title: const Text(
             'I agree that TGCG keeps my details, photo and PVC information to manage my '
             'membership and to contact me about party activities.',
@@ -881,11 +958,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           ),
         ),
         if (_errors['consent'] != null) _FieldError(_errors['consent']!),
-        _nav(
-          canContinue: _pinProblem == null && _consent,
-          onNext: _submit,
-          label: 'Create my membership',
-        ),
+        _nav(onNext: _pinNext, label: 'Create my membership'),
       ],
     );
   }

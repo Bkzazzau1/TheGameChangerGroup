@@ -194,37 +194,41 @@ class VolunteerOffer {
       );
 }
 
-/// Everything collected on the registration screens.
+/// Everything collected on the registration screens. As on USSD, joining
+/// needs the phone, the VIN and polling unit code, a name and a PIN; the
+/// rest may be left out.
 class MemberRegistration {
   const MemberRegistration({
     required this.phoneNumber,
-    required this.code,
     required this.vin,
     required this.delim,
     required this.fullName,
-    required this.gender,
     required this.pin,
-    required this.selfie,
-    required this.pvcImage,
+    this.code = '',
+    this.gender,
+    this.selfie,
+    this.pvcImage,
     this.dateOfBirth,
     this.occupation = '',
     this.email = '',
   });
 
   final String phoneNumber;
+
+  /// The SMS code, when the server asked for one.
   final String code;
   final String vin;
   final String delim;
   final String fullName;
 
-  /// male or female.
-  final String gender;
+  /// male or female, if given.
+  final String? gender;
   final DateTime? dateOfBirth;
   final String occupation;
   final String email;
   final String pin;
-  final ({Uint8List bytes, String name}) selfie;
-  final ({Uint8List bytes, String name}) pvcImage;
+  final ({Uint8List bytes, String name})? selfie;
+  final ({Uint8List bytes, String name})? pvcImage;
 }
 
 /// Member registration, sign-in help and the member home (`/register/...`, `/me/...`).
@@ -232,11 +236,25 @@ class MemberRepository {
   MemberRepository(this.client);
   final ApiClient client;
 
+  /// Whether joining needs an SMS code to prove the phone. The server asks for
+  /// one only while it can send SMS; a server from before this question
+  /// always asked.
+  Future<bool> phoneCodeRequired() async {
+    try {
+      final body = await client.get('register/options/', authenticated: false) as Map<String, dynamic>;
+      return body['phone_code_required'] != false;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return true;
+      rethrow;
+    }
+  }
+
   /// Sends a 6-digit code to [phone]; returns how many seconds it stays valid.
-  Future<int> requestRegistrationCode({required String phone, required String vin}) async {
+  /// The server first checks the phone, and the VIN if given, are not taken.
+  Future<int> requestRegistrationCode({required String phone, String vin = ''}) async {
     final body = await client.post(
       'register/code/',
-      body: {'phone_number': phone, 'vin': vin},
+      body: {'phone_number': phone, if (vin.isNotEmpty) 'vin': vin},
       authenticated: false,
     ) as Map<String, dynamic>;
     return (body['expires_in'] as int?) ?? 600;
@@ -250,11 +268,11 @@ class MemberRepository {
       authenticated: false,
       fields: {
         'phone_number': data.phoneNumber,
-        'code': data.code,
+        if (data.code.isNotEmpty) 'code': data.code,
         'vin': data.vin,
         'delim': data.delim,
         'full_name': data.fullName,
-        'gender': data.gender,
+        if (data.gender case final gender?) 'gender': gender,
         if (dob != null)
           'date_of_birth': '${dob.year.toString().padLeft(4, '0')}-'
               '${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}',
@@ -264,9 +282,10 @@ class MemberRepository {
         'consent': 'true',
       },
       files: () async => [
-        http.MultipartFile.fromBytes('photo', data.selfie.bytes, filename: data.selfie.name),
-        http.MultipartFile.fromBytes('pvc_image', data.pvcImage.bytes,
-            filename: data.pvcImage.name),
+        if (data.selfie case final selfie?)
+          http.MultipartFile.fromBytes('photo', selfie.bytes, filename: selfie.name),
+        if (data.pvcImage case final card?)
+          http.MultipartFile.fromBytes('pvc_image', card.bytes, filename: card.name),
       ],
     ) as Map<String, dynamic>;
     return _session(body);
