@@ -244,6 +244,73 @@ class MemberRegistration {
   final ({Uint8List bytes, String name})? pvcImage;
 }
 
+/// The details a member sends from their one PVC scan, checked against the
+/// card. A detail the card did not show may be left out; theirs then stays.
+class PvcScanDetails {
+  const PvcScanDetails({
+    required this.photo,
+    required this.fullName,
+    required this.vin,
+    required this.delim,
+    this.gender,
+    this.dateOfBirth,
+    this.occupation = '',
+  });
+
+  final ({Uint8List bytes, String name}) photo;
+  final String fullName;
+  final String vin;
+
+  /// The polling unit code on the card.
+  final String delim;
+  final String? gender;
+  final DateTime? dateOfBirth;
+  final String occupation;
+}
+
+/// How a member's PVC scan went.
+class PvcScanResult {
+  const PvcScanResult({
+    required this.id,
+    required this.status,
+    required this.createdAt,
+    this.decisionReason = '',
+  });
+
+  final String id;
+
+  /// applied (at once), pending (waiting for a coordinator), approved,
+  /// rejected or withdrawn.
+  final String status;
+  final String decisionReason;
+  final DateTime createdAt;
+
+  bool get isPending => status == 'pending';
+
+  factory PvcScanResult.fromJson(Map<String, dynamic> json) => PvcScanResult(
+        id: json['id'] as String,
+        status: json['status'] as String,
+        decisionReason: (json['decision_reason'] as String?) ?? '',
+        createdAt: DateTime.tryParse((json['created_at'] as String?) ?? '') ?? DateTime.now(),
+      );
+}
+
+/// Whether the member may make their one PVC scan: not once a card is on
+/// record, nor while a scan waits.
+class PvcScanState {
+  const PvcScanState({required this.canScan, this.latest});
+
+  final bool canScan;
+  final PvcScanResult? latest;
+
+  factory PvcScanState.fromJson(Map<String, dynamic> json) => PvcScanState(
+        canScan: json['can_scan'] as bool? ?? false,
+        latest: json['latest'] is Map<String, dynamic>
+            ? PvcScanResult.fromJson(json['latest'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
 /// A date as the server takes it: YYYY-MM-DD.
 String _day(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
     '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -380,24 +447,44 @@ class MemberRepository {
 
   /// Adds the selfie left out when joining. It can be replaced until the
   /// member's identity is checked; after that a coordinator changes it.
-  Future<MemberCard> addPhoto(({Uint8List bytes, String name}) photo) =>
-      _addOwnPhoto('me/member/photo/', 'photo', photo);
-
-  /// Adds a photo of the front of the PVC, on the same terms as [addPhoto].
-  Future<MemberCard> addCardPhoto(({Uint8List bytes, String name}) photo) =>
-      _addOwnPhoto('me/member/card-photo/', 'pvc_image', photo);
-
-  Future<MemberCard> _addOwnPhoto(
-    String path,
-    String field,
-    ({Uint8List bytes, String name}) photo,
-  ) async =>
+  Future<MemberCard> addPhoto(({Uint8List bytes, String name}) photo) async =>
       MemberCard.fromJson(
         await client.postMultipart(
-          path,
+          'me/member/photo/',
           fields: const {},
-          files: () async => [http.MultipartFile.fromBytes(field, photo.bytes, filename: photo.name)],
+          files: () async => [http.MultipartFile.fromBytes('photo', photo.bytes, filename: photo.name)],
         ) as Map<String, dynamic>,
+      );
+
+  /// Whether the member may make their one PVC scan, and how the last went.
+  Future<PvcScanState> pvcScan() async =>
+      PvcScanState.fromJson(await client.get('me/member/pvc-scan/') as Map<String, dynamic>);
+
+  /// Sends the details read off the PVC, which replace the typed ones: at
+  /// once, or after a coordinator's second check once the identity is checked.
+  Future<PvcScanResult> sendPvcScan(PvcScanDetails scan) async {
+    final dob = scan.dateOfBirth;
+    return PvcScanResult.fromJson(
+      await client.postMultipart(
+        'me/member/pvc-scan/',
+        fields: {
+          'full_name': scan.fullName,
+          'vin': scan.vin,
+          'delim': scan.delim,
+          if (scan.gender case final gender? when gender.isNotEmpty) 'gender': gender,
+          if (dob != null) 'date_of_birth': _day(dob),
+          if (scan.occupation.isNotEmpty) 'occupation': scan.occupation,
+        },
+        files: () async => [
+          http.MultipartFile.fromBytes('pvc_image', scan.photo.bytes, filename: scan.photo.name),
+        ],
+      ) as Map<String, dynamic>,
+    );
+  }
+
+  /// Takes back a scan still waiting for a coordinator, to scan again.
+  Future<PvcScanResult> withdrawPvcScan(String id) async => PvcScanResult.fromJson(
+        await client.post('me/member/pvc-scan/$id/withdraw/') as Map<String, dynamic>,
       );
 
   Future<MyPollingUnit> pollingUnit() async =>

@@ -739,8 +739,10 @@ void main() {
   });
 
   group('what a member adds after joining', () {
-    http.Response? memberHome(String path) => switch (path) {
+    http.Response? memberHome(String path, {Map<String, dynamic>? scan}) => switch (path) {
           'me/member/photo/' => http.Response.bytes(_pixel, 200, headers: {'content-type': 'image/png'}),
+          'me/member/pvc-scan/' => _json(scan ?? {'can_scan': true, 'latest': null}),
+          'register/polling-unit/' => _json({..._unit, 'navigation': null}),
           'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 1, 'members_in_ward': 2}),
           'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
           'me/volunteer/' => _json(<Object>[]),
@@ -753,38 +755,36 @@ void main() {
           matching: find.byType(TextButton),
         );
 
-    testWidgets('the occupation, a selfie and a card photo', (tester) async {
-      var card = <String, dynamic>{
-        ..._card(verification: 'pendingReview'),
-        'occupation': '',
-        'has_card_photo': false,
-      };
+    Map<String, dynamic> scanned(String status) => {
+          'id': 's1',
+          'status': status,
+          'decision_reason': '',
+          'created_at': '2026-10-14T10:00:00Z',
+          'decided_at': null,
+        };
+
+    testWidgets('the occupation and a selfie', (tester) async {
+      var card = <String, dynamic>{..._card(verification: 'pendingReview'), 'occupation': ''};
       final server = _Server((request) => switch ((request.method, _path(request))) {
             ('GET', 'me/member/') => _json(card),
             ('PATCH', 'me/member/') =>
               _json(card = {...card, ...jsonDecode(request.body) as Map<String, dynamic>}),
             ('POST', 'me/member/photo/') =>
               _json(card = {...card, 'photo_url': 'https://api.tgcg.test/api/v1/me/member/photo/'}),
-            ('POST', 'me/member/card-photo/') => _json(card = {...card, 'has_card_photo': true}),
             (_, final path) => memberHome(path),
           });
       final checks = [const SelfieCheck.failed('No face found.'), const SelfieCheck.passed()];
-      final scans = <bool>[];
       await _pump(
         tester,
         server.connect(),
         MemberShell(
-          scanPvc: ({required camera}) async {
-            scans.add(camera);
-            return PvcScan(photo: (bytes: _pixel, name: 'pvc.png'));
-          },
           takeSelfie: () async => XFile.fromData(_pixel, name: 'me.jpg'),
           checkSelfie: (_) async => checks.removeAt(0),
         ),
         member: true,
       );
       await tester.pumpAndSettle();
-      expect(find.text('Not added'), findsNWidgets(4)); // email, occupation and both photos
+      expect(find.text('Not added'), findsNWidgets(3)); // email, occupation and the selfie
 
       await tester.tap(action('Occupation'));
       await tester.pumpAndSettle();
@@ -804,17 +804,119 @@ void main() {
           .lastWhere((r) => r.method == 'POST' && r.url.path.endsWith('/me/member/photo/'));
       expect((selfie as http.MultipartRequest).files.single.field, 'photo');
       expect(find.text('Your photo was saved.'), findsOneWidget);
+      // Until their identity is checked, the member may still change it.
+      expect(action('Photo of you'), findsOneWidget);
+    });
 
-      await tester.tap(action('Photo of your PVC'));
+    testWidgets('one PVC scan replaces the details typed when joining', (tester) async {
+      var scan = <String, dynamic>{'can_scan': true, 'latest': null};
+      final server = _Server((request) => switch ((request.method, _path(request))) {
+            ('GET', 'me/member/') =>
+              _json({..._card(verification: 'pendingReview'), 'has_card_photo': !scan['can_scan']}),
+            ('POST', 'me/member/pvc-scan/') => () {
+                scan = {'can_scan': false, 'latest': scanned('applied')};
+                return _json(scanned('applied'), 201);
+              }(),
+            (_, final path) => memberHome(path, scan: scan),
+          });
+      final sources = <bool>[];
+      await _pump(
+        tester,
+        server.connect(),
+        MemberShell(
+          scanPvc: ({required camera}) async {
+            sources.add(camera);
+            return PvcScan(
+              photo: (bytes: _pixel, name: 'pvc.png'),
+              fullName: 'Musa Ibrahim Bello',
+              vin: '90F5B0E8D0295847263',
+              delim: '18-23-01-014',
+              occupation: 'Trader',
+            );
+          },
+        ),
+        member: true,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Not scanned'), findsOneWidget);
+
+      await tester.tap(action('Your PVC'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Take a photo of the card'));
+      await tester.pumpAndSettle();
+      expect(sources, [true]);
+      // The member checks what was read before it replaces their details.
+      expect(find.text('Musa Ibrahim Bello'), findsOneWidget);
+      expect(find.textContaining('Your polling unit: '), findsOneWidget);
+      await tester.tap(find.text('Use these details'));
+      await tester.pumpAndSettle();
+
+      final sent = server.requests.lastWhere(
+        (r) => r.method == 'POST' && r.url.path.endsWith('/me/member/pvc-scan/'),
+      ) as http.MultipartRequest;
+      // What the card did not show is the member's own, so it does not change.
+      expect(sent.fields, {
+        'full_name': 'Musa Ibrahim Bello',
+        'vin': '90F5B0E8D0295847263',
+        'delim': '18-23-01-014',
+        'gender': 'male',
+        'date_of_birth': '1990-05-14',
+        'occupation': 'Trader',
+      });
+      expect(sent.files.single.field, 'pvc_image');
+      expect(find.text('Your details now match your PVC.'), findsOneWidget);
+      // One scan only.
+      expect(find.text('On record'), findsOneWidget);
+      expect(action('Your PVC'), findsNothing);
+    });
+
+    testWidgets("a checked member's scan waits for a coordinator and can be taken back",
+        (tester) async {
+      var scan = <String, dynamic>{'can_scan': true, 'latest': null};
+      final server = _Server((request) => switch ((request.method, _path(request))) {
+            ('GET', 'me/member/') => _json(_card()), // identity checked
+            ('POST', 'me/member/pvc-scan/') => () {
+                scan = {'can_scan': false, 'latest': scanned('pending')};
+                return _json(scanned('pending'), 201);
+              }(),
+            ('POST', 'me/member/pvc-scan/s1/withdraw/') => () {
+                scan = {'can_scan': true, 'latest': scanned('withdrawn')};
+                return _json(scanned('withdrawn'));
+              }(),
+            (_, final path) => memberHome(path, scan: scan),
+          });
+      await _pump(
+        tester,
+        server.connect(),
+        MemberShell(
+          scanPvc: ({required camera}) async => PvcScan(
+            photo: (bytes: _pixel, name: 'pvc.png'),
+            fullName: 'Musa Bello',
+            vin: '90F5B0E8D0295847263',
+            delim: '18-23-01-014',
+          ),
+        ),
+        member: true,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(action('Your PVC'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose from gallery'));
       await tester.pumpAndSettle();
-      expect(scans, [false]);
-      final pvc = server.requests.lastWhere((r) => r.url.path.endsWith('/card-photo/'));
-      expect((pvc as http.MultipartRequest).files.single.field, 'pvc_image');
-      expect(find.text('Added'), findsNWidgets(2));
-      // Until their identity is checked, the member may still change them.
-      expect(action('Photo of you'), findsOneWidget);
+      expect(find.textContaining('a coordinator compares these with your card'), findsOneWidget);
+      await tester.tap(find.text('Use these details'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Sent. A coordinator will check the new details against your card.'),
+        findsOneWidget,
+      );
+      expect(find.text('Waiting for a coordinator'), findsOneWidget);
+
+      await tester.tap(action('Your PVC')); // Withdraw
+      await tester.pumpAndSettle();
+      expect(server.requests.where((r) => r.url.path.endsWith('/s1/withdraw/')), hasLength(1));
+      expect(find.text('Not scanned'), findsOneWidget);
     });
 
     testWidgets('their gender and date of birth', (tester) async {
@@ -857,7 +959,6 @@ void main() {
             'me/member/' => _json({
                 ..._card(),
                 'photo_url': 'https://api.tgcg.test/api/v1/me/member/photo/',
-                'has_card_photo': false,
               }),
             final path => memberHome(path),
           });
@@ -866,8 +967,8 @@ void main() {
       for (final onRecord in ['Photo of you', 'Gender', 'Date of birth']) {
         expect(action(onRecord), findsNothing, reason: onRecord);
       }
-      // A photo still missing can be added.
-      expect(action('Photo of your PVC'), findsOneWidget);
+      // A card not scanned yet still can be, with a coordinator's second check.
+      expect(action('Your PVC'), findsOneWidget);
     });
   });
 

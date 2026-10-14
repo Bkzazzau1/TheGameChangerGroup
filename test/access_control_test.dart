@@ -37,6 +37,11 @@ class _Server {
 
 const _kaduna = {'level': 'state', 'country': 'Nigeria', 'stateId': 'KD', 'stateName': 'Kaduna'};
 
+// A valid 1x1 PNG, so a card photo decodes.
+final _pixel = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+);
+
 final _permissions = [
   {'code': 'sendBroadcast', 'module': 'communications', 'action': 'publish', 'label': 'Publish announcements and broadcasts', 'protected': false, 'sensitive': false},
   {'code': 'viewRoles', 'module': 'roleManagement', 'action': 'view', 'label': 'View roles and appointments', 'protected': false, 'sensitive': false},
@@ -324,6 +329,73 @@ void main() {
       'notes': 'Compared the PVC with Bala in person.',
     });
     expect(find.text('Verified'), findsWidgets);
+  });
+
+  testWidgets("a reviewer gives a checked member's PVC scan its second check", (tester) async {
+    var status = 'pending';
+    Map<String, dynamic> update() => {
+          'id': 'p1',
+          'member': 'TGCG-000300',
+          'member_name': 'Bala Musa',
+          'status': status,
+          'changes': [
+            {
+              'field': 'full_name',
+              'label': 'Name',
+              'from': status == 'pending' ? 'Bala Musa' : null,
+              'to': 'Bala Musa Ibrahim',
+            },
+            {
+              'field': 'vin',
+              'label': 'VIN',
+              'from': status == 'pending' ? '***************7263' : null,
+              'to': '***************7264',
+            },
+          ],
+          'decided_by': null,
+          'decided_at': null,
+          'decision_reason': '',
+          'created_at': '2026-10-14T09:00:00Z',
+        };
+    final server = _Server((request) => switch (_path(request)) {
+          'members/' => _json({'count': 0, 'next': null, 'results': <Object>[]}),
+          'pvc-updates/' => _json({'count': 1, 'next': null, 'results': [update()]}),
+          'pvc-updates/p1/card/' =>
+            http.Response.bytes(_pixel, 200, headers: {'content-type': 'image/png'}),
+          'pvc-updates/p1/approve/' => () {
+              status = 'approved';
+              return _json(update());
+            }(),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      const MemberReviewPage(),
+      (session) => session.signInFromServer(
+        fullName: 'Kaduna Reviewer',
+        accessId: 'TGCG-000100',
+        scope: GeographicScope.nigeria,
+        capabilities: {'verifyMemberIdentity'},
+        membershipNumber: 'TGCG-000100',
+      ),
+    );
+
+    await tester.tap(find.text('PVC updates'));
+    await tester.pumpAndSettle();
+    expect(find.text('Name, VIN · 14 Oct 2026'), findsOneWidget);
+    await tester.tap(find.text('Bala Musa (TGCG-000300)'));
+    await tester.pumpAndSettle();
+    // What changes, set against the card photo; the VIN stays masked.
+    expect(find.text('Name: Bala Musa → Bala Musa Ibrahim'), findsOneWidget);
+    expect(find.text('VIN: ***************7263 → ***************7264'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve').last);
+    await tester.pumpAndSettle();
+    expect(jsonDecode(server.bodies['POST pvc-updates/p1/approve/']!), {'reason': ''});
   });
 
   group('the working area', () {

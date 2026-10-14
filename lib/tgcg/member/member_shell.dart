@@ -16,6 +16,7 @@ import '../ui/tgcg_design.dart';
 import 'member_registration_page.dart'
     show ScanPvc, TakeSelfie, readScanOnServer, scanPvcWithDevice, takeSelfieWithDevice;
 import 'membership_card_view.dart';
+import 'pvc_scan_page.dart';
 import 'selfie_check.dart';
 
 /// The member app: membership card, polling unit, announcements, volunteering
@@ -261,7 +262,7 @@ class _CardTab extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               TgcgSectionCard(
-                title: 'My photos',
+                title: 'My photo and PVC',
                 child: Column(
                   children: [
                     _Detail(
@@ -269,10 +270,12 @@ class _CardTab extends StatelessWidget {
                       card.hasPhoto ? 'Added' : 'Not added',
                       action: _changeAction(card, card.hasPhoto, () => _addSelfie(context)),
                     ),
-                    _Detail(
-                      'Photo of your PVC',
-                      card.hasCardPhoto ? 'Added' : 'Not added',
-                      action: _changeAction(card, card.hasCardPhoto, () => _addCardPhoto(context)),
+                    // A new card means a fresh look at the scan, e.g. after one applied.
+                    _PvcScanRow(
+                      key: ObjectKey(card),
+                      card: card,
+                      scanPvc: scanPvc,
+                      onChanged: onChanged,
                     ),
                   ],
                 ),
@@ -436,44 +439,6 @@ class _CardTab extends StatelessWidget {
     }
   }
 
-  Future<void> _addCardPhoto(BuildContext context) async {
-    final members = TgcgBackend.of(context)!.member;
-    final messenger = ScaffoldMessenger.of(context);
-    final camera = await showModalBottomSheet<bool>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.document_scanner_outlined),
-              title: const Text('Take a photo of the card'),
-              onTap: () => Navigator.pop(context, true),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from gallery'),
-              onTap: () => Navigator.pop(context, false),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (camera == null) return;
-    try {
-      final scan = await scanPvc(camera: camera);
-      if (scan == null) return;
-      await members.addCardPhoto(scan.photo);
-      onChanged();
-      messenger.showSnackBar(const SnackBar(content: Text('Your card photo was saved.')));
-    } on ApiException catch (error) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(error.fieldError('pvc_image') ?? error.message)),
-      );
-    } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(describeDeviceError(error))));
-    }
-  }
 }
 
 class _UnitTab extends StatelessWidget {
@@ -769,6 +734,136 @@ class _OfferDialogState extends State<_OfferDialog> {
             child: const Text('Send'),
           ),
         ],
+      );
+}
+
+/// The member's one PVC scan: the card's details replace the ones they typed
+/// when joining. A card scanned or uploaded when joining is on record already.
+class _PvcScanRow extends StatefulWidget {
+  const _PvcScanRow({
+    super.key,
+    required this.card,
+    required this.scanPvc,
+    required this.onChanged,
+  });
+
+  final MemberCard card;
+  final ScanPvc scanPvc;
+  final VoidCallback onChanged;
+
+  @override
+  State<_PvcScanRow> createState() => _PvcScanRowState();
+}
+
+class _PvcScanRowState extends State<_PvcScanRow> {
+  late MemberRepository _members;
+  Future<PvcScanState>? _state;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _members = TgcgBackend.of(context)!.member;
+    _state ??= _members.pvcScan();
+  }
+
+  void _reload() => setState(() {
+        _state = _members.pvcScan();
+      });
+
+  Future<void> _scan() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final camera = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.document_scanner_outlined),
+              title: const Text('Take a photo of the card'),
+              onTap: () => Navigator.pop(context, true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, false),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (camera == null) return;
+    try {
+      var scan = await widget.scanPvc(camera: camera);
+      if (scan == null || !mounted) return;
+      if (!scan.textRead) {
+        // A browser cannot read the card: the server reads the photo.
+        final (read, problem) = await readScanOnServer(scan, _members.readPvcText);
+        scan = read;
+        if (problem != null) messenger.showSnackBar(SnackBar(content: Text(problem)));
+      }
+      final checked = scan;
+      final result = await navigator.push<PvcScanResult>(
+        MaterialPageRoute(builder: (_) => PvcScanPage(scan: checked, card: widget.card)),
+      );
+      if (result == null) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.isPending
+                ? 'Sent. A coordinator will check the new details against your card.'
+                : 'Your details now match your PVC.',
+          ),
+        ),
+      );
+      widget.onChanged();
+      if (mounted) _reload();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(describeDeviceError(error))));
+    }
+  }
+
+  Future<void> _withdraw(PvcScanResult latest) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _members.withdrawPvcScan(latest.id);
+      if (mounted) _reload();
+      messenger.showSnackBar(const SnackBar(content: Text('Scan taken back. You can scan again.')));
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<PvcScanState>(
+        future: _state,
+        builder: (context, snapshot) {
+          final state = snapshot.data;
+          final latest = state?.latest;
+          if (state == null) {
+            return _Detail('Your PVC', snapshot.hasError ? 'Could not load' : '…');
+          }
+          if (latest != null && latest.isPending) {
+            return _Detail(
+              'Your PVC',
+              'Waiting for a coordinator',
+              action: TextButton(onPressed: () => _withdraw(latest), child: const Text('Withdraw')),
+            );
+          }
+          if (state.canScan) {
+            return _Detail(
+              'Your PVC',
+              latest?.status == 'rejected'
+                  ? 'Not accepted: ${latest!.decisionReason}'
+                  : 'Not scanned',
+              action: TextButton(onPressed: _scan, child: const Text('Scan')),
+            );
+          }
+          return const _Detail('Your PVC', 'On record');
+        },
       );
 }
 

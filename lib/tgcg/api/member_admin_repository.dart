@@ -212,6 +212,70 @@ class PollingUnitChange {
   );
 }
 
+/// One detail a PVC scan changes. [from] is the member's detail now, shown
+/// only while the scan waits; the server masks the VIN and withholds a date
+/// of birth from those who may not see personal details.
+class PvcChange {
+  const PvcChange({required this.field, required this.label, this.from, this.to});
+
+  final String field;
+  final String label;
+  final String? from;
+  final String? to;
+
+  factory PvcChange.fromJson(Map<String, dynamic> json) => PvcChange(
+    field: json['field'] as String,
+    label: json['label'] as String? ?? '',
+    from: json['from'] as String?,
+    to: json['to'] as String?,
+  );
+}
+
+/// A checked member's PVC scan, waiting for (or past) a coordinator's second
+/// check against the card.
+class PvcUpdate {
+  const PvcUpdate({
+    required this.id,
+    required this.member,
+    required this.memberName,
+    required this.status,
+    required this.createdAt,
+    this.changes = const [],
+    this.decidedBy,
+    this.decidedAt,
+    this.decisionReason = '',
+  });
+
+  final String id;
+  final String member;
+  final String memberName;
+
+  /// pending, approved, rejected or withdrawn.
+  final String status;
+  final List<PvcChange> changes;
+  final String? decidedBy;
+  final DateTime? decidedAt;
+  final String decisionReason;
+  final DateTime createdAt;
+
+  bool get isPending => status == 'pending';
+
+  factory PvcUpdate.fromJson(Map<String, dynamic> json) => PvcUpdate(
+    id: json['id'] as String,
+    member: json['member'] as String,
+    memberName: json['member_name'] as String? ?? '',
+    status: json['status'] as String,
+    changes: [
+      for (final change in (json['changes'] as List<dynamic>? ?? const []))
+        PvcChange.fromJson(change as Map<String, dynamic>),
+    ],
+    decidedBy: json['decided_by'] as String?,
+    decidedAt: _date(json['decided_at']),
+    decisionReason: json['decision_reason'] as String? ?? '',
+    createdAt: _date(json['created_at']) ?? DateTime.now(),
+  );
+}
+
 /// Staff work on members: finding them, identity review, standing and
 /// polling unit changes. The server enforces every area and permission.
 class MemberAdminRepository {
@@ -307,6 +371,30 @@ class MemberAdminRepository {
   /// The photo of the updated voter card behind a change request.
   Future<Uint8List> pollingUnitChangeCard(String id) =>
       client.getBytes('polling-unit-changes/$id/card/');
+
+  /// Checked members' PVC scans for a second check, in the caller's areas.
+  Future<ApiPage<PvcUpdate>> pvcUpdates({String? status, int offset = 0}) async =>
+      ApiPage.fromJson(
+        await client.get(
+          'pvc-updates/',
+          query: {if (status != null) 'status': status, if (offset > 0) 'offset': '$offset'},
+        ),
+        PvcUpdate.fromJson,
+      );
+
+  /// The card shows these details and belongs to the member: they replace theirs.
+  Future<PvcUpdate> approvePvcUpdate(String id, {String reason = ''}) async => PvcUpdate.fromJson(
+    await client.post('pvc-updates/$id/approve/', body: {'reason': reason.trim()})
+        as Map<String, dynamic>,
+  );
+
+  Future<PvcUpdate> rejectPvcUpdate(String id, String reason) async => PvcUpdate.fromJson(
+    await client.post('pvc-updates/$id/reject/', body: {'reason': reason.trim()})
+        as Map<String, dynamic>,
+  );
+
+  /// The photo of the scanned voter card behind a PVC update.
+  Future<Uint8List> pvcUpdateCard(String id) => client.getBytes('pvc-updates/$id/card/');
 }
 
 /// The member's own polling unit change requests.

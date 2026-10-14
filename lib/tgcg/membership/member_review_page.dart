@@ -29,8 +29,10 @@ class MemberReviewPage extends StatelessWidget {
     }
     final session = TgcgSession.of(context);
     final tabs = <(String, IconData, Widget)>[
-      if (session.can(TgcgCapability.verifyMemberIdentity))
+      if (session.can(TgcgCapability.verifyMemberIdentity)) ...[
         ('Identity review', Icons.verified_user_outlined, const _IdentityReviewTab()),
+        ('PVC updates', Icons.document_scanner_outlined, const _PvcUpdatesTab()),
+      ],
       if (session.can(TgcgCapability.reviewPollingUnitChanges))
         ('Polling unit changes', Icons.move_down_rounded, const _PollingUnitChangesTab()),
       if (session.can(TgcgCapability.suspendMembers))
@@ -697,6 +699,227 @@ class _PollingUnitChangeDialogState extends State<PollingUnitChangeDialog> {
       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
     ],
   );
+}
+
+// --- PVC updates -----------------------------------------------------------------------
+
+/// Checked members' PVC scans, waiting for a second check before the card's
+/// details replace theirs.
+class _PvcUpdatesTab extends StatefulWidget {
+  const _PvcUpdatesTab();
+
+  @override
+  State<_PvcUpdatesTab> createState() => _PvcUpdatesTabState();
+}
+
+class _PvcUpdatesTabState extends State<_PvcUpdatesTab> {
+  String? _status = 'pending';
+  Future<ApiPage<PvcUpdate>>? _updates;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updates ??= _load();
+  }
+
+  Future<ApiPage<PvcUpdate>> _load() =>
+      TgcgBackend.of(context)!.members.pvcUpdates(status: _status);
+
+  void _reload() => setState(() {
+    _updates = _load();
+  });
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      Wrap(
+        spacing: 8,
+        children: [
+          for (final (value, label) in const [
+            ('pending', 'Awaiting review'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+            (null, 'All'),
+          ])
+            ChoiceChip(
+              label: Text(label),
+              selected: _status == value,
+              onSelected: (_) {
+                _status = value;
+                _reload();
+              },
+            ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      FutureBuilder<ApiPage<PvcUpdate>>(
+        future: _updates,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return TgcgEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: 'PVC updates could not be loaded',
+              message: failureMessage(snapshot.error!),
+            );
+          }
+          final page = snapshot.data;
+          if (page == null) return const LinearProgressIndicator();
+          if (page.items.isEmpty) {
+            return const TgcgEmptyState(
+              icon: Icons.document_scanner_outlined,
+              title: 'No PVC updates',
+              message: 'Checked members in your areas who scan their PVC appear here.',
+            );
+          }
+          return Column(
+            children: [
+              for (final update in page.items)
+                Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: TgcgColors.border),
+                  ),
+                  child: ListTile(
+                    title: Text(
+                      '${update.memberName} (${update.member})',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      '${update.changes.map((change) => change.label).join(', ')} · '
+                      '${formatDay(update.createdAt)}',
+                    ),
+                    trailing: Text(update.status),
+                    onTap: () async {
+                      final changed = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => PvcUpdateDialog(update: update),
+                      );
+                      if (changed != false) _reload();
+                    },
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    ],
+  );
+}
+
+/// A checked member's PVC scan with the card photo it rests on: approve it
+/// and the card's details replace theirs, the identity staying checked.
+class PvcUpdateDialog extends StatefulWidget {
+  const PvcUpdateDialog({super.key, required this.update});
+
+  final PvcUpdate update;
+
+  @override
+  State<PvcUpdateDialog> createState() => _PvcUpdateDialogState();
+}
+
+class _PvcUpdateDialogState extends State<PvcUpdateDialog> {
+  late final Future<Uint8List> _card = TgcgBackend.of(
+    context,
+  )!.members.pvcUpdateCard(widget.update.id);
+  bool _busy = false;
+
+  Future<void> _decide({required bool approve}) async {
+    final reason = await promptText(
+      context,
+      title: approve ? 'Approve these details?' : 'Reject this scan?',
+      message: approve
+          ? 'They replace ${widget.update.memberName}\'s details, and the identity stays checked '
+                'on your word.'
+          : 'Tell the member why, so they can scan their card again.',
+      label: approve ? 'Note' : 'Why it is rejected',
+      action: approve ? 'Approve' : 'Reject',
+      required: !approve,
+      destructive: !approve,
+    );
+    if (reason == null || !mounted) return;
+    final members = TgcgBackend.of(context)!.members;
+    setState(() => _busy = true);
+    try {
+      if (approve) {
+        await members.approvePvcUpdate(widget.update.id, reason: reason);
+      } else {
+        await members.rejectPvcUpdate(widget.update.id, reason);
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      showDone(context, approve ? 'Details updated from the PVC.' : 'Scan rejected.');
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final update = widget.update;
+    return AlertDialog(
+      title: Text('${update.memberName}\'s PVC'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final change in update.changes)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    change.from == null
+                        ? '${change.label}: ${change.to ?? '-'}'
+                        : '${change.label}: ${change.from} → ${change.to ?? '-'}',
+                  ),
+                ),
+              Text(
+                'Sent on ${formatMoment(update.createdAt)}',
+                style: const TextStyle(color: TgcgColors.muted),
+              ),
+              if (update.decisionReason.isNotEmpty) Text('Decision: ${update.decisionReason}'),
+              const SizedBox(height: 12),
+              const Text(
+                'Check that the card shows these details and belongs to this member.',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              FutureBuilder<Uint8List>(
+                future: _card,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) return Text(failureMessage(snapshot.error!));
+                  if (!snapshot.hasData) return const LinearProgressIndicator();
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(snapshot.data!, fit: BoxFit.contain),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (update.isPending) ...[
+          TextButton(
+            onPressed: _busy ? null : () => _decide(approve: false),
+            style: TextButton.styleFrom(foregroundColor: TgcgColors.danger),
+            child: const Text('Reject'),
+          ),
+          FilledButton(
+            onPressed: _busy ? null : () => _decide(approve: true),
+            child: const Text('Approve'),
+          ),
+        ],
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+      ],
+    );
+  }
 }
 
 // --- standing -------------------------------------------------------------------------
