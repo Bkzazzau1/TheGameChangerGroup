@@ -101,5 +101,13 @@ String describeDeviceError(Object error) {
               '& security > Location.'
         : 'Location permission is required. Allow location access in system settings.';
   }
+  if (error is PlatformException) {
+    final code = error.code.toLowerCase();
+    if (code.contains('denied') || code.contains('permission')) {
+      return 'Camera or photo access is blocked. Allow it in system settings.';
+    }
+    // The plugin's own words, without the Android stack trace it carries.
+    return 'The phone could not complete this. Try again. (${error.message ?? error.code})';
+  }
   return message.replaceFirst(RegExp(r'^(Bad state|Exception): '), '');
 }
