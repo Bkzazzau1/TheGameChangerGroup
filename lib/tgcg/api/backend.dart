@@ -72,8 +72,8 @@ class BackendServices {
   final MemberAdminRepository members;
 }
 
-/// Makes [BackendServices] available below it. `services` is null in a
-/// build made without TGCG_API_URL; the app then says it is not connected.
+/// Makes [BackendServices] available below it. The app always provides
+/// them; `services` is null only for a page shown on its own, as in tests.
 class TgcgBackend extends InheritedWidget {
   const TgcgBackend({super.key, required this.services, required super.child});
 

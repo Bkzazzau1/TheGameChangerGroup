@@ -72,8 +72,10 @@ The Flutter domain layer is kept backend-agnostic so development can begin with 
 ## Connecting to the backend
 
 The app talks to the Django API in
-[tgcg_backend](https://github.com/Bkzazzau1/tgcg_backend). Set the server
-address when you run or build the app:
+[tgcg_backend](https://github.com/Bkzazzau1/tgcg_backend). Every build uses the
+live server, `https://api.tgcg.online`, so Run in VS Code, `flutter run` and
+`flutter build apk` all connect to it. To use another server, such as a
+development backend, set its address with `TGCG_API_URL`:
 
 ```bash
 # Windows desktop or web, with the backend on this machine
@@ -87,7 +89,7 @@ flutter run --dart-define=TGCG_API_URL=http://10.0.2.2:8000
 flutter run --dart-define=TGCG_API_URL=http://192.168.1.20:8000
 ```
 
-With `TGCG_API_URL` set, the app opens on the TGCG poster
+The app opens on the TGCG poster
 (`assets/brand/login_poster.webp`), the logo and a welcome note. On a phone,
 **Sign in** opens the form; on a wide screen the form stands beside the poster.
 Sign in with an access ID or phone number and a password, or a PIN for members.
@@ -95,8 +97,7 @@ The server decides the role and area. Tokens are kept in secure storage, the
 session is restored on the next launch, and an expired session signs the user
 out.
 
-Without `TGCG_API_URL`, the app is not connected to a server and says so. There
-is no presentation or demo mode, so every build for real users must set it:
+There is no presentation or demo mode. Release APKs are built with:
 
 ```bash
 flutter build apk --release --dart-define=TGCG_API_URL=https://api.tgcg.online

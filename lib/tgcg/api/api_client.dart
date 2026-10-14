@@ -5,13 +5,14 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-/// Backend address, set at build time:
+/// The TGCG server. Every build, Run in the editor included, uses the live
+/// server unless TGCG_API_URL points it at another, such as a local Django:
 /// `flutter run --dart-define=TGCG_API_URL=http://10.0.2.2:8000`
 /// (10.0.2.2 reaches the host machine from the Android emulator.)
-/// When empty, the app runs in offline presentation mode.
-const tgcgApiUrl = String.fromEnvironment('TGCG_API_URL');
-
-bool get tgcgApiConfigured => tgcgApiUrl.isNotEmpty;
+const tgcgApiUrl = String.fromEnvironment(
+  'TGCG_API_URL',
+  defaultValue: 'https://api.tgcg.online',
+);
 
 /// A failed API call, with the server's message and per-field errors.
 class ApiException implements Exception {

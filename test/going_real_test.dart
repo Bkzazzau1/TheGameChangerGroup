@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
-import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/dashboard_page.dart';
 import 'package:tgcg_emcop/tgcg/domain/permissions.dart';
 import 'package:tgcg_emcop/tgcg/field/field_agent_shell.dart';
@@ -99,10 +98,9 @@ void main() {
     expect(find.text('Welcome to TGCG-EMCOP'), findsOneWidget);
   });
 
-  testWidgets('without a server the app says so instead of showing samples', (tester) async {
-    await _pump(tester, const TgcgApp());
-    expect(find.text('This copy of the app is not connected to the TGCG server.'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
+  test('a build made without TGCG_API_URL uses the live server', () {
+    // Tests run without --dart-define, like Run in VS Code or `flutter run`.
+    expect(tgcgApiUrl, 'https://api.tgcg.online');
   });
 
   test('menus offer only modules that work on server records', () {

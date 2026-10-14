@@ -27,7 +27,8 @@ import 'ui/tgcg_design.dart';
 class TgcgApp extends StatefulWidget {
   const TgcgApp({super.key, this.backend});
 
-  /// Server connection; defaults to TGCG_API_URL when configured.
+  /// Server connection; the TGCG server at [tgcgApiUrl] unless a test passes
+  /// another.
   final BackendServices? backend;
 
   static const Color primary = TgcgColors.primary;
@@ -41,16 +42,15 @@ class TgcgApp extends StatefulWidget {
 }
 
 class _TgcgAppState extends State<TgcgApp> {
-  late final BackendServices? backend = widget.backend ??
-      (tgcgApiConfigured ? BackendServices.connect(tgcgApiUrl) : null);
+  late final BackendServices backend = widget.backend ?? BackendServices.connect(tgcgApiUrl);
 
   /// True while a saved server session is being restored at startup.
-  late bool restoringSession = backend != null;
+  bool restoringSession = true;
   late TgcgSessionController sessionController;
   late OfflinePersistenceController offlinePersistenceController;
 
   /// Uploads the offline outbox while signed in to the server.
-  SyncController? syncController;
+  late SyncController syncController;
   late MembershipOperationsController membershipOperationsController;
   late GovernanceOperationsController governanceOperationsController;
   late FieldOperationsController fieldOperationsController;
@@ -65,13 +65,10 @@ class _TgcgAppState extends State<TgcgApp> {
     super.initState();
     _createControllers();
     unawaited(offlinePersistenceController.initialize());
-    final services = backend;
-    if (services != null) {
-      services.client.onSessionExpired = () {
-        if (sessionController.isServerSession) sessionController.signOut();
-      };
-      unawaited(_restoreSession(services));
-    }
+    backend.client.onSessionExpired = () {
+      if (sessionController.isServerSession) sessionController.signOut();
+    };
+    unawaited(_restoreSession(backend));
   }
 
   Future<void> _restoreSession(BackendServices services) async {
@@ -106,23 +103,19 @@ class _TgcgAppState extends State<TgcgApp> {
   }
 
   void _createControllers() {
-    sessionController = TgcgSessionController(onSignOut: backend?.auth.logout);
     final services = backend;
-    if (services != null) {
-      final session = sessionController;
-      final offline = offlinePersistenceController = OfflinePersistenceController();
-      final sync = syncController = SyncController(
-        persistence: offline,
-        transport: HttpSyncTransport(
-          services.client,
-          accessId: () => session.accessId,
-          outbox: offline,
-        ),
-      );
-      // Members have no field records to upload.
-      session.addListener(() => sync.setEnabled(session.isServerSession && !session.isMember));
-    }
-    if (services == null) offlinePersistenceController = OfflinePersistenceController();
+    final session = sessionController = TgcgSessionController(onSignOut: services.auth.logout);
+    final offline = offlinePersistenceController = OfflinePersistenceController();
+    final sync = syncController = SyncController(
+      persistence: offline,
+      transport: HttpSyncTransport(
+        services.client,
+        accessId: () => session.accessId,
+        outbox: offline,
+      ),
+    );
+    // Members have no field records to upload.
+    session.addListener(() => sync.setEnabled(session.isServerSession && !session.isMember));
     membershipOperationsController = MembershipOperationsController.prototypeSeed(
       GeographyRegistry.prototypeSeed(),
     );
@@ -133,19 +126,16 @@ class _TgcgAppState extends State<TgcgApp> {
     final results = resultOperationsController = ResultOperationsController.prototypeSeed(
       persistence: offlinePersistenceController,
     );
-    if (services != null) {
-      // Staff sessions see the server's incidents, reports and results, and act on them there.
-      final session = sessionController;
-      session.addListener(() {
-        if (session.isServerSession && session.isOperator) {
-          field.connect(services.field, account: session.accessId);
-          results.connect(services.results, account: session.accessId);
-        } else {
-          field.disconnect();
-          results.disconnect();
-        }
-      });
-    }
+    // Staff sessions see the server's incidents, reports and results, and act on them there.
+    session.addListener(() {
+      if (session.isServerSession && session.isOperator) {
+        field.connect(services.field, account: session.accessId);
+        results.connect(services.results, account: session.accessId);
+      } else {
+        field.disconnect();
+        results.disconnect();
+      }
+    });
     communicationsController =
         CommunicationsController.prototypeSeed(governanceOperationsController);
     bulkCommunicationsController =
@@ -162,7 +152,7 @@ class _TgcgAppState extends State<TgcgApp> {
 
   @override
   void dispose() {
-    syncController?.dispose();
+    syncController.dispose();
     sessionController.dispose();
     fieldOperationsController.dispose();
     resultOperationsController.dispose();
@@ -456,7 +446,6 @@ class _AuthenticationGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
-    if (TgcgBackend.of(context) == null) return const _NotConnected();
     if (!session.isAuthenticated) {
       return const TgcgLoginPage(key: ValueKey('server-login'));
     }
@@ -468,38 +457,4 @@ class _AuthenticationGate extends StatelessWidget {
     }
     return const TgcgShell(key: ValueKey('tgcg-shell'));
   }
-}
-
-/// A build made without the server's address (TGCG_API_URL). The app only
-/// works against the TGCG server, so it says so instead of showing samples.
-class _NotConnected extends StatelessWidget {
-  const _NotConnected();
-
-  @override
-  Widget build(BuildContext context) => const Scaffold(
-        backgroundColor: TgcgColors.primaryDark,
-        body: Center(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TgcgLogo(size: 88),
-                SizedBox(height: 22),
-                Text(
-                  'This copy of the app is not connected to the TGCG server.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
-                ),
-                SizedBox(height: 10),
-                Text(
-                  'Install the official TGCG app, or open app.tgcg.online.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
 }
