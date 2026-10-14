@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest web release verified on 14 October 2026
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `e5f5d722a1c4d696fe608c44b44e457aefd8e350`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `194ea18e60d68bea6ffe0ad6da04320eecb35558`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,15 +32,15 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261013-234832-aeb1b7f8c708` (release directory timestamps use UTC).
-- Frontend build source: `1c0f0399141984fd267375e5a04ecb4b1598095a` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261013-205026-b259a9ee2cb3`.
+- Published release: `/var/www/tgcg/releases/web-20261014-080116-fcfd68e3228e` (release directory timestamps use UTC).
+- Frontend build source: `4ae479d8f3b8e4a93978753581b39c211b646973` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261013-234832-aeb1b7f8c708`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `aeb1b7f8c7081dd258c576b399393d572c6885983a53f25d830606daa0ecc624`.
-- Build: 855 files, 54,516,876 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
+- Main JavaScript SHA256: `fcfd68e3228ed1a4213d88e941537bd884d54bf7669683551db43e52cdafd7d1`.
+- Build: 854 files, 54,504,608 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
-Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. Without the API URL the app displays "Not connected". Demo and presentation sign-in routes were removed.
+Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
 The browser version keeps its offline queue in memory, so pending work does not survive a reload. Incident and result photos use authenticated multipart evidence uploads and can be opened for review. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web; unsupported screens are hidden. The published desktop welcome/poster/sign-in screen was verified in the browser.
 
@@ -122,7 +122,41 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
-### Connected Android installer (14 October 2026)
+### Member-registration release and Android version 3 (14 October 2026)
+
+Deployed backend `194ea18`, including `50fdf1d`, and built web and Android from frontend `4ae479d`. Migration `membership.0009_member_polling_unit_from_list` added the boolean field with default `false`; it was the only pending migration. Production Django checks and migration checks passed, and `tgcg-api.service` was restarted successfully. No runtime settings were changed. The private environment remains `600:tgcg:tgcg`.
+
+Termii has no API key configured and `REGISTRATION_PHONE_CODE_REQUIRED` remains unset. The effective value is `false`, so app registration does not require an SMS code. The registration-place throttle retains its `600/hour` default. Polling units can now be selected by name while joining; these selections await PVC review.
+
+The existing `/etc/nginx/tgcg-sms-pending.inc` uses exact locations only for `/api/v1/register/code/` and `/api/v1/register/pin-code/`. Both still return 503. Registration options and place lookups pass through to Django without sign-in. Read-only checks passed on loopback and public HTTPS, with `Origin: https://app.tgcg.online`; both GET CORS headers and OPTIONS preflights passed for every endpoint:
+
+| Endpoint | Result |
+| --- | --- |
+| `/api/v1/register/options/` | 200; `{"phone_code_required": false}` |
+| `/api/v1/register/places/states/` | 200; 37 entries, `code` and `name` |
+| `/api/v1/register/places/lgas/?state=KD` | 200; 23 entries, `code` and `name` |
+| `/api/v1/register/places/wards/?lga=KD-ZARIA` | 200; 13 entries, `code` and `name` |
+| `/api/v1/register/places/polling-units/?ward=18-23-01` | 200; 51 entries, only `code`, `name` and `location` |
+
+No members or sign-in accounts were created in production; their counts were unchanged. API health returned `{"status":"ok","database":"ok"}`. Secret-free results are recorded in `/opt/tgcg/deployment/registration-release-checks.json`.
+
+Validation: 203 Flutter tests passed and static analysis found no issues. The backend passed 396 tests locally with seven environment-dependent skips; all 403 tests passed against a separate PostgreSQL database on the VPS, including real concurrency and native Tesseract checks. The isolated database was removed after testing. All 854 web files matched their upload manifest, and public JavaScript, bootstrap and poster checks passed.
+
+Download: <https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-3.apk>. Version `0.1.0+3`, package `ng.tgcg.tgcg_emcop`, minimum Android API 24, with ARM, ARM64 and x86_64 support. Size: 170,924,198 bytes. SHA256: `32067e0a961db9c4bdf12f2a8e455b5388491d62f2e821f961db80af2b733913`.
+
+```powershell
+flutter build apk --release --build-number=3 --dart-define=TGCG_API_URL=https://api.tgcg.online
+```
+
+The package and signer match version 2. The existing signing identity was retained (`e58a513eead318719b1ab854181cbcdee5130e2d3305c49442019434e6808a41`); the APK is non-debuggable. Signature and 16 KB alignment checks passed. Every ABI includes the production API address and native SQLite library. The PVC release fix from `1b2ef7f` is included: all four ML Kit registrar classes and their public no-argument constructors were confirmed in the packaged manifest and DEX. Public MIME type, length, ranged download and full checksum checks passed. Version 2 and the previous web release are retained.
+
+The user chose to handle phone testing with `flutter run`; release-APK Scan PVC on a real phone remains unverified. To test the actual release fix, install the version 3 APK above or run `flutter run --release --dart-define=TGCG_API_URL=https://api.tgcg.online`. No UI notes were added for this deployment.
+
+The new APK route was added to `/etc/nginx/tgcg-downloads.inc`; Nginx configuration passed and was reloaded. Release metadata is in `/opt/tgcg/deployment/web-release.json` and `/opt/tgcg/deployment/android-release.json`. Local and GitHub sources were pulled before building and the VPS source checkouts were fast-forwarded to those same releases. Backup verification succeeded before deployment.
+
+When Termii SMS is configured, adding its key enables registration phone codes by default. At the same time, remove the two temporary SMS locations, restart the API, test and reload Nginx, and verify SMS delivery with the approved sender.
+
+### Previous Android installer: version 2 (14 October 2026)
 
 Download: <https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-2.apk>. Version `0.1.0`, version code `2`, package `ng.tgcg.tgcg_emcop`, minimum Android API 24 (Android 7). This universal APK includes ARM, ARM64 and x86_64 support. Its size is 170,833,912 bytes; SHA256 is `388e19745820f90abe3195fa206a43a4c946d8f06bba011e1c5e90555136ec61`.
 
