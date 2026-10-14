@@ -50,7 +50,7 @@ The release was built with:
 flutter build web --release --dart-define=TGCG_API_URL=https://api.tgcg.online --base-href=/ --pwa-strategy=none
 ```
 
-Every production APK build must also include `--dart-define=TGCG_API_URL=https://api.tgcg.online`, as documented in README. No APK was built for this web release.
+Every production APK build must also include `--dart-define=TGCG_API_URL=https://api.tgcg.online`, as documented in README. The Android installer below was built separately from the web release.
 
 Web entrypoints and JavaScript use `no-store`; missing assets return 404 rather than HTML. Nginx serves renderer `.wasm` files as `application/wasm`.
 
@@ -121,6 +121,22 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Connected Android installer (14 October 2026)
+
+Download: <https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-2.apk>. Version `0.1.0`, version code `2`, package `ng.tgcg.tgcg_emcop`, minimum Android API 24 (Android 7). This universal APK includes ARM, ARM64 and x86_64 support. Its size is 170,833,912 bytes; SHA256 is `388e19745820f90abe3195fa206a43a4c946d8f06bba011e1c5e90555136ec61`.
+
+Built from source `3c3a103` with:
+
+```powershell
+flutter build apk --release --build-number=2 --dart-define=TGCG_API_URL=https://api.tgcg.online
+```
+
+The installed debug APK lacked the production API URL. The new release embeds it in every ABI and is non-debuggable. Android signature and 16 KB alignment checks passed. It uses the existing workspace debug signing identity so it can replace the previous APK from this workspace; the signer fingerprint matches (`e58a513eead318719b1ab854181cbcdee5130e2d3305c49442019434e6808a41`). Keep this signing identity for updates. A physical phone was not connected, so device installation, camera/GPS and runtime OCR remain for phone verification.
+
+The release shrinker initially reported eight absent classes for optional OCR scripts. TGCG explicitly uses Latin OCR. Narrow generated `-dontwarn` rules were added in `android/app/proguard-rules.pro` and wired into the release build, following [Android's compile-only dependency guidance](https://developer.android.com/build/releases/agp-7-0-0-release-notes#missing-class-warnings-in-r8-shrinker). The release rebuilt successfully without disabling the shrinker. The existing 195 Flutter tests cover the unchanged Dart source. No app UI notes were added; `AGENTS.md` records the user's preference and required production build flag.
+
+The APK is stored separately from Flutter web assets under `/var/www/tgcg/downloads`. The app host includes `/etc/nginx/tgcg-downloads.inc`, which serves this exact versioned URL with the Android package MIME type, attachment filename, HTTPS security headers and no-store caching; other download paths return 404. Signature/manifest/API URL/SQLite library checks passed locally. Public MIME type, file length, ranged download and full served checksum passed. API health stayed healthy and the backend was not changed or restarted. APK metadata is in `/opt/tgcg/deployment/android-release.json`; private signing keys and APK binaries are not committed to Git. VPS configuration backups ran before and after publication. The previous web release remains unchanged.
 
 ### Frontend-only release (14 October 2026)
 
