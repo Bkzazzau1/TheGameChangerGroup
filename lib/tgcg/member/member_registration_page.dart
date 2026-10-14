@@ -418,11 +418,19 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   Future<void> _pickBirthday() async {
     final now = DateTime.now();
+    final firstDate = DateTime(now.year - 110);
+    final lastDate = DateTime(now.year - 16, now.month, now.day);
+    final birthday = DateUtils.dateOnly(_dateOfBirth ?? DateTime(now.year - 30));
+    final initialDate = birthday.isBefore(firstDate)
+        ? firstDate
+        : birthday.isAfter(lastDate)
+            ? lastDate
+            : birthday;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dateOfBirth ?? DateTime(now.year - 30),
-      firstDate: DateTime(now.year - 110),
-      lastDate: DateTime(now.year - 16, now.month, now.day),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
       helpText: 'Date of birth',
     );
     if (picked != null) setState(() => _dateOfBirth = picked);

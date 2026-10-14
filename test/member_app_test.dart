@@ -108,6 +108,37 @@ Future<TgcgSessionController> _pump(
   return session;
 }
 
+Future<void> _correctScannedBirthday(
+  WidgetTester tester,
+  DateTime scanned,
+  DateTime pickerInitial,
+) async {
+  final original = 'Born ${scanned.day}/${scanned.month}/${scanned.year}';
+  await tester.ensureVisible(find.text(original));
+  await tester.tap(find.text(original));
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+  expect(tester.widget<DatePickerDialog>(find.byType(DatePickerDialog)).initialDate, pickerInitial);
+
+  // Opening the picker must not silently replace the date read from the card.
+  await tester.tap(find.text('Cancel'));
+  await tester.pumpAndSettle();
+  expect(find.text(original), findsOneWidget);
+
+  await tester.tap(find.text(original));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byTooltip('Switch to input'));
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.descendant(of: find.byType(InputDatePickerFormField), matching: find.byType(TextFormField)),
+    '05/14/1990',
+  );
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
+  expect(find.text('Born 14/5/1990'), findsOneWidget);
+  expect(tester.takeException(), isNull);
+}
+
 void main() {
   test('Nigerian phone numbers are normalised like the server does', () {
     expect(normalizeNigerianPhone('0803 123 4567'), '+2348031234567');
@@ -432,6 +463,40 @@ void main() {
       expect(find.text('Choose 6 digits.'), findsOneWidget);
       expect(find.text('Tick the box to agree.'), findsOneWidget);
     });
+
+    for (final future in [true, false]) {
+      testWidgets('registration corrects an OCR ${future ? 'future' : 'too-old'} date of birth',
+          (tester) async {
+        final now = DateTime.now();
+        final birthday = DateTime(now.year + (future ? 2 : -150), 5, 14);
+        final initial = future
+            ? DateTime(now.year - 16, now.month, now.day)
+            : DateTime(now.year - 110);
+        final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
+        await open(
+          tester,
+          api,
+          scanPvc: ({required camera}) async => PvcScan(
+            photo: (bytes: _pixel, name: 'pvc.png'),
+            fullName: 'Musa Bello',
+            vin: '90F5B0E8D0295847263',
+            delim: '18/23/01/014',
+            dateOfBirth: birthday,
+          ),
+        );
+        await enterPhone(tester);
+        await tester.tap(find.text('Scan PVC'));
+        await tester.pumpAndSettle();
+        await next(tester);
+        await _correctScannedBirthday(tester, birthday, initial);
+        await next(tester);
+        await choosePin(tester);
+        final request = api.requests.lastWhere(
+          (request) => request.method == 'POST' && request.url.path.endsWith('/register/'),
+        ) as http.MultipartRequest;
+        expect(request.fields['date_of_birth'], '1990-05-14');
+      });
+    }
 
     testWidgets('a scan says what it read, what to type, and fills in the details', (tester) async {
       await open(
@@ -807,6 +872,48 @@ void main() {
       // Until their identity is checked, the member may still change it.
       expect(action('Photo of you'), findsOneWidget);
     });
+
+    for (final future in [true, false]) {
+      testWidgets('a member corrects an OCR ${future ? 'future' : 'too-old'} date of birth',
+          (tester) async {
+        final now = DateTime.now();
+        final birthday = DateTime(now.year + (future ? 2 : -150), 5, 14);
+        final initial = future
+            ? DateTime(now.year - 16, now.month, now.day)
+            : DateTime(now.year - 110);
+        final server = _Server((request) => switch ((request.method, _path(request))) {
+              ('GET', 'me/member/') => _json(_card(verification: 'pendingReview')),
+              ('POST', 'me/member/pvc-scan/') => _json(scanned('applied'), 201),
+              (_, final path) => memberHome(path),
+            });
+        await _pump(
+          tester,
+          server.connect(),
+          MemberShell(
+            scanPvc: ({required camera}) async => PvcScan(
+              photo: (bytes: _pixel, name: 'pvc.png'),
+              fullName: 'Musa Bello',
+              vin: '90F5B0E8D0295847263',
+              delim: '18-23-01-014',
+              dateOfBirth: birthday,
+            ),
+          ),
+          member: true,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(action('Your PVC'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Take a photo of the card'));
+        await tester.pumpAndSettle();
+        await _correctScannedBirthday(tester, birthday, initial);
+        await tester.tap(find.text('Use these details'));
+        await tester.pumpAndSettle();
+        final request = server.requests.lastWhere(
+          (request) => request.method == 'POST' && request.url.path.endsWith('/pvc-scan/'),
+        ) as http.MultipartRequest;
+        expect(request.fields['date_of_birth'], '1990-05-14');
+      });
+    }
 
     testWidgets('one PVC scan replaces the details typed when joining', (tester) async {
       var scan = <String, dynamic>{'can_scan': true, 'latest': null};
