@@ -52,6 +52,7 @@ class MemberCard {
     this.vin,
     this.hasPvc = false,
     this.gender = '',
+    this.dateOfBirth,
     this.occupation = '',
     this.status = '',
     this.membershipState = 'active',
@@ -70,6 +71,7 @@ class MemberCard {
   final String? vin;
   final bool hasPvc;
   final String gender;
+  final DateTime? dateOfBirth;
   final String occupation;
   final String status;
 
@@ -101,6 +103,7 @@ class MemberCard {
       vin: json['vin'] as String?,
       hasPvc: json['has_pvc'] as bool? ?? false,
       gender: (json['gender'] as String?) ?? '',
+      dateOfBirth: DateTime.tryParse((json['date_of_birth'] as String?) ?? ''),
       occupation: (json['occupation'] as String?) ?? '',
       status: (json['status'] as String?) ?? '',
       membershipState: (json['membership_state'] as String?) ?? 'active',
@@ -241,6 +244,10 @@ class MemberRegistration {
   final ({Uint8List bytes, String name})? pvcImage;
 }
 
+/// A date as the server takes it: YYYY-MM-DD.
+String _day(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
+    '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
 /// Member registration, sign-in help and the member home (`/register/...`, `/me/...`).
 class MemberRepository {
   MemberRepository(this.client);
@@ -284,9 +291,7 @@ class MemberRepository {
         if (data.pollingUnit.isNotEmpty) 'polling_unit': data.pollingUnit,
         'full_name': data.fullName,
         if (data.gender case final gender?) 'gender': gender,
-        if (dob != null)
-          'date_of_birth': '${dob.year.toString().padLeft(4, '0')}-'
-              '${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}',
+        if (dob != null) 'date_of_birth': _day(dob),
         'occupation': data.occupation,
         'email': data.email,
         'pin': data.pin,
@@ -359,6 +364,16 @@ class MemberRepository {
 
   Future<MemberCard> updateOccupation(String occupation) async => MemberCard.fromJson(
         await client.patch('me/member/', body: {'occupation': occupation}) as Map<String, dynamic>,
+      );
+
+  /// male or female. Like the date of birth, it can be added at any time, and
+  /// changed until the member's identity is checked.
+  Future<MemberCard> updateGender(String gender) async => MemberCard.fromJson(
+        await client.patch('me/member/', body: {'gender': gender}) as Map<String, dynamic>,
+      );
+
+  Future<MemberCard> updateDateOfBirth(DateTime date) async => MemberCard.fromJson(
+        await client.patch('me/member/', body: {'date_of_birth': _day(date)}) as Map<String, dynamic>,
       );
 
   Future<Uint8List> photo() => client.getBytes('me/member/photo/');

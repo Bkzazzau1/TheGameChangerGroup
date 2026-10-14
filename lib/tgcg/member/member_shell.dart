@@ -218,6 +218,28 @@ class _CardTab extends StatelessWidget {
                     ),
                     _Detail('PVC', card.vin ?? 'Not on record'),
                     _Detail(
+                      'Gender',
+                      switch (card.gender) {
+                        'male' => 'Male',
+                        'female' => 'Female',
+                        _ => 'Not added',
+                      },
+                      action: _changeAction(
+                        card,
+                        card.gender.isNotEmpty,
+                        () => _pickGender(context, card),
+                      ),
+                    ),
+                    _Detail(
+                      'Date of birth',
+                      card.dateOfBirth == null ? 'Not added' : _date(card.dateOfBirth!),
+                      action: _changeAction(
+                        card,
+                        card.dateOfBirth != null,
+                        () => _pickBirthday(context, card),
+                      ),
+                    ),
+                    _Detail(
                       'Occupation',
                       card.occupation.isEmpty ? 'Not added' : card.occupation,
                       action: TextButton(
@@ -245,12 +267,12 @@ class _CardTab extends StatelessWidget {
                     _Detail(
                       'Photo of you',
                       card.hasPhoto ? 'Added' : 'Not added',
-                      action: _photoAction(card, card.hasPhoto, () => _addSelfie(context)),
+                      action: _changeAction(card, card.hasPhoto, () => _addSelfie(context)),
                     ),
                     _Detail(
                       'Photo of your PVC',
                       card.hasCardPhoto ? 'Added' : 'Not added',
-                      action: _photoAction(card, card.hasCardPhoto, () => _addCardPhoto(context)),
+                      action: _changeAction(card, card.hasCardPhoto, () => _addCardPhoto(context)),
                     ),
                   ],
                 ),
@@ -260,11 +282,58 @@ class _CardTab extends StatelessWidget {
         },
       );
 
-  /// Adds a missing photo, or changes one until the identity is checked;
-  /// after that a coordinator changes it.
-  Widget? _photoAction(MemberCard card, bool added, VoidCallback onPressed) {
+  /// For the photos, gender and date of birth: add one that is missing, or
+  /// change it until the identity is checked; after that a coordinator does.
+  Widget? _changeAction(MemberCard card, bool added, VoidCallback onPressed) {
     if (added && card.identityChecked) return null;
     return TextButton(onPressed: onPressed, child: Text(added ? 'Change' : 'Add'));
+  }
+
+  Future<void> _pickGender(BuildContext context, MemberCard card) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    final gender = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Gender, as on your PVC'),
+        children: [
+          for (final (value, label) in const [('male', 'Male'), ('female', 'Female')])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, value),
+              child: Text(label, style: const TextStyle(fontSize: 16)),
+            ),
+        ],
+      ),
+    );
+    if (gender == null || gender == card.gender) return;
+    try {
+      await members.updateGender(gender);
+      onChanged();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.fieldError('gender') ?? error.message)));
+    }
+  }
+
+  Future<void> _pickBirthday(BuildContext context, MemberCard card) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: card.dateOfBirth ?? DateTime(now.year - 30),
+      firstDate: DateTime(now.year - 110),
+      lastDate: DateTime(now.year - 16, now.month, now.day),
+      helpText: 'Date of birth, as on your PVC',
+    );
+    if (picked == null || picked == card.dateOfBirth) return;
+    try {
+      await members.updateDateOfBirth(picked);
+      onChanged();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.fieldError('date_of_birth') ?? error.message)),
+      );
+    }
   }
 
   Future<void> _editEmail(BuildContext context, MemberCard card) async {

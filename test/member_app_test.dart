@@ -817,7 +817,41 @@ void main() {
       expect(action('Photo of you'), findsOneWidget);
     });
 
-    testWidgets("once the identity is checked, a photo on record is a coordinator's to change",
+    testWidgets('their gender and date of birth', (tester) async {
+      var card = <String, dynamic>{
+        ..._card(verification: 'pendingReview'),
+        'gender': '',
+        'date_of_birth': null,
+      };
+      final server = _Server((request) => switch ((request.method, _path(request))) {
+            ('GET', 'me/member/') => _json(card),
+            ('PATCH', 'me/member/') =>
+              _json(card = {...card, ...jsonDecode(request.body) as Map<String, dynamic>}),
+            (_, final path) => memberHome(path),
+          });
+      await _pump(tester, server.connect(), const MemberShell(), member: true);
+      await tester.pumpAndSettle();
+
+      await tester.tap(action('Gender'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Female'));
+      await tester.pumpAndSettle();
+      expect(jsonDecode(server.bodies['PATCH /api/v1/me/member/']!), {'gender': 'female'});
+      expect(find.text('Female'), findsOneWidget);
+
+      await tester.tap(action('Date of birth'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('14'));
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      final year = DateTime.now().year - 30;
+      expect(jsonDecode(server.bodies['PATCH /api/v1/me/member/']!), {'date_of_birth': '$year-01-14'});
+      expect(find.text('14 Jan $year'), findsOneWidget);
+      // Until the identity is checked, both can still be changed.
+      expect(action('Gender'), findsOneWidget);
+    });
+
+    testWidgets("once the identity is checked, what is on record is a coordinator's to change",
         (tester) async {
       final server = _Server((request) => switch (_path(request)) {
             'me/member/' => _json({
@@ -829,7 +863,9 @@ void main() {
           });
       await _pump(tester, server.connect(), const MemberShell(), member: true);
       await tester.pumpAndSettle();
-      expect(action('Photo of you'), findsNothing);
+      for (final onRecord in ['Photo of you', 'Gender', 'Date of birth']) {
+        expect(action(onRecord), findsNothing, reason: onRecord);
+      }
       // A photo still missing can be added.
       expect(action('Photo of your PVC'), findsOneWidget);
     });
