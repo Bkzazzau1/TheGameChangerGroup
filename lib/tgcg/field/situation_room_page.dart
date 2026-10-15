@@ -368,6 +368,15 @@ class _PriorityItem extends StatelessWidget {
                           fontSize: 9.5,
                         ),
                       ),
+                      if (incident.isLive) ...[
+                        const SizedBox(height: 5),
+                        const TgcgStatusPill(
+                          label: 'LIVE',
+                          color: TgcgColors.danger,
+                          icon: Icons.live_tv_rounded,
+                          compact: true,
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 5,
@@ -880,6 +889,7 @@ class _IncidentInspector extends StatelessWidget {
           else
             ...item.evidence.map((evidence) => _EvidenceTile(evidence: evidence)),
           IncidentPhotoButton(incident: item),
+          LiveVideoActions(incident: item),
           const SizedBox(height: 14),
           const Divider(height: 1),
           const SizedBox(height: 14),

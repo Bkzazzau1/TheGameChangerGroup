@@ -14,6 +14,7 @@ import '../session.dart';
 import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
+import 'live_video_page.dart';
 
 // The incident workflow, as the server runs it (tgcg_backend
 // apps/field/services.py). The app offers only these moves; the server checks
@@ -323,6 +324,7 @@ class _HistoryLine extends StatelessWidget {
       'reported' => 'Reported',
       'assigned' => 'Assigned',
       'evidenceAdded' => 'Evidence added',
+      'liveVideo' => 'Live video',
       _ when to != null && entry.fromStatus == IncidentStatus.resolved &&
               to == IncidentStatus.investigating =>
         'Reopened',
@@ -643,4 +645,51 @@ String? incidentLocationText(FieldIncident incident) {
     'noGps' => 'No GPS',
     _ => null,
   };
+}
+
+/// Going live from one's own incident on the server, or watching one that
+/// is live; both open full screen.
+class LiveVideoActions extends StatelessWidget {
+  const LiveVideoActions({super.key, required this.incident});
+
+  final FieldIncident incident;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = FieldOperations.of(context);
+    final session = TgcgSession.of(context);
+    if (!store.isLive || store.isOnDevice(incident.id) || TgcgBackend.of(context) == null) {
+      return const SizedBox.shrink();
+    }
+    final mine = incident.reporterId == session.accessId;
+    final canBroadcast = mine && incident.status != IncidentStatus.closed;
+    final canWatch = incident.isLive && !mine;
+    if (!canBroadcast && !canWatch) return const SizedBox.shrink();
+
+    Future<void> open(Widget page) async {
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+      unawaited(store.refresh()); // it went live, or ended
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: TgcgColors.danger),
+          onPressed: () => open(
+            canBroadcast
+                ? LiveBroadcastPage(incident: incident)
+                : LiveWatchPage(incident: incident),
+          ),
+          icon: Icon(canBroadcast ? Icons.videocam_rounded : Icons.live_tv_rounded, size: 18),
+          label: Text(
+            canBroadcast
+                ? (incident.isLive ? 'Back to the live video' : 'Go live')
+                : 'Watch live',
+          ),
+        ),
+      ),
+    );
+  }
 }

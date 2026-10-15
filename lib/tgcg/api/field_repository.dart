@@ -1,6 +1,7 @@
 import '../domain/models.dart';
 import 'api_client.dart';
 import 'auth_repository.dart' show geographicScopeFromJson;
+import 'meetings_repository.dart' show JoinPass;
 
 String? _text(Object? value) => value is String && value.trim().isNotEmpty ? value : null;
 
@@ -27,6 +28,7 @@ FieldIncident fieldIncidentFromJson(Map<String, dynamic> json) {
   final latitude = _decimal(json['latitude']);
   final longitude = _decimal(json['longitude']);
   final location = json['location'] as Map<String, dynamic>?;
+  final live = json['live'] as Map<String, dynamic>?;
   final accuracy = (location?['accuracy_m'] as num?)?.toDouble();
   final capturedAt = DateTime.tryParse('${location?['captured_at']}');
   return FieldIncident(
@@ -59,6 +61,8 @@ FieldIncident fieldIncidentFromJson(Map<String, dynamic> json) {
     clientId: _text(json['client_id']),
     locationStatus: _text(location?['status']),
     distanceToUnitMeters: (location?['distance_to_pu_m'] as num?)?.round(),
+    isLive: live?['is_live'] as bool? ?? false,
+    liveRecording: _text(live?['recording']),
   );
 }
 
@@ -90,7 +94,7 @@ class IncidentHistoryEntry {
     this.actor,
   });
 
-  /// reported, statusChanged, assigned or evidenceAdded.
+  /// reported, statusChanged, assigned, evidenceAdded or liveVideo.
   final String action;
   final DateTime at;
   final IncidentStatus? fromStatus;
@@ -188,6 +192,22 @@ class FieldRepository {
           'incidents/$reference/assign/',
           body: {'team': team.trim(), 'note': note.trim()},
         ) as Map<String, dynamic>,
+      );
+
+  /// A pass to broadcast live video of the incident from this phone (its
+  /// reporter only); the same stream again if already live.
+  Future<JoinPass> goLive(String reference) async => JoinPass.fromJson(
+        await client.post('incidents/$reference/live/start/') as Map<String, dynamic>,
+      );
+
+  /// A pass to watch the incident's live video, for whoever may see it.
+  Future<JoinPass> watchLive(String reference) async => JoinPass.fromJson(
+        await client.post('incidents/$reference/live/watch/') as Map<String, dynamic>,
+      );
+
+  /// Ends the live video; the recording, if any, is then kept on the incident.
+  Future<FieldIncident> endLive(String reference) async => fieldIncidentFromJson(
+        await client.post('incidents/$reference/live/end/') as Map<String, dynamic>,
       );
 
   /// Every step taken on the incident, oldest first.

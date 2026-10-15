@@ -277,6 +277,8 @@ class FieldIncident {
     this.clientId,
     this.locationStatus,
     this.distanceToUnitMeters,
+    this.isLive = false,
+    this.liveRecording,
   });
 
   final String id;
@@ -305,6 +307,12 @@ class FieldIncident {
   /// How far from its polling unit it was reported, when the unit's location
   /// is known.
   final int? distanceToUnitMeters;
+
+  /// Its reporter is broadcasting live video of it now.
+  final bool isLive;
+
+  /// Its latest live video's recording: off, recording, saved or failed.
+  final String? liveRecording;
 }
 
 class FieldReport {

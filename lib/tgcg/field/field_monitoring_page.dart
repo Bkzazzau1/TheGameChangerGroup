@@ -887,6 +887,15 @@ class _IncidentRow extends StatelessWidget {
                         fontSize: 10,
                       ),
                     ),
+                    if (incident.isLive) ...[
+                      const SizedBox(height: 5),
+                      const TgcgStatusPill(
+                        label: 'LIVE',
+                        color: TgcgColors.danger,
+                        icon: Icons.live_tv_rounded,
+                        compact: true,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1023,6 +1032,7 @@ class _IncidentInspector extends StatelessWidget {
           const SizedBox(height: 14),
           _EvidencePanel(evidence: current.evidence),
           IncidentPhotoButton(incident: current),
+          LiveVideoActions(incident: current),
           const SizedBox(height: 14),
           if (history)
             IncidentHistoryPanel(key: ValueKey(current.id), incident: current)

@@ -672,6 +672,8 @@ void main() {
         FieldMonitoringPage(gps: gps, newVoiceRecorder: _FakeRecorder.new),
         size: const Size(420, 3000),
       );
+      // Their own incident on the server can go live.
+      expect(find.text('Go live'), findsOneWidget);
       await tester.tap(find.text('Report incident'));
       await tester.pumpAndSettle();
       await tester.enterText(find.widgetWithText(TextField, 'Incident title'), 'Box snatched');
@@ -700,6 +702,27 @@ void main() {
       expect(saved.gps?.latitude, _gps.latitude);
       expect(saved.evidence.single.type, EvidenceType.audio);
       expect(find.textContaining('with a voice note'), findsOneWidget);
+    });
+
+    testWidgets('a live incident offers its video to those who can see it', (tester) async {
+      server.open = [
+        {
+          ..._incident('INC-000001'),
+          'live': {
+            'id': 'l1',
+            'is_live': true,
+            'started_by': 'AG-1',
+            'started_at': '2027-02-20T10:00:00Z',
+            'ended_at': null,
+            'recording': 'recording',
+          },
+        },
+      ];
+      await tester.runAsync(() => store.refresh());
+      await pump(tester, const FieldMonitoringPage());
+      expect(find.text('LIVE'), findsWidgets);
+      expect(find.text('Watch live'), findsOneWidget);
+      expect(find.text('Go live'), findsNothing); // only its reporter broadcasts
     });
 
     testWidgets('the Situation Room shows the server incidents', (tester) async {
