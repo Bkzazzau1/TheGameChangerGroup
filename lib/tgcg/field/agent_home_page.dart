@@ -11,15 +11,17 @@ import '../membership/member_review_page.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
+import '../sound/sound_alerts.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
 
 /// An agent's home on the phone: who and where they are (from their server
 /// account), check-in, on-duty location sharing, and the work of the day.
 class AgentHomePage extends StatefulWidget {
-  const AgentHomePage({super.key, required this.onOpenModule});
+  const AgentHomePage({super.key, required this.onOpenModule, this.soundAlerts});
 
   final ValueChanged<TgcgModule> onOpenModule;
+  final SoundAlerts? soundAlerts;
 
   @override
   State<AgentHomePage> createState() => _AgentHomePageState();
@@ -85,6 +87,7 @@ class _AgentHomePageState extends State<AgentHomePage> {
     final session = TgcgSession.of(context);
     final field = FieldOperations.of(context);
     final results = ResultOperations.of(context);
+    final alerts = widget.soundAlerts ?? SoundAlerts.instance;
     final me = session.accessId;
     bool mine(String reporter) => reporter == me;
 
@@ -128,6 +131,10 @@ class _AgentHomePageState extends State<AgentHomePage> {
         ),
         const SizedBox(height: 10),
         _OnDutyCard(ownerId: me),
+        if (alerts.supported) ...[
+          const SizedBox(height: 10),
+          _SoundAlertsCard(alerts: alerts),
+        ],
         const SizedBox(height: 18),
         const Text(
           'Your work today',
@@ -506,4 +513,90 @@ class _OnDutyCard extends StatelessWidget {
   static String _hhmm(DateTime? value) => value == null
       ? '--:--'
       : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+}
+
+/// Switch for sound alerts: while on duty the phone listens for danger, also
+/// with the screen locked, and raises an incident when it hears one.
+class _SoundAlertsCard extends StatelessWidget {
+  const _SoundAlertsCard({required this.alerts});
+
+  final SoundAlerts alerts;
+
+  @override
+  Widget build(BuildContext context) {
+    final tracker = DutyTracker.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([alerts, tracker]),
+      builder: (context, _) {
+        final on = alerts.on;
+        final last = alerts.lastSent;
+        final detail = switch (alerts.state) {
+          SoundAlertsState.off when !tracker.onDuty => 'Works while you are on duty',
+          SoundAlertsState.off => 'Gunshots, screaming, a loud crowd, breaking glass',
+          SoundAlertsState.starting => 'Starting…',
+          _ => alerts.problem ??
+              (last == null
+                  ? 'Listening, also with the screen locked'
+                  : 'Last alert ${_OnDutyCard._hhmm(last.at.toLocal())}: ${last.kind.label}'),
+        };
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+          decoration: BoxDecoration(
+            color: on ? TgcgColors.primary : TgcgColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: on ? TgcgColors.primary : TgcgColors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                on ? Icons.hearing_rounded : Icons.hearing_disabled_outlined,
+                color: on ? TgcgColors.accentBright : TgcgColors.muted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      on ? 'Sound alerts on' : 'Sound alerts',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: on ? Colors.white : TgcgColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: on ? const Color(0xFFC9D4F0) : TgcgColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: on,
+                onChanged: on || tracker.onDuty ? (value) => _toggle(context, value) : null,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _toggle(BuildContext context, bool value) async {
+    if (!value) {
+      await alerts.switchOff();
+      return;
+    }
+    if (!await alerts.switchOn() && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sound alerts need the microphone. Allow it for TGCG and try again.'),
+        ),
+      );
+    }
+  }
 }

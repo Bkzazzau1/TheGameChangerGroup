@@ -312,6 +312,8 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
     GpsFix? gps,
     List<EvidenceAttachment> evidence = const [],
     List<PendingEvidence> photos = const [],
+    // systemDerived when the phone raised it, such as a sound alert.
+    RecordOrigin origin = RecordOrigin.localEntry,
   }) async {
     final id = _newId('INC');
     final incident = FieldIncident(
@@ -332,7 +334,7 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
         for (final (index, photo) in photos.indexed)
           photo.toAttachment(id: '$id-PHOTO-${index + 1}', uploaderId: reporterId),
       ]),
-      origin: RecordOrigin.localEntry,
+      origin: origin,
     );
     final receipt = await _persistence?.persistMutation(
       entityType: 'field_incident',

@@ -18,3 +18,8 @@
 -keep class * implements com.google.firebase.components.ComponentRegistrar {
     <init>();
 }
+
+# Sound alerts run YAMNet through LiteRT (TensorFlow Lite). Its native
+# library looks some of these classes up by name, which R8 cannot see.
+-keep class org.tensorflow.lite.** { *; }
+-dontwarn org.tensorflow.lite.**

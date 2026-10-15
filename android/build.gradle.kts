@@ -18,6 +18,15 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
 }
+subprojects {
+    // tflite_flutter (sound alerts) builds its Java for Java 11 but leaves its
+    // Kotlin on the JDK Gradle runs on, and Kotlin refuses the mismatch.
+    if (name == "tflite_flutter") {
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
+    }
+}
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

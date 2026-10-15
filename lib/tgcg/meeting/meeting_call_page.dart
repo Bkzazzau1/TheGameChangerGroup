@@ -7,6 +7,7 @@ import '../access/access_widgets.dart' show confirmAction;
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/meetings_repository.dart';
+import '../sound/microphone.dart';
 import '../ui/tgcg_design.dart';
 
 Room _createRoom() =>
@@ -51,6 +52,7 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
 
   Future<void> _connect() async {
     try {
+      await Microphone.instance.take(this);
       await _room.connect(widget.pass.url, widget.pass.token);
       if (!mounted || _exiting) return;
       await _room.localParticipant?.setMicrophoneEnabled(true);
@@ -146,7 +148,12 @@ class _MeetingCallPageState extends State<MeetingCallPage> {
     _exiting = true;
     _room.removeListener(_changed);
     unawaited(_events.dispose());
-    unawaited(_room.disconnect().whenComplete(_room.dispose));
+    unawaited(
+      _room
+          .disconnect()
+          .whenComplete(_room.dispose)
+          .whenComplete(() => Microphone.instance.release(this)),
+    );
     super.dispose();
   }
 

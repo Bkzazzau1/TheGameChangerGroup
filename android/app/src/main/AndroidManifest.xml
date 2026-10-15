@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- GPS on check-in, incidents, results and evidence -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
@@ -12,6 +13,12 @@
     <!-- PVC scan, selfies, evidence photos/video and voice notes -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Sound alerts keep listening for danger with the screen locked, as a
+         visible foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <!-- The sound alerts service never starts itself after a reboot or an
+         update, so its plugin's boot receiver is left out. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove"/>
     <!-- Meeting calls (LiveKit): network changes, call audio and Bluetooth headsets -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
@@ -46,6 +53,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Sound alerts. Listening runs in the app, so the service stops when
+             the app is closed instead of claiming to listen. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="true"
+            android:exported="false"/>
+        <receiver
+            android:name="com.pravera.flutter_foreground_task.service.RebootReceiver"
+            tools:node="remove"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

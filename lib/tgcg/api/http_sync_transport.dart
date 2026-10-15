@@ -170,6 +170,7 @@ class HttpSyncTransport implements SyncTransport {
         'scope': _scope(p['scope']),
         'reported_at': p['reportedAt'],
         'gps': p['gps'],
+        'origin': p['origin'],
         'client_id': clientId,
       }..removeWhere((_, value) => value == null);
 

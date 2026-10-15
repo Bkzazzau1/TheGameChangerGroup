@@ -49,3 +49,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+configurations.all {
+    // Sound alerts run their model on the CPU. The GPU delegate that
+    // tflite_flutter also brings is never loaded, so it stays out of the APK.
+    exclude(group = "com.google.ai.edge.litert", module = "litert-gpu")
+}

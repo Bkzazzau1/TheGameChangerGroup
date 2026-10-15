@@ -7,6 +7,7 @@ import 'package:livekit_client/livekit_client.dart';
 import '../access/access_widgets.dart' show failureMessage;
 import '../api/backend.dart';
 import '../domain/models.dart';
+import '../sound/microphone.dart';
 import '../ui/tgcg_design.dart';
 
 Room _createRoom() =>
@@ -83,6 +84,7 @@ class _LiveBroadcastPageState extends State<LiveBroadcastPage> {
     try {
       final pass = await field.goLive(widget.incident.id);
       if (!mounted) return;
+      await Microphone.instance.take(this);
       await _room.connect(pass.url, pass.token);
       if (!mounted) return;
       final me = _room.localParticipant;
@@ -141,7 +143,12 @@ class _LiveBroadcastPageState extends State<LiveBroadcastPage> {
   void dispose() {
     _ticker?.cancel();
     _room.removeListener(_changed);
-    unawaited(_room.disconnect().whenComplete(_room.dispose));
+    unawaited(
+      _room
+          .disconnect()
+          .whenComplete(_room.dispose)
+          .whenComplete(() => Microphone.instance.release(this)),
+    );
     super.dispose();
   }
 

@@ -29,6 +29,8 @@ dependencies:
   livekit_client: ^2.13.1
   video_player: ^2.14.1
   web: ^1.1.1
+  tflite_flutter: ^0.12.1
+  flutter_foreground_task: ^11.0.3
 
 dev_dependencies:
   flutter_test:
@@ -39,6 +41,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/
+    - assets/models/
     - assets/geo/
     - assets/geo/lga/
     - assets/geo/ward/

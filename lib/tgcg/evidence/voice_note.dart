@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../domain/models.dart';
+import '../sound/microphone.dart';
 import '../ui/tgcg_design.dart';
 import 'evidence_upload.dart';
 
@@ -37,6 +38,8 @@ class _DeviceVoiceRecorder implements VoiceRecorder {
   @override
   Future<bool> start() async {
     if (!await _recorder.hasPermission()) return false;
+    // Sound alerts give the microphone up while the note records.
+    await Microphone.instance.take(this);
     // Phones record AAC (.m4a); a browser records WAV, which all of them can.
     final aac = !kIsWeb && await _recorder.isEncoderSupported(AudioEncoder.aacLc);
     _extension = aac ? '.m4a' : '.wav';
@@ -60,6 +63,7 @@ class _DeviceVoiceRecorder implements VoiceRecorder {
   @override
   Future<PendingEvidence?> stop() async {
     final path = await _recorder.stop();
+    await Microphone.instance.release(this);
     if (path == null) return null;
     final bytes = await XFile(path).readAsBytes();
     if (bytes.isEmpty) return null;
@@ -72,10 +76,16 @@ class _DeviceVoiceRecorder implements VoiceRecorder {
   }
 
   @override
-  Future<void> cancel() => _recorder.cancel();
+  Future<void> cancel() async {
+    await _recorder.cancel();
+    await Microphone.instance.release(this);
+  }
 
   @override
-  Future<void> dispose() => _recorder.dispose();
+  Future<void> dispose() async {
+    await _recorder.dispose();
+    await Microphone.instance.release(this);
+  }
 }
 
 String _clock(Duration value) =>
