@@ -204,7 +204,6 @@ void main() {
       TgcgModule.membershipNetwork,
       TgcgModule.accreditation,
       TgcgModule.communications,
-      TgcgModule.discussionRoom,
       TgcgModule.evidenceCapture,
       TgcgModule.reports,
     ]) {
@@ -275,6 +274,9 @@ void main() {
             'submitElectionResult',
             'viewMeetingRoom',
             'joinMeeting',
+            'viewDiscussionRoom',
+            'createDiscussionThread',
+            'postDiscussionReply',
           },
         );
       final now = DateTime.now().toUtc();
@@ -299,10 +301,11 @@ void main() {
       expect(find.textContaining('KWARBAI I'), findsWidgets);
       expect(find.textContaining('Checked in today at'), findsOneWidget);
       expect(find.text('Off duty'), findsOneWidget);
-      for (final tab in ['Home', 'Report', 'Result', 'Meetings']) {
+      // The forum is for everyone with a role, agents too (15 October 2026).
+      for (final tab in ['Home', 'Report', 'Result', 'Meetings', 'Forum']) {
         expect(find.widgetWithText(NavigationDestination, tab), findsOneWidget, reason: tab);
       }
-      for (final gone in ['Messages', 'Forum', 'Field Assignment Required']) {
+      for (final gone in ['Messages', 'Field Assignment Required']) {
         expect(find.text(gone), findsNothing, reason: gone);
       }
     });

@@ -50,6 +50,7 @@ const liveModules = {
   TgcgModule.fieldMonitoring,
   TgcgModule.resultCapture,
   TgcgModule.collation,
+  TgcgModule.discussionRoom,
   TgcgModule.meetingRoom,
 };
 

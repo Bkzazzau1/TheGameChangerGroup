@@ -153,6 +153,8 @@ class ApiClient {
 
   Future<dynamic> patch(String path, {Object? body}) => _send('PATCH', path, body: body);
 
+  Future<dynamic> delete(String path) => _send('DELETE', path);
+
   /// The raw body of an authenticated GET, such as a photo.
   Future<Uint8List> getBytes(String path) async {
     Future<http.Response> send() async {

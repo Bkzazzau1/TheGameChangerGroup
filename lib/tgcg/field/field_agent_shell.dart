@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../account/change_pin_dialog.dart';
+import '../discussion/discussion_room_page.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -23,6 +24,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
     TgcgModule.fieldMonitoring,
     TgcgModule.resultCapture,
     TgcgModule.meetingRoom,
+    TgcgModule.discussionRoom,
   ];
 
   TgcgModule selectedModule = TgcgModule.overview;
@@ -96,6 +98,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.meetingRoom => const FieldAgentMeetingPage(),
+        TgcgModule.discussionRoom => const DiscussionRoomPage(),
         _ => AgentHomePage(onOpenModule: _open),
       },
       bottomNavigationBar: tabs.length < 2
@@ -122,6 +125,11 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                         selectedIcon: Icon(Icons.call_rounded),
                         label: 'Meetings',
                       ),
+                    TgcgModule.discussionRoom => const NavigationDestination(
+                        icon: Icon(Icons.forum_outlined),
+                        selectedIcon: Icon(Icons.forum_rounded),
+                        label: 'Forum',
+                      ),
                     _ => const NavigationDestination(
                         icon: Icon(Icons.home_outlined),
                         selectedIcon: Icon(Icons.home_rounded),
@@ -137,6 +145,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         TgcgModule.fieldMonitoring => 'FIELD REPORTING',
         TgcgModule.resultCapture => 'RESULT SUBMISSION',
         TgcgModule.meetingRoom => 'MEETINGS',
+        TgcgModule.discussionRoom => 'FORUM',
         _ => 'POLLING AGENT',
       };
 }

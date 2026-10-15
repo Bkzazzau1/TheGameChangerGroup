@@ -93,8 +93,6 @@ class TgcgDemoDataPage extends StatelessWidget {
       'Contacts, messages and delivery activity are sample or local records. Messages here are not delivered through the live server.',
     TgcgModule.bulkCommunications =>
       'Recipients and campaign activity use sample or local records. Campaigns here do not send live messages.',
-    TgcgModule.discussionRoom =>
-      'Discussion messages and participants are sample or local records, not a live server conversation.',
     TgcgModule.systemMonitoring =>
       'Activity counts include sample records. Sync status reflects this device, not overall server health.',
     TgcgModule.reports =>
@@ -111,6 +109,7 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.fieldMonitoring ||
     TgcgModule.resultCapture ||
     TgcgModule.collation ||
+    TgcgModule.discussionRoom ||
     TgcgModule.meetingRoom => null,
   };
 }

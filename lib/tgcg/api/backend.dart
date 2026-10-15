@@ -5,6 +5,7 @@ import 'access_repository.dart';
 import 'api_client.dart';
 import 'auth_repository.dart';
 import 'field_repository.dart';
+import 'forum_repository.dart';
 import 'member_admin_repository.dart';
 import 'mapping_repository.dart';
 import 'meetings_repository.dart';
@@ -27,7 +28,8 @@ class BackendServices {
         meetings = MeetingsRepository(client),
         overview = OverviewRepository(client, TrackingRepository(client)),
         access = AccessRepository(client),
-        members = MemberAdminRepository(client);
+        members = MemberAdminRepository(client),
+        forum = ForumRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -70,6 +72,9 @@ class BackendServices {
 
   /// Staff work on members: identity review, standing, polling unit changes.
   final MemberAdminRepository members;
+
+  /// The discussion forum: posts, replies and their approval.
+  final ForumRepository forum;
 }
 
 /// Makes [BackendServices] available below it. The app always provides
