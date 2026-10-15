@@ -12,6 +12,7 @@ import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
 import 'incident_actions.dart';
+import 'incident_report.dart';
 
 class SituationRoomPage extends StatefulWidget {
   const SituationRoomPage({super.key});
@@ -787,172 +788,8 @@ class _IncidentInspector extends StatelessWidget {
         ),
       );
     }
-
-    final color = _severityColor(item.severity);
-    final store = FieldOperations.of(context);
-
-    return TgcgSectionCard(
-      title: 'Incident inspector',
-      subtitle: item.id,
-      trailing: TgcgStatusPill(
-        label: _label(item.severity.name),
-        color: color,
-        compact: true,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.title,
-            style: const TextStyle(
-              color: TgcgColors.ink,
-              fontSize: 15,
-              height: 1.3,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            item.summary ?? 'No additional incident summary was supplied.',
-            style: const TextStyle(
-              color: TgcgColors.muted,
-              fontSize: 11,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _InspectorLine(
-            icon: Icons.category_outlined,
-            label: 'Category',
-            value: item.category,
-          ),
-          _InspectorLine(
-            icon: Icons.location_on_outlined,
-            label: 'Location',
-            value: item.scope.label,
-          ),
-          if (incidentLocationText(item) case final where?)
-            _InspectorLine(
-              icon: Icons.near_me_outlined,
-              label: 'From the unit',
-              value: where,
-            ),
-          _InspectorLine(
-            icon: Icons.person_outline_rounded,
-            label: 'Reporter',
-            value: item.reporterId,
-          ),
-          _InspectorLine(
-            icon: Icons.groups_2_outlined,
-            label: 'Response owner',
-            value: item.assignedTeam ?? 'Unassigned',
-          ),
-          _InspectorLine(
-            icon: Icons.schedule_rounded,
-            label: 'Reported',
-            value: _timeLabel(item.reportedAt),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              TgcgStatusPill(
-                label: _label(item.status.name),
-                color: TgcgColors.primaryMid,
-                compact: true,
-              ),
-              const Spacer(),
-              Text(
-                '${item.evidence.length} evidence',
-                style: const TextStyle(
-                  color: TgcgColors.muted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (item.evidence.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: TgcgColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: TgcgColors.border),
-              ),
-              child: const Text(
-                'No linked media evidence for this incident.',
-                style: TextStyle(color: TgcgColors.muted, fontSize: 10.5),
-              ),
-            )
-          else
-            ...item.evidence.map((evidence) => _EvidenceTile(evidence: evidence)),
-          IncidentPhotoButton(incident: item),
-          LiveVideoActions(incident: item),
-          const SizedBox(height: 14),
-          const Divider(height: 1),
-          const SizedBox(height: 14),
-          IncidentCommandPanel(incident: item),
-          if (store.isLive && !store.isOnDevice(item.id)) ...[
-            const SizedBox(height: 14),
-            IncidentHistoryPanel(key: ValueKey(item.id), incident: item),
-          ],
-        ],
-      ),
-    );
+    return IncidentReportCard(incident: item);
   }
-}
-
-class _EvidenceTile extends StatelessWidget {
-  const _EvidenceTile({required this.evidence});
-
-  final EvidenceAttachment evidence;
-
-  @override
-  Widget build(BuildContext context) =>
-      EvidenceRow(evidence: evidence, icon: _evidenceIcon(evidence.type));
-}
-
-class _InspectorLine extends StatelessWidget {
-  const _InspectorLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 9),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 16, color: TgcgColors.muted),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 86,
-              child: Text(
-                label,
-                style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                value,
-                style: const TextStyle(
-                  color: TgcgColors.ink,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 class _ActivityTimeline extends StatelessWidget {
@@ -1213,15 +1050,6 @@ Color _severityColor(IncidentSeverity severity) => switch (severity) {
       IncidentSeverity.medium => TgcgColors.warning,
       IncidentSeverity.low => TgcgColors.info,
       IncidentSeverity.info => TgcgColors.muted,
-    };
-
-IconData _evidenceIcon(EvidenceType type) => switch (type) {
-      EvidenceType.photo => Icons.image_outlined,
-      EvidenceType.video => Icons.videocam_outlined,
-      EvidenceType.audio => Icons.mic_none_rounded,
-      EvidenceType.document => Icons.attach_file_rounded,
-      EvidenceType.resultForm => Icons.description_outlined,
-      EvidenceType.location => Icons.location_on_outlined,
     };
 
 String _timeLabel(DateTime value) {

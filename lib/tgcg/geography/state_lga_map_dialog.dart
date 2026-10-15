@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
+import '../field/incident_report.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'geography_registry.dart';
@@ -219,6 +220,7 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
             lga: _lgaById[selectedLgaId]!,
             incidents: _openByLga[selectedLgaId] ?? const [],
             members: hasMembers ? _members(selectedLgaId!) : null,
+            showMembers: showMembers,
             onBack: () => setState(() => selectedLgaId = null),
           )
         : _LgaList(
@@ -380,17 +382,26 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
   Widget _incidentDot(FieldIncident incident, GeoProjection projection) {
     final point = projection.project(incident.latitude!, incident.longitude!);
     return Positioned(
-      left: point.dx - 6,
-      top: point.dy - 6,
+      left: point.dx - 12,
+      top: point.dy - 12,
       child: Tooltip(
         message: incident.title,
-        child: Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: _severityColor(incident.severity),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => openIncidentReport(context, incident),
+          child: SizedBox.square(
+            dimension: 24,
+            child: Center(
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: _severityColor(incident.severity),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -506,12 +517,16 @@ class _LgaDetail extends StatelessWidget {
     required this.lga,
     required this.incidents,
     required this.members,
+    required this.showMembers,
     required this.onBack,
   });
 
   final CanonicalLga lga;
+
+  /// The LGA's open incidents, most severe first.
   final List<FieldIncident> incidents;
   final int? members;
+  final bool showMembers;
   final VoidCallback onBack;
 
   @override
@@ -564,7 +579,12 @@ class _LgaDetail extends StatelessWidget {
             _Fact(label: 'LGA code', value: lga.id),
             const SizedBox(height: 10),
             FilledButton.icon(
-              onPressed: () => showLgaWardMap(context, lga: lga),
+              onPressed: () => showLgaWardMap(
+                context,
+                lga: lga,
+                incidents: incidents,
+                showIncidents: !showMembers,
+              ),
               icon: const Icon(Icons.grid_view_rounded, size: 18),
               label: const Text('Wards & polling units'),
             ),
@@ -585,42 +605,7 @@ class _LgaDetail extends StatelessWidget {
                 style: TextStyle(color: TgcgColors.muted, fontSize: 12),
               ),
             for (final incident in incidents)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: TgcgColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border(
-                    left: BorderSide(
-                      color: _severityColor(incident.severity),
-                      width: 3,
-                    ),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      incident.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: TgcgColors.ink,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${incident.severity.name.toUpperCase()} • '
-                      '${incident.status.name} • ${incident.scope.label}',
-                      style: const TextStyle(
-                        color: TgcgColors.muted,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              IncidentReportLine(incident: incident, showPlace: true),
           ],
         ),
       );
