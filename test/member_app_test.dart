@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cross_file/cross_file.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:tgcg_emcop/tgcg/account/change_pin_dialog.dart';
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/auth_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
@@ -137,6 +139,64 @@ Future<void> _correctScannedBirthday(
   await tester.pumpAndSettle();
   expect(find.text('Born 14/5/1990'), findsOneWidget);
   expect(tester.takeException(), isNull);
+}
+
+class _PinNavigationObserver extends NavigatorObserver {
+  final popped = <String?>[];
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    popped.add(route.settings.name);
+  }
+}
+
+Future<(BackendServices, _PinNavigationObserver)> _openPendingPinChange(
+  WidgetTester tester,
+  Completer<http.Response> response,
+  List<http.Request> requests,
+) async {
+  final backend = BackendServices.connect(
+    'https://api.tgcg.test',
+    tokens: MemoryTokenStore(),
+    httpClient: MockClient((request) {
+      requests.add(request);
+      return response.future;
+    }),
+  );
+  final navigator = GlobalKey<NavigatorState>();
+  final observer = _PinNavigationObserver();
+  await tester.pumpWidget(TgcgBackend(
+    services: backend,
+    child: MaterialApp(
+      navigatorKey: navigator,
+      navigatorObservers: [observer],
+      home: const Scaffold(body: Text('Home page')),
+    ),
+  ));
+  unawaited(navigator.currentState!.push<void>(MaterialPageRoute(
+    settings: const RouteSettings(name: 'account'),
+    builder: (context) => Scaffold(
+      body: Center(
+        child: TextButton(
+          onPressed: () => showDialog<bool>(
+            context: context,
+            builder: (_) => const ChangePinDialog(pin: true),
+          ),
+          child: const Text('Open PIN change'),
+        ),
+      ),
+    ),
+  )));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Open PIN change'));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.widgetWithText(TextField, 'Current PIN or password'), '482916');
+  await tester.enterText(find.widgetWithText(TextField, 'New 6-digit PIN'), '482915');
+  await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482915');
+  await tester.tap(find.widgetWithText(FilledButton, 'Change PIN'));
+  await tester.pumpAndSettle();
+  expect(requests, hasLength(1));
+  return (backend, observer);
 }
 
 void main() {
@@ -674,6 +734,37 @@ void main() {
         expect(find.text('Choose your PIN'), findsOneWidget);
       });
     });
+  });
+
+  testWidgets('a pending PIN change cannot submit twice from the keyboard', (tester) async {
+    final response = Completer<http.Response>();
+    final requests = <http.Request>[];
+    final (backend, observer) = await _openPendingPinChange(tester, response, requests);
+    await tester.showKeyboard(find.widgetWithText(TextField, 'New PIN again'));
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(requests, hasLength(1));
+    response.complete(_json({'access': 'A2', 'refresh': 'R2'}));
+    await tester.pumpAndSettle();
+    expect(observer.popped, isNot(contains('account')));
+    expect(find.text('Open PIN change'), findsOneWidget);
+    expect((await backend.client.tokens.read())?.refresh, 'R2');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a dismissed pending PIN change does not close the account page', (tester) async {
+    final response = Completer<http.Response>();
+    final requests = <http.Request>[];
+    final (backend, observer) = await _openPendingPinChange(tester, response, requests);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump(); // The dialog remains mounted during its exit transition.
+    response.complete(_json({'access': 'A2', 'refresh': 'R2'}));
+    await tester.pumpAndSettle();
+    expect(observer.popped, isNot(contains('account')));
+    expect(find.byType(ChangePinDialog), findsNothing);
+    expect(find.text('Open PIN change'), findsOneWidget);
+    expect((await backend.client.tokens.read())?.refresh, 'R2');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a member changes the phone-number password they were given for a PIN',

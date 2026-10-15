@@ -50,6 +50,7 @@ class _ChangePinDialogState extends State<ChangePinDialog> {
   }
 
   Future<void> _save() async {
+    if (_busy) return;
     final pin = widget.pin;
     final errors = {
       if (_current.text.isEmpty) 'current_password': 'Enter what you sign in with now.',
@@ -64,6 +65,7 @@ class _ChangePinDialogState extends State<ChangePinDialog> {
     setState(() => _busy = true);
     try {
       await auth.changePassword(current: _current.text, newPassword: _new.text);
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
       navigator.pop(true);
     } on ApiException catch (error) {
       if (mounted) {
