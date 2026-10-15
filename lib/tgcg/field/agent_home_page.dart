@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart' show formatMoment;
 import '../api/backend.dart';
+import '../domain/permissions.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
+import '../membership/member_review_page.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
@@ -112,7 +114,12 @@ class _AgentHomePageState extends State<AgentHomePage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        _AgentCard(name: session.operatorName, accessId: me, scope: session.scope),
+        _AgentCard(
+          name: session.operatorName,
+          accessId: me,
+          role: session.roleTitle,
+          scope: session.scope,
+        ),
         const SizedBox(height: 14),
         _CheckInCard(
           checkedInAt: checkedInToday ? last : null,
@@ -145,6 +152,21 @@ class _AgentHomePageState extends State<AgentHomePage> {
           detail: 'Calls from your coordinators',
           onTap: () => widget.onOpenModule(TgcgModule.meetingRoom),
         ),
+        if (session.can(TgcgCapability.verifyMemberIdentity))
+          _Action(
+            icon: Icons.verified_user_outlined,
+            title: 'Identity checks',
+            detail: 'Confirm the members of your polling unit',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  backgroundColor: TgcgColors.canvas,
+                  appBar: AppBar(title: const Text('Identity checks')),
+                  body: const MemberReviewPage(),
+                ),
+              ),
+            ),
+          ),
         const SizedBox(height: 18),
         const Text(
           'What you have sent',
@@ -185,10 +207,18 @@ class _AgentHomePageState extends State<AgentHomePage> {
 }
 
 class _AgentCard extends StatelessWidget {
-  const _AgentCard({required this.name, required this.accessId, required this.scope});
+  const _AgentCard({
+    required this.name,
+    required this.accessId,
+    required this.role,
+    required this.scope,
+  });
 
   final String name;
   final String accessId;
+
+  /// "Polling Unit Agent", or the roles they were appointed to.
+  final String role;
   final GeographicScope scope;
 
   @override
@@ -215,7 +245,7 @@ class _AgentCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '$accessId · Polling unit agent',
+                    '$accessId · $role',
                     style: const TextStyle(color: Color(0xFFC9D4F0), fontSize: 12),
                   ),
                   const SizedBox(height: 6),

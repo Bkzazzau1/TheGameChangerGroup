@@ -43,6 +43,7 @@ enum TgcgCapability {
   assignIncident,
   closeIncident,
   submitFieldReport,
+  fieldDuty,
   verifyFieldReport,
   submitElectionResult,
   verifyElectionResult,
@@ -277,6 +278,7 @@ class TgcgPermissionPolicy {
       TgcgCapability.viewMeetingRoom,
       TgcgCapability.joinMeeting,
       TgcgCapability.viewEvidence,
+      TgcgCapability.fieldDuty,
     },
     TgcgRole.observer: {
       TgcgCapability.viewGeography,
@@ -290,6 +292,7 @@ class TgcgPermissionPolicy {
       TgcgCapability.viewMeetingRoom,
       TgcgCapability.joinMeeting,
       TgcgCapability.viewEvidence,
+      TgcgCapability.fieldDuty,
     },
     TgcgRole.legalOfficer: {
       TgcgCapability.viewSituationRoom,

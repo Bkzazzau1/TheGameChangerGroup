@@ -126,6 +126,14 @@ class TgcgSessionController extends ChangeNotifier {
       ? allowedModulesFor(can, supervises: _supervises).intersection(liveModules)
       : const {};
 
+  /// Agents use the phone field app, and so does anyone appointed to work at
+  /// one polling unit, such as a chapter's polling unit executives.
+  bool get usesFieldApp =>
+      _role == TgcgRole.pollingUnitAgent ||
+      (_role == null &&
+          can(TgcgCapability.fieldDuty) &&
+          scope.level == GeographyLevel.pollingUnit);
+
   /// The fixed role's name, or the appointments the access comes from.
   String get roleTitle {
     final role = _role;

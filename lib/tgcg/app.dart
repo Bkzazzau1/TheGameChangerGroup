@@ -452,7 +452,7 @@ class _AuthenticationGate extends StatelessWidget {
     if (session.isMember) {
       return const MemberShell(key: ValueKey('member-shell'));
     }
-    if (session.role == TgcgRole.pollingUnitAgent) {
+    if (session.usesFieldApp) {
       return const FieldAgentShell(key: ValueKey('field-agent-shell'));
     }
     return const TgcgShell(key: ValueKey('tgcg-shell'));

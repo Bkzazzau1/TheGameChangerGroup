@@ -101,7 +101,16 @@ void main() {
   });
 
   group("a phone's light top bar draws its buttons dark", () {
-    const unit = {'level': 'pollingUnit', 'country': 'Nigeria', 'pollingUnitId': '18-23-05-001'};
+    // As the server sends an area: the polling unit with every area above it.
+    const unit = {
+      'level': 'pollingUnit',
+      'country': 'Nigeria',
+      'zoneId': 'NW',
+      'stateId': 'KD',
+      'lgaId': 'KD-ZARIA',
+      'wardId': '18-23-05',
+      'pollingUnitId': '18-23-05-001',
+    };
 
     Future<void> signIn(WidgetTester tester, Map<String, dynamic> user) async {
       final backend = _server((key, query) => switch (key) {
@@ -168,6 +177,44 @@ void main() {
           reason: item,
         );
       }
+    });
+
+    testWidgets('a polling unit executive works in the agent app', (tester) async {
+      const permissions = [
+        'fieldDuty',
+        'createIncident',
+        'submitFieldReport',
+        'submitElectionResult',
+        'verifyMemberIdentity',
+        'viewMeetingRoom',
+        'joinMeeting',
+      ];
+      await signIn(tester, {
+        'access_id': 'TGCG-000200',
+        'full_name': 'Musa Bello',
+        'role': 'member',
+        'scope': unit,
+        'capabilities': permissions,
+        'membership_number': 'TGCG-000200',
+        'access': [
+          {
+            'source': 'assignment',
+            'assignment': 'a1',
+            'role': 'pu-organising-officer',
+            'role_name': 'PU Organising Officer',
+            'protected': false,
+            'areas': [unit],
+            'permissions': permissions,
+          },
+        ],
+      });
+
+      // The agent's phone app, with their appointment, not the menu app.
+      expect(find.text('TGCG-000200 · PU Organising Officer'), findsOneWidget);
+      expect(find.text('Check in'), findsOneWidget);
+      expect(find.byTooltip('Open navigation menu'), findsNothing);
+      await tester.scrollUntilVisible(find.text('Identity checks'), 200);
+      expect(find.text('Identity checks'), findsOneWidget);
     });
 
     testWidgets("the polling agent's PIN and sign-out buttons", (tester) async {
@@ -297,7 +344,7 @@ void main() {
       await _pump(tester, app(const FieldAgentShell()));
 
       expect(find.text('Musa Bello'), findsOneWidget);
-      expect(find.text('AG-00001 · Polling unit agent'), findsOneWidget);
+      expect(find.text('AG-00001 · Polling Unit Agent'), findsOneWidget);
       expect(find.textContaining('KWARBAI I'), findsWidgets);
       expect(find.textContaining('Checked in today at'), findsOneWidget);
       expect(find.text('Off duty'), findsOneWidget);
