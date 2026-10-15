@@ -2,11 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../domain/models.dart';
+import '../api/backend.dart';
+import '../api/member_admin_repository.dart';
+import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'geography_registry.dart';
 import 'lga_ward_map_dialog.dart';
 import 'nigeria_map.dart';
+import 'ward_polling_units_page.dart';
 
 /// Opens a state's LGA map in a large dialog.
 ///
@@ -100,15 +103,36 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
     return result;
   }();
 
-  late final int _maxLgaMembers = (widget.memberCounts?.values ?? const [0])
-      .fold<int>(0, math.max);
+  /// Counts from the server when the caller gave none and this account may
+  /// find members in the whole state.
+  MemberCounts? _serverCounts;
+  bool _countsAsked = false;
 
-  late final int _lgaMemberTotal =
-      (widget.memberCounts?.values ?? const <int>[]).fold<int>(0, (a, b) => a + b);
+  Map<String, int>? get _memberCounts => widget.memberCounts ?? _serverCounts?.counts;
+  int? get _stateMemberCount => widget.stateMemberCount ?? _serverCounts?.total;
+
+  int get _maxLgaMembers => (_memberCounts?.values ?? const [0]).fold<int>(0, math.max);
+
+  int get _lgaMemberTotal =>
+      (_memberCounts?.values ?? const <int>[]).fold<int>(0, (a, b) => a + b);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_countsAsked || widget.memberCounts != null) return;
+    _countsAsked = true;
+    final backend = TgcgBackend.of(context);
+    if (backend == null || !canFindMembers(TgcgSession.of(context, listen: false))) return;
+    backend.members
+        .counts(level: GeographyLevel.state, code: widget.state.id, by: GeographyLevel.lga)
+        .then((counts) {
+          if (mounted) setState(() => _serverCounts = counts);
+        }, onError: (Object _) {}); // a state beyond the account's area: no numbers
+  }
 
   late final Future<GeoShapeSet> _shapes = GeoShapeSet.lgasOf(widget.state.id);
 
-  int _members(String lgaId) => widget.memberCounts?[lgaId] ?? 0;
+  int _members(String lgaId) => _memberCounts?[lgaId] ?? 0;
 
   Color? _fillFor(String id) {
     if (showMembers) return memberDensityColor(_members(id), _maxLgaMembers);
@@ -139,7 +163,7 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
     final parts = [
       lga.name,
       lga.senatorialDistrictName,
-      if (widget.memberCounts != null) _plural(_members(id), 'member'),
+      if (_memberCounts != null) _plural(_members(id), 'member'),
       if (open > 0) _plural(open, 'open incident'),
     ];
     return parts.join(' • ');
@@ -153,10 +177,10 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
     final title = state.isFederalCapitalTerritory
         ? state.name
         : '${state.name} State';
-    final hasMembers = widget.memberCounts != null;
+    final hasMembers = _memberCounts != null;
     final stateLevelMembers = math.max(
       0,
-      (widget.stateMemberCount ?? _lgaMemberTotal) - _lgaMemberTotal,
+      (_stateMemberCount ?? _lgaMemberTotal) - _lgaMemberTotal,
     );
 
     final map = Container(
@@ -200,7 +224,7 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
         : _LgaList(
             lgas: widget.lgas,
             openByLga: _openByLga,
-            memberCounts: widget.memberCounts,
+            memberCounts: _memberCounts,
             showMembers: showMembers,
             stateLevelMembers: stateLevelMembers,
             onSelect: (id) => setState(() => selectedLgaId = id),
@@ -217,90 +241,101 @@ class _StateLgaMapDialogState extends State<StateLgaMapDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                alignment: WrapAlignment.spaceBetween,
-                runSpacing: 10,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.map_outlined, color: TgcgColors.primary),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              color: TgcgColors.ink,
-                              fontSize: 19,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            '${state.zoneName} • ${widget.lgas.length} local government areas • '
-                            '${_plural(_districtIds.length, 'senatorial district')}',
-                            style: const TextStyle(
-                              color: TgcgColors.muted,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasMembers) ...[
-                        SegmentedButton<bool>(
-                          showSelectedIcon: false,
-                          style: const ButtonStyle(
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          segments: const [
-                            ButtonSegment(
-                              value: false,
-                              icon: Icon(Icons.warning_amber_rounded, size: 16),
-                              label: Text('Incidents'),
-                            ),
-                            ButtonSegment(
-                              value: true,
-                              icon: Icon(Icons.groups_outlined, size: 16),
-                              label: Text('Members'),
+                  Expanded(
+                    // On a phone the counts go below the title.
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.map_outlined, color: TgcgColors.primary),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      color: TgcgColors.ink,
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${state.zoneName} • ${widget.lgas.length} local government areas • '
+                                    '${_plural(_districtIds.length, 'senatorial district')}',
+                                    style: const TextStyle(
+                                      color: TgcgColors.muted,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
-                          selected: {showMembers},
-                          onSelectionChanged: (value) =>
-                              setState(() => showMembers = value.first),
                         ),
-                        const SizedBox(width: 10),
-                        TgcgStatusPill(
-                          label:
-                              '${widget.stateMemberCount ?? _lgaMemberTotal} MEMBERS',
-                          color: TgcgColors.primary,
-                          icon: Icons.groups_outlined,
-                          compact: true,
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (hasMembers) ...[
+                              SegmentedButton<bool>(
+                                showSelectedIcon: false,
+                                style: const ButtonStyle(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                segments: const [
+                                  ButtonSegment(
+                                    value: false,
+                                    icon: Icon(Icons.warning_amber_rounded, size: 16),
+                                    label: Text('Incidents'),
+                                  ),
+                                  ButtonSegment(
+                                    value: true,
+                                    icon: Icon(Icons.groups_outlined, size: 16),
+                                    label: Text('Members'),
+                                  ),
+                                ],
+                                selected: {showMembers},
+                                onSelectionChanged: (value) =>
+                                    setState(() => showMembers = value.first),
+                              ),
+                              TgcgStatusPill(
+                                label:
+                                    '${_stateMemberCount ?? _lgaMemberTotal} MEMBERS',
+                                color: TgcgColors.primary,
+                                icon: Icons.groups_outlined,
+                                compact: true,
+                              ),
+                            ],
+                            TgcgStatusPill(
+                              label: '$totalOpen OPEN',
+                              color: totalOpen == 0
+                                  ? TgcgColors.success
+                                  : TgcgColors.danger,
+                              icon: Icons.warning_amber_rounded,
+                              compact: true,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
                       ],
-                      TgcgStatusPill(
-                        label: '$totalOpen OPEN',
-                        color: totalOpen == 0
-                            ? TgcgColors.success
-                            : TgcgColors.danger,
-                        icon: Icons.warning_amber_rounded,
-                        compact: true,
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        tooltip: 'Close',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
@@ -683,12 +718,15 @@ Widget _legendItem(Color color, String label) => Row(
           ),
         ),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            color: TgcgColors.muted,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
+        // A long label wraps on a narrow phone instead of overflowing.
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: TgcgColors.muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],

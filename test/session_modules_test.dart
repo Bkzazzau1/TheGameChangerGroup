@@ -12,7 +12,8 @@ void main() {
     // Ground for whoever sees live operations, and Member Review for the state,
     // LGA and ward coordinators who verify identities (13 October 2026). Role
     // Assignment for zonal and state coordinators and Technical Support waits for
-    // cascading appointments.
+    // cascading appointments. Since 15 October 2026 the Situation Room is national,
+    // so no coordinator has it, nor Security Response, which needs it.
     final grid = <TgcgRole, Set<TgcgModule>>{
       TgcgRole.nationalCollationOfficer: modules(
         'overview liveOperations agentTracking alertCenter situationRoom evidenceCapture '
@@ -25,24 +26,24 @@ void main() {
         'reports',
       ),
       TgcgRole.zonalCoordinator: modules(
-        'overview liveOperations agentTracking aiAnalytics alertCenter situationRoom '
-        'securityResponse mediaIntelligence accreditation unitMapping aiVerification '
+        'overview liveOperations agentTracking aiAnalytics alertCenter '
+        'mediaIntelligence accreditation unitMapping aiVerification '
         'fieldMonitoring evidenceCapture resultCapture collation communications '
         'bulkCommunications discussionRoom meetingRoom reports',
       ),
       TgcgRole.stateCoordinator: modules(
-        'overview liveOperations agentTracking aiAnalytics alertCenter situationRoom '
-        'securityResponse mediaIntelligence accreditation memberReview unitMapping aiVerification '
+        'overview liveOperations agentTracking aiAnalytics alertCenter '
+        'mediaIntelligence accreditation memberReview unitMapping aiVerification '
         'fieldMonitoring evidenceCapture resultCapture collation communications '
         'bulkCommunications discussionRoom meetingRoom reports',
       ),
       TgcgRole.lgaCoordinator: modules(
-        'overview liveOperations agentTracking alertCenter situationRoom securityResponse '
+        'overview liveOperations agentTracking alertCenter '
         'accreditation memberReview unitMapping aiVerification fieldMonitoring evidenceCapture '
         'resultCapture collation communications discussionRoom meetingRoom',
       ),
       TgcgRole.wardCoordinator: modules(
-        'overview liveOperations agentTracking situationRoom accreditation memberReview '
+        'overview liveOperations agentTracking accreditation memberReview '
         'unitMapping fieldMonitoring evidenceCapture resultCapture collation communications '
         'discussionRoom meetingRoom',
       ),

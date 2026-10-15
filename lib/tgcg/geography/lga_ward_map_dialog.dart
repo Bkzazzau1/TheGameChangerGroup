@@ -2,10 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../api/backend.dart';
+import '../api/member_admin_repository.dart';
+import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'geography_registry.dart';
 import 'lga_wards.dart';
 import 'nigeria_map.dart';
+import 'ward_polling_units_page.dart';
 
 /// Opens an LGA's ward map with the number of polling units in each ward.
 Future<void> showLgaWardMap(BuildContext context, {required CanonicalLga lga}) =>
@@ -29,6 +33,29 @@ class LgaWardMapDialog extends StatefulWidget {
 class _LgaWardMapDialogState extends State<LgaWardMapDialog> {
   late final Future<LgaWards> _wards = LgaWards.load(widget.lga.id);
   String? _selected;
+
+  /// Members registered in each ward, for those who may find members here.
+  MemberCounts? _members;
+  bool _countsAsked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_countsAsked) return;
+    _countsAsked = true;
+    final backend = TgcgBackend.of(context);
+    if (backend == null || !canFindMembers(TgcgSession.of(context, listen: false))) return;
+    backend.members
+        .counts(level: GeographyLevel.lga, code: widget.lga.id, by: GeographyLevel.ward)
+        .then((counts) {
+          if (mounted) setState(() => _members = counts);
+        }, onError: (Object _) {}); // an LGA outside the account's area: no numbers
+  }
+
+  void _open(WardInfo ward) {
+    setState(() => _selected = ward.code);
+    openWardPollingUnits(context, code: ward.code, name: ward.name);
+  }
 
   @override
   Widget build(BuildContext context) => Dialog(
@@ -110,8 +137,9 @@ class _LgaWardMapDialogState extends State<LgaWardMapDialog> {
     final list = _WardList(
       wards: data.wards,
       selected: _selected,
+      members: _members,
       hasShape: (code) => data.shapes?.shapes.containsKey(code) ?? false,
-      onSelect: (code) => setState(() => _selected = _selected == code ? null : code),
+      onSelect: _open,
     );
     final shapes = data.shapes;
     if (shapes == null) {
@@ -147,7 +175,10 @@ class _LgaWardMapDialogState extends State<LgaWardMapDialog> {
         source: Future.value(shapes),
         padding: 12,
         selectedId: _selected,
-        onTap: (code) => setState(() => _selected = _selected == code ? null : code),
+        onTap: (code) {
+          final ward = byCode[code];
+          if (ward != null) _open(ward);
+        },
         fillFor: (code) => pollingUnitDensityColor(byCode[code]?.pollingUnits ?? 0, max),
         labelFor: (code) {
           final ward = byCode[code];
@@ -215,14 +246,16 @@ class _WardList extends StatelessWidget {
   const _WardList({
     required this.wards,
     required this.selected,
+    required this.members,
     required this.hasShape,
     required this.onSelect,
   });
 
   final List<WardInfo> wards;
   final String? selected;
+  final MemberCounts? members;
   final bool Function(String code) hasShape;
-  final ValueChanged<String> onSelect;
+  final ValueChanged<WardInfo> onSelect;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -241,15 +274,26 @@ class _WardList extends StatelessWidget {
               dense: true,
               selected: ward.code == selected,
               selectedTileColor: TgcgColors.primarySoft,
-              onTap: () => onSelect(ward.code),
+              onTap: () => onSelect(ward),
               title: Text(_title(ward.name), style: const TextStyle(fontWeight: FontWeight.w800)),
               subtitle: Text(
                 '${ward.code}${hasShape(ward.code) ? '' : ' • no boundary'}',
                 style: const TextStyle(fontSize: 11, color: TgcgColors.muted),
               ),
-              trailing: Text(
-                '${ward.pollingUnits} PUs',
-                style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.primary),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${ward.pollingUnits} PUs',
+                    style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.primary),
+                  ),
+                  if (members != null)
+                    Text(
+                      '${members![ward.code]} members',
+                      style: const TextStyle(fontSize: 11, color: TgcgColors.muted),
+                    ),
+                ],
               ),
             );
           },

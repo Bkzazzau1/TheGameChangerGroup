@@ -6,8 +6,10 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/tracking_repository.dart';
 import '../geography/geography_registry.dart';
+import '../geography/lga_ward_map_dialog.dart';
 import '../geography/lga_wards.dart';
 import '../geography/nigeria_map.dart';
+import '../geography/ward_polling_units_page.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -325,6 +327,27 @@ class _AgentMap extends StatelessWidget {
   final Future<GeoShapeSet> shapes;
   final GeographicScope scope;
 
+  /// A tapped LGA opens its wards; a tapped ward, its polling units.
+  Future<void> _open(BuildContext context, String id) async {
+    switch (scope.level) {
+      case GeographyLevel.state:
+      case GeographyLevel.senatorialDistrict:
+        final lga = MembershipOperations.of(context, listen: false).geography.lga(id);
+        if (lga != null) await showLgaWardMap(context, lga: lga);
+      case GeographyLevel.lga:
+      case GeographyLevel.ward:
+      case GeographyLevel.pollingUnit:
+        // Without published ward boundaries the map shows the LGA itself.
+        if (id == scope.lgaId) return;
+        final wards = await LgaWards.load(scope.lgaId!);
+        final ward = wards.wards.where((ward) => ward.code == id).firstOrNull;
+        if (ward == null || !context.mounted) return;
+        await openWardPollingUnits(context, code: ward.code, name: ward.name);
+      default:
+        return;
+    }
+  }
+
   /// One dot per agent with a position; the most urgent are painted on top.
   List<Widget> _markers(GeoShapeSet _, GeoProjection projection) {
     final markers = <Widget>[];
@@ -381,6 +404,7 @@ class _AgentMap extends StatelessWidget {
                         style: GeoMapStyle.dark,
                         padding: 28,
                         focusIds: data.$2,
+                        onTap: (id) => _open(context, id),
                         fillFor: (_) => null,
                         overlayBuilder: _markers,
                       ),

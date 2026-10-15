@@ -141,11 +141,11 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.zonalCoordinator: {
+      // No coordinator has the Situation Room: it is national (15 October 2026).
       // As on the server: register members, pin units, see members' contacts.
       TgcgCapability.registerMembers,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
-      TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewAlerts,
       TgcgCapability.viewAnalytics,
@@ -178,7 +178,6 @@ class TgcgPermissionPolicy {
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.verifyMemberIdentity,
-      TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewAlerts,
       TgcgCapability.viewAnalytics,
@@ -214,7 +213,6 @@ class TgcgPermissionPolicy {
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.verifyMemberIdentity,
-      TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewAlerts,
       TgcgCapability.viewGeography,
@@ -245,7 +243,6 @@ class TgcgPermissionPolicy {
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.verifyMemberIdentity,
-      TgcgCapability.viewSituationRoom,
       TgcgCapability.viewLiveOperations,
       TgcgCapability.viewGeography,
       TgcgCapability.viewIncidents,

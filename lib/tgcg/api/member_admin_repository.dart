@@ -26,6 +26,12 @@ class StaffMember {
     this.hasPvc = false,
     this.roles = const [],
     this.createdAt,
+    this.gender = '',
+    this.dateOfBirth,
+    this.occupation = '',
+    this.registrationChannel = '',
+    this.phoneVerified = false,
+    this.hasAppAccount = false,
   });
 
   final String membershipNumber;
@@ -57,6 +63,18 @@ class StaffMember {
   final List<String> roles;
   final DateTime? createdAt;
 
+  /// male, female or empty when not given.
+  final String gender;
+
+  /// Withheld (null) like the phone unless personal details are visible.
+  final DateTime? dateOfBirth;
+  final String occupation;
+
+  /// How they joined: self (the app), ussd, assisted or import.
+  final String registrationChannel;
+  final bool phoneVerified;
+  final bool hasAppAccount;
+
   bool get isVerified => verificationStatus == 'verified';
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
@@ -78,6 +96,32 @@ class StaffMember {
         ((role as Map<String, dynamic>)['role_name'] as String?) ?? '',
     ],
     createdAt: _date(json['created_at']),
+    gender: json['gender'] as String? ?? '',
+    dateOfBirth: DateTime.tryParse('${json['date_of_birth'] ?? ''}'),
+    occupation: json['occupation'] as String? ?? '',
+    registrationChannel: json['registration_channel'] as String? ?? '',
+    phoneVerified: json['phone_verified'] as bool? ?? false,
+    hasAppAccount: json['has_app_account'] as bool? ?? false,
+  );
+}
+
+/// Registered members in each smaller area of an area (`/members/counts/`),
+/// keyed by the smaller areas' codes; areas without members are left out.
+class MemberCounts {
+  const MemberCounts({required this.total, required this.counts});
+
+  /// Everyone in the area, including those registered above the smaller level.
+  final int total;
+  final Map<String, int> counts;
+
+  int operator [](String code) => counts[code] ?? 0;
+
+  factory MemberCounts.fromJson(Map<String, dynamic> json) => MemberCounts(
+    total: json['total'] as int? ?? 0,
+    counts: {
+      for (final MapEntry(:key, :value) in (json['counts'] as Map<String, dynamic>? ?? {}).entries)
+        key: value as int,
+    },
   );
 }
 
@@ -288,6 +332,7 @@ class MemberAdminRepository {
     String? verificationStatus,
     String? membershipState,
     String? phone,
+    String? pollingUnit,
     int offset = 0,
   }) async => ApiPage.fromJson(
     await client.get(
@@ -297,10 +342,24 @@ class MemberAdminRepository {
         if (verificationStatus != null) 'verification_status': verificationStatus,
         if (membershipState != null) 'membership_state': membershipState,
         if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        if (pollingUnit != null) ...{'polling_unit__code': pollingUnit, 'ordering': 'full_name'},
         if (offset > 0) 'offset': '$offset',
       },
     ),
     StaffMember.fromJson,
+  );
+
+  /// Registered members in each [by] area of the area [level]/[code]. The
+  /// server refuses an area not wholly within this account's reach.
+  Future<MemberCounts> counts({
+    required GeographyLevel level,
+    String? code,
+    required GeographyLevel by,
+  }) async => MemberCounts.fromJson(
+    await client.get(
+      'members/counts/',
+      query: {'level': level.name, if (code != null) 'code': code, 'by': by.name},
+    ) as Map<String, dynamic>,
   );
 
   Future<StaffMember> member(String number) async =>
