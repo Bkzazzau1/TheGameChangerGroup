@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,16 +11,54 @@ import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/api/field_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/http_sync_transport.dart';
+import 'package:tgcg_emcop/tgcg/evidence/evidence_upload.dart';
+import 'package:tgcg_emcop/tgcg/evidence/evidence_viewer.dart';
+import 'package:tgcg_emcop/tgcg/evidence/voice_note.dart';
+import 'package:tgcg_emcop/tgcg/field/incident_actions.dart';
 import 'package:tgcg_emcop/tgcg/field/field_monitoring_page.dart';
 import 'package:tgcg_emcop/tgcg/field/field_operations_store.dart';
 import 'package:tgcg_emcop/tgcg/field/situation_room_page.dart';
 import 'package:tgcg_emcop/tgcg/geography/geography_registry.dart';
+import 'package:tgcg_emcop/tgcg/location/gps_service.dart';
 import 'package:tgcg_emcop/tgcg/membership/membership_store.dart';
 import 'package:tgcg_emcop/tgcg/offline/offline_database_stub.dart' as memory_db;
 import 'package:tgcg_emcop/tgcg/offline/offline_payloads.dart';
 import 'package:tgcg_emcop/tgcg/offline/offline_persistence.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 import 'package:tgcg_emcop/tgcg/sync/sync_worker.dart';
+
+/// Location off until a [fix] is set.
+class _FakeGps extends GpsService {
+  GpsFix? fix;
+
+  @override
+  Future<GpsFix> currentFix({Duration timeout = const Duration(seconds: 20)}) async {
+    final reading = fix;
+    if (reading == null) throw const GpsUnavailable(GpsProblem.serviceOff);
+    return reading;
+  }
+}
+
+class _FakeRecorder implements VoiceRecorder {
+  @override
+  Future<bool> start() async => true;
+
+  @override
+  Future<PendingEvidence?> stop() async => PendingEvidence(
+        type: EvidenceType.audio,
+        fileName: 'voice-note.m4a',
+        mimeType: 'audio/mp4',
+        bytes: Uint8List.fromList([0, 0, 0, 24, 102, 116, 121, 112]),
+        sha256: 'ab' * 32,
+        takenAt: DateTime.utc(2027, 2, 20, 10),
+      );
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
 
 http.Response _json(Object body, [int status = 200]) =>
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
@@ -542,6 +581,8 @@ void main() {
       expect(find.text('LIVE FROM SERVER'), findsOneWidget);
       expect(find.text('Ballot box snatched'), findsWidgets);
       expect(find.textContaining('Demo data'), findsNothing);
+      // How far from its polling unit it was reported, as the server judged.
+      expect(find.text('At the polling unit (12 m away)'), findsOneWidget);
       // A reported incident can be acknowledged, escalated or closed, or given a team.
       for (final action in ['Acknowledge', 'Escalate', 'Close', 'Assign team']) {
         expect(find.text(action), findsOneWidget, reason: action);
@@ -613,6 +654,54 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('from a polling unit an incident needs GPS and may carry a voice note', (
+      tester,
+    ) async {
+      session.dispose();
+      session = TgcgSessionController()
+        ..signInFromServer(
+          role: TgcgRole.pollingUnitAgent,
+          fullName: 'Polling Agent',
+          accessId: 'AG-1',
+          scope: _unitScope,
+          capabilities: {'createIncident', 'submitFieldReport', 'viewIncidents'},
+        );
+      final gps = _FakeGps();
+      await pump(
+        tester,
+        FieldMonitoringPage(gps: gps, newVoiceRecorder: _FakeRecorder.new),
+        size: const Size(420, 3000),
+      );
+      await tester.tap(find.text('Report incident'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Incident title'), 'Box snatched');
+
+      // A voice note to explain it.
+      await tester.tap(find.text('Record a voice note'));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('Stop'));
+      await tester.pumpAndSettle();
+      expect(find.text('Voice note · 0:00'), findsOneWidget);
+
+      // With location off it cannot be sent from the polling unit.
+      await tester.tap(find.text('Save incident'));
+      await tester.pumpAndSettle();
+      expect(find.text('Location needed to report this incident'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Report field incident'), findsOneWidget);
+
+      gps.fix = _gps;
+      await tester.tap(find.text('Save incident'));
+      await tester.pumpAndSettle();
+      expect(find.text('Report field incident'), findsNothing);
+      final saved = store.incidents.firstWhere((item) => item.title == 'Box snatched');
+      expect(saved.gps?.latitude, _gps.latitude);
+      expect(saved.evidence.single.type, EvidenceType.audio);
+      expect(find.textContaining('with a voice note'), findsOneWidget);
+    });
+
     testWidgets('the Situation Room shows the server incidents', (tester) async {
       await pump(tester, const SituationRoomPage(), settle: false);
       expect(find.text('LIVE FROM SERVER'), findsOneWidget);
@@ -629,5 +718,42 @@ void main() {
         expect(find.text(action), findsNothing, reason: action);
       }
     });
+  });
+
+  test('an incident says where it was reported, against its polling unit', () {
+    FieldIncident at(String? status, [int? meters]) => FieldIncident(
+          id: 'INC-1',
+          title: 'Box',
+          category: 'Security',
+          severity: IncidentSeverity.high,
+          status: IncidentStatus.reported,
+          scope: _unitScope,
+          reportedAt: DateTime.utc(2027, 2, 20),
+          reporterId: 'AG-1',
+          locationStatus: status,
+          distanceToUnitMeters: meters,
+        );
+    expect(incidentLocationText(at('onSite', 40)), 'At the polling unit (40 m away)');
+    expect(incidentLocationText(at('away', 1850)), '1.9 km from the polling unit');
+    expect(incidentLocationText(at('unverified')), 'The polling unit is not mapped yet');
+    expect(incidentLocationText(at('unverified', 90)), 'About 90 m from the polling unit (weak GPS)');
+    expect(incidentLocationText(at('suspect')), 'The location may be faked');
+    expect(incidentLocationText(at('noGps')), 'No GPS');
+    expect(incidentLocationText(at(null)), isNull);
+  });
+
+  test('voice notes and videos on the server can be played', () {
+    EvidenceAttachment evidence(String id, EvidenceType type) => EvidenceAttachment(
+          id: id,
+          type: type,
+          fileName: 'note.m4a',
+          createdAt: DateTime.utc(2027, 2, 20),
+          uploaderId: 'AG-1',
+        );
+    const server = '9a1e0000-0000-4000-8000-000000000002';
+    expect(canPlayEvidence(evidence(server, EvidenceType.audio)), isTrue);
+    expect(canPlayEvidence(evidence(server, EvidenceType.video)), isTrue);
+    expect(canPlayEvidence(evidence(server, EvidenceType.photo)), isFalse);
+    expect(canPlayEvidence(evidence('INC-L-1-PHOTO-1', EvidenceType.audio)), isFalse);
   });
 }

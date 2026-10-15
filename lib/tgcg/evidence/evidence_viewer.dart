@@ -6,6 +6,7 @@ import '../access/access_widgets.dart' show formatMoment;
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../domain/models.dart';
+import '../media/media_player_page.dart';
 import '../ui/tgcg_design.dart';
 import 'evidence_upload.dart';
 
@@ -16,6 +17,28 @@ bool canShowEvidence(EvidenceAttachment evidence) =>
     _serverId.hasMatch(evidence.id) &&
     (evidence.type == EvidenceType.photo || evidence.type == EvidenceType.resultForm) &&
     (evidence.mimeType?.startsWith('image/') ?? true);
+
+/// On the server, and something the app plays: a voice note or a video.
+bool canPlayEvidence(EvidenceAttachment evidence) =>
+    _serverId.hasMatch(evidence.id) &&
+    (evidence.type == EvidenceType.audio || evidence.type == EvidenceType.video);
+
+/// Plays a voice note or video from the server, which checks that you may
+/// hear it (your own, or evidence in your areas).
+Future<void> playEvidence(BuildContext context, EvidenceAttachment evidence) {
+  final client = TgcgBackend.of(context)!.client;
+  final sound = evidence.type == EvidenceType.audio;
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => MediaPlayerPage(
+        title: sound ? 'Voice note' : 'Video',
+        id: evidence.id,
+        mimeType: evidence.mimeType ?? (sound ? 'audio/mp4' : 'video/mp4'),
+        load: () => client.getBytes('evidence/${evidence.id}/download/'),
+      ),
+    ),
+  );
+}
 
 /// Opens a photo or result sheet from the server, which checks that you may
 /// see it (your own, or evidence in your areas).

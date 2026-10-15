@@ -3,13 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
 
-import '../access/access_widgets.dart' show failureMessage;
 import '../api/backend.dart';
 import '../api/forum_repository.dart';
+import '../media/media_player_page.dart';
 import '../ui/tgcg_design.dart';
-import 'video_source.dart';
 
 /// Where a new post's pictures and videos come from.
 enum ForumMediaSource { photo, video, gallery }
@@ -221,9 +219,19 @@ class ForumVideoTile extends StatelessWidget {
     borderRadius: BorderRadius.circular(12),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => ForumVideoPage(attachment: attachment)),
-      ),
+      onTap: () {
+        final forum = TgcgBackend.of(context)!.forum;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => MediaPlayerPage(
+              title: 'Video',
+              id: attachment.id,
+              mimeType: attachment.mimeType,
+              load: () => forum.attachment(attachment.id),
+            ),
+          ),
+        );
+      },
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: Stack(
@@ -244,114 +252,4 @@ class ForumVideoTile extends StatelessWidget {
       ),
     ),
   );
-}
-
-class ForumVideoPage extends StatefulWidget {
-  const ForumVideoPage({super.key, required this.attachment});
-
-  final ForumAttachment attachment;
-
-  @override
-  State<ForumVideoPage> createState() => _ForumVideoPageState();
-}
-
-class _ForumVideoPageState extends State<ForumVideoPage> {
-  VideoPlayerController? _controller;
-  Future<void> Function()? _release;
-  Object? _error;
-  bool _started = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_started) return;
-    _started = true;
-    _open();
-  }
-
-  Future<void> _open() async {
-    try {
-      final attachment = widget.attachment;
-      final bytes = await TgcgBackend.of(context)!.forum.attachment(attachment.id);
-      final (controller, release) = await playableVideo(
-        bytes,
-        id: attachment.id,
-        mimeType: attachment.mimeType,
-      );
-      _release = release;
-      if (!mounted) {
-        await release();
-        return;
-      }
-      await controller.initialize();
-      if (!mounted) {
-        await controller.dispose();
-        await release();
-        return;
-      }
-      setState(() => _controller = controller);
-      await controller.play();
-    } catch (error) {
-      if (mounted) setState(() => _error = error);
-    }
-  }
-
-  @override
-  void dispose() {
-    final controller = _controller;
-    final release = _release;
-    controller?.dispose().then((_) => release?.call());
-    if (controller == null) release?.call();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = _controller;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: const Text('Video'),
-      ),
-      body: Center(
-        child: _error != null
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'The video could not be played. ${failureMessage(_error!)}',
-                  style: const TextStyle(color: Colors.white),
-                  textAlign: TextAlign.center,
-                ),
-              )
-            : controller == null
-            ? const CircularProgressIndicator()
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: AspectRatio(
-                      aspectRatio: controller.value.aspectRatio,
-                      child: VideoPlayer(controller),
-                    ),
-                  ),
-                  VideoProgressIndicator(controller, allowScrubbing: true),
-                  ValueListenableBuilder<VideoPlayerValue>(
-                    valueListenable: controller,
-                    builder: (context, value, _) => IconButton(
-                      tooltip: value.isPlaying ? 'Pause' : 'Play',
-                      color: Colors.white,
-                      iconSize: 40,
-                      onPressed: value.isPlaying ? controller.pause : controller.play,
-                      icon: Icon(
-                        value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
 }

@@ -504,6 +504,8 @@ class FieldOperationsController extends ChangeNotifier with ServerRecords<FieldS
         evidence: incident.evidence,
         origin: incident.origin,
         clientId: incident.clientId,
+        locationStatus: incident.locationStatus,
+        distanceToUnitMeters: incident.distanceToUnitMeters,
       );
 
   void _replaceIncident(FieldIncident incident) {

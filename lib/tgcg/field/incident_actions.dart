@@ -546,7 +546,9 @@ class EvidenceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewable = canShowEvidence(evidence);
-    final onDevice = !viewable && evidence.contentHash?.startsWith('sha256:') == true &&
+    final playable = canPlayEvidence(evidence);
+    final onDevice = !viewable && !playable &&
+        evidence.contentHash?.startsWith('sha256:') == true &&
         evidence.id.contains('-PHOTO-');
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
@@ -555,7 +557,11 @@ class EvidenceRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(11),
         child: InkWell(
           borderRadius: BorderRadius.circular(11),
-          onTap: viewable ? () => showEvidence(context, evidence) : null,
+          onTap: viewable
+              ? () => showEvidence(context, evidence)
+              : playable
+                  ? () => playEvidence(context, evidence)
+                  : null,
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -589,15 +595,19 @@ class EvidenceRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (viewable)
-                  const Row(
+                if (viewable || playable)
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.visibility_outlined, size: 16, color: TgcgColors.primaryMid),
-                      SizedBox(width: 4),
+                      Icon(
+                        viewable ? Icons.visibility_outlined : Icons.play_circle_outline_rounded,
+                        size: 16,
+                        color: TgcgColors.primaryMid,
+                      ),
+                      const SizedBox(width: 4),
                       Text(
-                        'View',
-                        style: TextStyle(
+                        viewable ? 'View' : 'Play',
+                        style: const TextStyle(
                           color: TgcgColors.primaryMid,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
@@ -612,4 +622,25 @@ class EvidenceRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Where an incident was reported, judged against its polling unit, in words;
+/// null until the server has judged it.
+String? incidentLocationText(FieldIncident incident) {
+  final meters = incident.distanceToUnitMeters;
+  final distance = meters == null
+      ? null
+      : meters < 1000
+          ? '$meters m'
+          : '${(meters / 1000).toStringAsFixed(1)} km';
+  return switch (incident.locationStatus) {
+    'onSite' => 'At the polling unit${distance == null ? '' : ' ($distance away)'}',
+    'away' => '${distance ?? 'Away'} from the polling unit',
+    'unverified' => distance == null
+        ? 'The polling unit is not mapped yet'
+        : 'About $distance from the polling unit (weak GPS)',
+    'suspect' => 'The location may be faked',
+    'noGps' => 'No GPS',
+    _ => null,
+  };
 }

@@ -5,7 +5,7 @@ import 'package:video_player/video_player.dart';
 import 'package:web/web.dart' as web;
 
 /// The web plays from an in-memory link to the downloaded bytes.
-Future<(VideoPlayerController, Future<void> Function())> playableVideo(
+Future<(VideoPlayerController, Future<void> Function())> playableMedia(
   Uint8List bytes, {
   required String id,
   required String mimeType,

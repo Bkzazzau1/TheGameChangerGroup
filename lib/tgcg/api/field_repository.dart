@@ -57,6 +57,8 @@ FieldIncident fieldIncidentFromJson(Map<String, dynamic> json) {
     ],
     origin: _origin(json['origin']),
     clientId: _text(json['client_id']),
+    locationStatus: _text(location?['status']),
+    distanceToUnitMeters: (location?['distance_to_pu_m'] as num?)?.round(),
   );
 }
 

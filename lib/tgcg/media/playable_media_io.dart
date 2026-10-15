@@ -5,8 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 /// Phones and desktops play from a file in the app's own temporary folder,
-/// deleted when the video is closed.
-Future<(VideoPlayerController, Future<void> Function())> playableVideo(
+/// deleted when it is closed.
+Future<(VideoPlayerController, Future<void> Function())> playableMedia(
   Uint8List bytes, {
   required String id,
   required String mimeType,
@@ -16,9 +16,14 @@ Future<(VideoPlayerController, Future<void> Function())> playableVideo(
     'video/quicktime' => '.mov',
     'video/3gpp' => '.3gp',
     'video/webm' => '.webm',
+    'audio/mp4' || 'audio/m4a' || 'audio/x-m4a' => '.m4a',
+    'audio/wav' || 'audio/x-wav' || 'audio/wave' => '.wav',
+    'audio/mpeg' => '.mp3',
+    'audio/aac' => '.aac',
+    'audio/ogg' => '.ogg',
     _ => '.mp4',
   };
-  final file = File('${folder.path}${Platform.pathSeparator}forum-$id$extension');
+  final file = File('${folder.path}${Platform.pathSeparator}tgcg-media-$id$extension');
   await file.writeAsBytes(bytes, flush: true);
   return (
     VideoPlayerController.file(file),

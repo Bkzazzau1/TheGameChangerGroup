@@ -5,7 +5,9 @@ import '../access/access_widgets.dart' show promptText, showDone;
 import '../domain/permissions.dart';
 import '../evidence/evidence_upload.dart';
 import '../evidence/evidence_viewer.dart';
+import '../evidence/voice_note.dart';
 import '../location/gps_prompt.dart';
+import '../location/gps_service.dart';
 import '../session.dart';
 import '../sync/server_records.dart';
 import '../ui/server_feed.dart';
@@ -14,7 +16,14 @@ import 'field_operations_store.dart';
 import 'incident_actions.dart';
 
 class FieldMonitoringPage extends StatefulWidget {
-  const FieldMonitoringPage({super.key});
+  const FieldMonitoringPage({
+    super.key,
+    this.gps = const GpsService(),
+    this.newVoiceRecorder = deviceVoiceRecorder,
+  });
+
+  final GpsService gps;
+  final VoiceRecorder Function() newVoiceRecorder;
 
   @override
   State<FieldMonitoringPage> createState() => _FieldMonitoringPageState();
@@ -178,164 +187,176 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
     var severity = IncidentSeverity.medium;
     var scope = locations.first;
     var photos = <PendingEvidence>[];
+    PendingEvidence? voiceNote;
 
     final created = await showDialog<FieldIncident>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Report field incident'),
-          content: SizedBox(
-            width: 620,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: title,
-                    decoration: const InputDecoration(
-                      labelText: 'Incident title',
-                      hintText: 'Short factual description',
+      builder: (dialogContext) => _DisposeWhenClosed(
+        notifiers: [title, summary],
+        child: StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Report field incident'),
+            content: SizedBox(
+              width: 620,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: title,
+                      decoration: const InputDecoration(
+                        labelText: 'Incident title',
+                        hintText: 'Short factual description',
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final categoryField = DropdownButtonFormField<String>(
-                        initialValue: category,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Category'),
-                        items: _incidentCategories
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value, overflow: TextOverflow.ellipsis),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) => setDialogState(
-                          () => category = value ?? category,
-                        ),
-                      );
-                      final severityField = DropdownButtonFormField<IncidentSeverity>(
-                        initialValue: severity,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Severity'),
-                        items: IncidentSeverity.values
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(
-                                  _label(value.name),
-                                  overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 10),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final categoryField = DropdownButtonFormField<String>(
+                          initialValue: category,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Category'),
+                          items: _incidentCategories
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value, overflow: TextOverflow.ellipsis),
                                 ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) => setDialogState(
-                          () => severity = value ?? severity,
-                        ),
-                      );
-                      // Side by side only where both have room for their words.
-                      if (constraints.maxWidth < 440) {
-                        return Column(
+                              )
+                              .toList(),
+                          onChanged: (value) => setDialogState(
+                            () => category = value ?? category,
+                          ),
+                        );
+                        final severityField = DropdownButtonFormField<IncidentSeverity>(
+                          initialValue: severity,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Severity'),
+                          items: IncidentSeverity.values
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(
+                                    _label(value.name),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) => setDialogState(
+                            () => severity = value ?? severity,
+                          ),
+                        );
+                        // Side by side only where both have room for their words.
+                        if (constraints.maxWidth < 440) {
+                          return Column(
+                            children: [
+                              categoryField,
+                              const SizedBox(height: 10),
+                              severityField,
+                            ],
+                          );
+                        }
+                        return Row(
                           children: [
-                            categoryField,
-                            const SizedBox(height: 10),
-                            severityField,
+                            Expanded(child: categoryField),
+                            const SizedBox(width: 10),
+                            Expanded(child: severityField),
                           ],
                         );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: categoryField),
-                          const SizedBox(width: 10),
-                          Expanded(child: severityField),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<GeographicScope>(
-                    initialValue: scope,
-                    decoration: const InputDecoration(labelText: 'Field location'),
-                    isExpanded: true,
-                    items: locations
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(
-                              value.label,
-                              overflow: TextOverflow.ellipsis,
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<GeographicScope>(
+                      initialValue: scope,
+                      decoration: const InputDecoration(labelText: 'Field location'),
+                      isExpanded: true,
+                      items: locations
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(
+                                value.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setDialogState(
-                      () => scope = value ?? scope,
+                          )
+                          .toList(),
+                      onChanged: (value) => setDialogState(
+                        () => scope = value ?? scope,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: summary,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'What happened?',
-                      hintText: 'Record observable facts and operational impact.',
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: summary,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'What happened?',
+                        hintText: 'Record observable facts and operational impact.',
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (store.isLive)
-                    EvidencePhotoPicker(
-                      photos: photos,
-                      label: 'Photos (optional)',
-                      hint: 'They upload after the incident and are kept as taken.',
-                      onChanged: (value) => setDialogState(() => photos = value),
-                    )
-                  else
-                    const _DeviceCaptureIntegrationPanel(),
-                ],
+                    const SizedBox(height: 14),
+                    if (store.isLive) ...[
+                      EvidencePhotoPicker(
+                        photos: photos,
+                        label: 'Photos (optional)',
+                        hint: 'They upload after the incident and are kept as taken.',
+                        onChanged: (value) => setDialogState(() => photos = value),
+                      ),
+                      const SizedBox(height: 14),
+                      VoiceNoteField(
+                        note: voiceNote,
+                        newRecorder: widget.newVoiceRecorder,
+                        onChanged: (value) => setDialogState(() => voiceNote = value),
+                      ),
+                    ] else
+                      const _DeviceCaptureIntegrationPanel(),
+                  ],
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  if (title.text.trim().isEmpty) return;
+                  // A report from a polling unit needs GPS, to say how far from
+                  // the unit it was made; coordinators may report without it.
+                  final fromUnit = session.scope.level == GeographyLevel.pollingUnit;
+                  final gps = await captureGps(
+                    dialogContext,
+                    required: fromUnit,
+                    action: 'report this incident',
+                    gps: widget.gps,
+                  );
+                  if (fromUnit && gps == null) return;
+                  final incident = await store.createIncident(
+                    title: title.text,
+                    category: category,
+                    severity: severity,
+                    scope: scope,
+                    reporterId: session.accessId.isEmpty
+                        ? session.operatorName
+                        : session.accessId,
+                    summary: summary.text,
+                    gps: gps,
+                    photos: [...photos, ?voiceNote],
+                  );
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, incident);
+                  }
+                },
+                icon: const Icon(Icons.send_outlined),
+                label: const Text('Save incident'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                if (title.text.trim().isEmpty) return;
-                // GPS is attached when available but never blocks a report.
-                final gps = await captureGps(
-                  dialogContext,
-                  required: false,
-                  action: 'report this incident',
-                );
-                final incident = await store.createIncident(
-                  title: title.text,
-                  category: category,
-                  severity: severity,
-                  scope: scope,
-                  reporterId: session.accessId.isEmpty
-                      ? session.operatorName
-                      : session.accessId,
-                  summary: summary.text,
-                  gps: gps,
-                  photos: photos,
-                );
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, incident);
-                }
-              },
-              icon: const Icon(Icons.send_outlined),
-              label: const Text('Save incident'),
-            ),
-          ],
         ),
       ),
     );
-    title.dispose();
-    summary.dispose();
     if (created != null && context.mounted) {
       setState(() => selectedIncidentId = created.id);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -344,6 +365,7 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
             store.isLive
                 ? 'Incident saved on this device'
                     '${photos.isEmpty ? '' : ' with ${photos.length} photo${photos.length == 1 ? '' : 's'}'}'
+                    '${voiceNote == null ? '' : photos.isEmpty ? ' with a voice note' : ' and a voice note'}'
                     '. It uploads to the server automatically.'
                 : '${created.id} encrypted locally and queued for sync. Media/GPS capture will attach when device integrations are connected.',
           ),
@@ -374,114 +396,116 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
 
     final created = await showDialog<FieldReport>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Submit field report'),
-          content: SizedBox(
-            width: 580,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: category,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Report category'),
-                    items: _reportCategories
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value, overflow: TextOverflow.ellipsis),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setDialogState(
-                      () => category = value ?? category,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<GeographicScope>(
-                    initialValue: scope,
-                    decoration: const InputDecoration(labelText: 'Field location'),
-                    isExpanded: true,
-                    items: locations
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value.label, overflow: TextOverflow.ellipsis),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setDialogState(
-                      () => scope = value ?? scope,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String?>(
-                    initialValue: incidentId,
-                    decoration: const InputDecoration(
-                      labelText: 'Related incident (optional)',
-                    ),
-                    isExpanded: true,
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('No linked incident'),
+      builder: (dialogContext) => _DisposeWhenClosed(
+        notifiers: [summary],
+        child: StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Submit field report'),
+            content: SizedBox(
+              width: 580,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: category,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Report category'),
+                      items: _reportCategories
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value, overflow: TextOverflow.ellipsis),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setDialogState(
+                        () => category = value ?? category,
                       ),
-                      ...availableIncidents.map(
-                        (incident) => DropdownMenuItem<String?>(
-                          value: incident.id,
-                          child: Text(
-                            '${incident.id} • ${incident.title}',
-                            overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<GeographicScope>(
+                      initialValue: scope,
+                      decoration: const InputDecoration(labelText: 'Field location'),
+                      isExpanded: true,
+                      items: locations
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value.label, overflow: TextOverflow.ellipsis),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setDialogState(
+                        () => scope = value ?? scope,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String?>(
+                      initialValue: incidentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Related incident (optional)',
+                      ),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('No linked incident'),
+                        ),
+                        ...availableIncidents.map(
+                          (incident) => DropdownMenuItem<String?>(
+                            value: incident.id,
+                            child: Text(
+                              '${incident.id} • ${incident.title}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                    onChanged: (value) => setDialogState(() => incidentId = value),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: summary,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Field update',
-                      hintText: 'Record the current operational situation.',
+                      ],
+                      onChanged: (value) => setDialogState(() => incidentId = value),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: summary,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Field update',
+                        hintText: 'Record the current operational situation.',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  if (summary.text.trim().isEmpty) return;
+                  final report = await store.submitFieldReport(
+                    category: category,
+                    summary: summary.text,
+                    scope: scope,
+                    reporterId: session.accessId.isEmpty
+                        ? session.operatorName
+                        : session.accessId,
+                    incidentId: incidentId,
+                  );
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, report);
+                  }
+                },
+                icon: const Icon(Icons.send_outlined),
+                label: const Text('Submit report'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                if (summary.text.trim().isEmpty) return;
-                final report = await store.submitFieldReport(
-                  category: category,
-                  summary: summary.text,
-                  scope: scope,
-                  reporterId: session.accessId.isEmpty
-                      ? session.operatorName
-                      : session.accessId,
-                  incidentId: incidentId,
-                );
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, report);
-                }
-              },
-              icon: const Icon(Icons.send_outlined),
-              label: const Text('Submit report'),
-            ),
-          ],
         ),
       ),
     );
-    summary.dispose();
     if (created != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -976,6 +1000,8 @@ class _IncidentInspector extends StatelessWidget {
                     ? '${current.latitude}, ${current.longitude}'
                     : 'Not captured',
           ),
+          if (incidentLocationText(current) case final where?)
+            _Detail('From the unit', where),
           if (current.summary != null) ...[
             const SizedBox(height: 12),
             const Text(
@@ -1552,4 +1578,29 @@ String _label(String value) {
 
 extension _FirstOrNull<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+}
+
+/// Disposes a dialog's text controllers once the dialog has gone, after its
+/// closing animation: disposed as soon as it is popped, they break it.
+class _DisposeWhenClosed extends StatefulWidget {
+  const _DisposeWhenClosed({required this.notifiers, required this.child});
+
+  final List<ChangeNotifier> notifiers;
+  final Widget child;
+
+  @override
+  State<_DisposeWhenClosed> createState() => _DisposeWhenClosedState();
+}
+
+class _DisposeWhenClosedState extends State<_DisposeWhenClosed> {
+  @override
+  void dispose() {
+    for (final notifier in widget.notifiers) {
+      notifier.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

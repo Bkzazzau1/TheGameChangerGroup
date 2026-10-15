@@ -822,6 +822,12 @@ class _IncidentInspector extends StatelessWidget {
             label: 'Location',
             value: item.scope.label,
           ),
+          if (incidentLocationText(item) case final where?)
+            _InspectorLine(
+              icon: Icons.near_me_outlined,
+              label: 'From the unit',
+              value: where,
+            ),
           _InspectorLine(
             icon: Icons.person_outline_rounded,
             label: 'Reporter',

@@ -275,6 +275,8 @@ class FieldIncident {
     this.evidence = const [],
     this.origin = RecordOrigin.localEntry,
     this.clientId,
+    this.locationStatus,
+    this.distanceToUnitMeters,
   });
 
   final String id;
@@ -295,6 +297,14 @@ class FieldIncident {
 
   /// The id the device uploaded it with (the server's `client_id`).
   final String? clientId;
+
+  /// The server's judgement of where it was reported: onSite, away,
+  /// unverified, suspect or noGps. Null until the server has it.
+  final String? locationStatus;
+
+  /// How far from its polling unit it was reported, when the unit's location
+  /// is known.
+  final int? distanceToUnitMeters;
 }
 
 class FieldReport {
