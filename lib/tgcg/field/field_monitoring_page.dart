@@ -198,44 +198,61 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: category,
-                          decoration: const InputDecoration(labelText: 'Category'),
-                          items: _incidentCategories
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) => setDialogState(
-                            () => category = value ?? category,
-                          ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final categoryField = DropdownButtonFormField<String>(
+                        initialValue: category,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Category'),
+                        items: _incidentCategories
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value, overflow: TextOverflow.ellipsis),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setDialogState(
+                          () => category = value ?? category,
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonFormField<IncidentSeverity>(
-                          initialValue: severity,
-                          decoration: const InputDecoration(labelText: 'Severity'),
-                          items: IncidentSeverity.values
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(_label(value.name)),
+                      );
+                      final severityField = DropdownButtonFormField<IncidentSeverity>(
+                        initialValue: severity,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Severity'),
+                        items: IncidentSeverity.values
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(
+                                  _label(value.name),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              )
-                              .toList(),
-                          onChanged: (value) => setDialogState(
-                            () => severity = value ?? severity,
-                          ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setDialogState(
+                          () => severity = value ?? severity,
                         ),
-                      ),
-                    ],
+                      );
+                      // Side by side only where both have room for their words.
+                      if (constraints.maxWidth < 440) {
+                        return Column(
+                          children: [
+                            categoryField,
+                            const SizedBox(height: 10),
+                            severityField,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: categoryField),
+                          const SizedBox(width: 10),
+                          Expanded(child: severityField),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<GeographicScope>(
@@ -368,12 +385,13 @@ class _FieldMonitoringPageState extends State<FieldMonitoringPage> with ServerAu
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: category,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Report category'),
                     items: _reportCategories
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
-                            child: Text(value),
+                            child: Text(value, overflow: TextOverflow.ellipsis),
                           ),
                         )
                         .toList(),

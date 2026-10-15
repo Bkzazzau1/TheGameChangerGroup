@@ -499,8 +499,13 @@ void main() {
       store.dispose();
     });
 
-    Future<void> pump(WidgetTester tester, Widget page, {bool settle = true}) async {
-      tester.view.physicalSize = const Size(1300, 4200);
+    Future<void> pump(
+      WidgetTester tester,
+      Widget page, {
+      bool settle = true,
+      Size size = const Size(1300, 4200),
+    }) async {
+      tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
@@ -570,6 +575,42 @@ void main() {
         'reason': '',
       });
       expect(find.text('Nothing to review'), findsOneWidget);
+    });
+
+    testWidgets('on a phone, the incident and field report forms fit their words', (tester) async {
+      await pump(tester, const FieldMonitoringPage(), size: const Size(360, 3000));
+      Finder inDialog(Finder finder) =>
+          find.descendant(of: find.byType(AlertDialog), matching: finder);
+
+      await tester.tap(find.text('Report incident'));
+      await tester.pumpAndSettle();
+      expect(find.text('Report field incident'), findsOneWidget);
+      // Side by side neither has room for its words, so Severity goes below.
+      expect(
+        tester.getTopLeft(inDialog(find.text('Severity'))).dy,
+        greaterThan(tester.getTopLeft(inDialog(find.text('Category'))).dy),
+      );
+      // The longest category fits once chosen (an overflow fails the test).
+      await tester.tap(inDialog(find.byType(DropdownButtonFormField<String>)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Materials / logistics').last);
+      await tester.pumpAndSettle();
+      await tester.tap(inDialog(find.byType(DropdownButtonFormField<IncidentSeverity>)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Critical').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Field report'));
+      await tester.pumpAndSettle();
+      expect(find.text('Submit field report'), findsOneWidget);
+      await tester.tap(inDialog(find.byType(DropdownButtonFormField<String>)).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Queue / turnout observation').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('the Situation Room shows the server incidents', (tester) async {

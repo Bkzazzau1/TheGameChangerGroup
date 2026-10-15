@@ -370,9 +370,14 @@ class _PinGuidePageState extends State<PinGuidePage> {
             const SizedBox(height: 10),
             DropdownButtonFormField<MappingProblem>(
               initialValue: _problem,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'What is wrong?'),
               items: [
-                for (final p in MappingProblem.values) DropdownMenuItem(value: p, child: Text(p.label)),
+                for (final p in MappingProblem.values)
+                  DropdownMenuItem(
+                    value: p,
+                    child: Text(p.label, overflow: TextOverflow.ellipsis),
+                  ),
               ],
               onChanged: (value) => setState(() => _problem = value ?? _problem),
             ),
