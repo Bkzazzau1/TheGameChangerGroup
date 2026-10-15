@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'access/access_page.dart';
 import 'access/my_access_page.dart';
+import 'account/change_pin_dialog.dart';
 import 'ai/ai_verification_page.dart';
 import 'alerts/alert_center_page.dart';
 import 'analytics/ai_data_analytics_page.dart';
@@ -360,23 +361,31 @@ class _OperatorCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (session.membershipNumber != null)
-                  IconButton(
-                    tooltip: 'My membership',
-                    onPressed: () => openMyMembership(context),
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.card_membership_outlined,
-                      color: Color(0xFFA4AAB9),
-                      size: 18,
-                    ),
-                  ),
                 if (session.isServerSession)
-                  IconButton(
-                    tooltip: 'My access',
-                    onPressed: () => openMyAccess(context),
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.badge_outlined, color: Color(0xFFA4AAB9), size: 18),
+                  // One menu, so the name keeps its room in a phone's drawer.
+                  PopupMenuButton<VoidCallback>(
+                    tooltip: 'Account',
+                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFFA4AAB9), size: 18),
+                    onSelected: (open) => open(),
+                    itemBuilder: (_) => [
+                      if (session.membershipNumber != null)
+                        PopupMenuItem(
+                          value: () => openMyMembership(context),
+                          child: const Text('My membership'),
+                        ),
+                      PopupMenuItem(
+                        value: () => openMyAccess(context),
+                        child: const Text('My access'),
+                      ),
+                      PopupMenuItem(
+                        value: () => showChangePin(context),
+                        child: Text(
+                          session.isMember || session.role == null
+                              ? 'Change PIN'
+                              : 'Change password',
+                        ),
+                      ),
+                    ],
                   ),
                 IconButton(
                   tooltip: 'Sign out',

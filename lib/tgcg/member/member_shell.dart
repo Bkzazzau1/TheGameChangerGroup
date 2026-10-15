@@ -4,6 +4,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart';
+import '../account/change_pin_dialog.dart';
 import '../access/my_access_page.dart';
 import '../api/api_client.dart';
 import '../api/backend.dart';
@@ -97,11 +98,23 @@ class _MemberShellState extends State<MemberShell> {
           children: [
             TgcgLogo(size: 30),
             SizedBox(width: 10),
-            Text('TGCG Member', style: TextStyle(fontWeight: FontWeight.w900)),
+            // Shrinks rather than overflow beside the buttons on a narrow phone.
+            Flexible(
+              child: Text(
+                'TGCG Member',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
           ],
         ),
         actions: [
           IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
+          IconButton(
+            tooltip: 'Change PIN',
+            onPressed: () => showChangePin(context),
+            icon: const Icon(Icons.password_rounded),
+          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: session.signOut,

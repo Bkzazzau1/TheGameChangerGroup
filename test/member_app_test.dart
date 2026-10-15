@@ -676,6 +676,42 @@ void main() {
     });
   });
 
+  testWidgets('a member changes the phone-number password they were given for a PIN',
+      (tester) async {
+    final server = _Server((request) => switch (_path(request)) {
+          'auth/password/' => _json({'access': 'A2', 'refresh': 'R2'}),
+          'me/member/' => _json(_card()),
+          'me/member/pvc-scan/' => _json({'can_scan': false, 'latest': null}),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 1, 'members_in_ward': 2}),
+          'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
+          'me/volunteer/' => _json(<Object>[]),
+          _ => null,
+        });
+    final backend = server.connect();
+    await _pump(tester, backend, const MemberShell(), member: true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Change PIN'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Current PIN or password'), '08030000001');
+    await tester.enterText(find.widgetWithText(TextField, 'New 6-digit PIN'), '482915');
+    await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482916');
+    await tester.tap(find.widgetWithText(FilledButton, 'Change PIN'));
+    await tester.pump();
+    expect(find.text('The two do not match.'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482915');
+    await tester.tap(find.widgetWithText(FilledButton, 'Change PIN'));
+    await tester.pumpAndSettle();
+    expect(jsonDecode(server.bodies['POST /api/v1/auth/password/']!), {
+      'current_password': '08030000001',
+      'new_password': '482915',
+    });
+    expect(find.text('Your PIN was changed.'), findsOneWidget);
+    // This device keeps going with the new session the server handed back.
+    expect((await backend.client.tokens.read())?.refresh, 'R2');
+  });
+
   testWidgets('a forgotten PIN is reset by SMS code and signs the member in', (tester) async {
     final server = _Server((request) => switch (_path(request)) {
           'register/pin-code/' => _json({'expires_in': 600}),
@@ -1298,7 +1334,11 @@ void main() {
     expect(find.text('Roles & Access'), findsNothing);
     expect(find.text('Your access'), findsOneWidget);
     expect(find.text('Kaduna Media Director'), findsWidgets);
-    // Still a member: the card and the rest of the member app are one tap away.
-    expect(find.byTooltip('My membership'), findsOneWidget);
+    // Still a member: the card and the rest of the member app are in the
+    // account menu, with changing the PIN.
+    await tester.tap(find.byTooltip('Account').first);
+    await tester.pumpAndSettle();
+    expect(find.text('My membership'), findsOneWidget);
+    expect(find.text('Change PIN'), findsOneWidget);
   });
 }

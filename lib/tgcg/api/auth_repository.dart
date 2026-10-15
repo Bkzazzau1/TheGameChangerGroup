@@ -149,6 +149,19 @@ class AuthRepository {
   Future<ServerUser> me() async =>
       ServerUser.fromJson(await client.get('auth/me/') as Map<String, dynamic>);
 
+  /// Changes this account's password, or a member's 6-digit PIN. The server
+  /// signs out every other device; this one carries on with new tokens.
+  Future<void> changePassword({required String current, required String newPassword}) async {
+    final body = await client.post(
+      'auth/password/',
+      body: {'current_password': current, 'new_password': newPassword},
+    ) as Map<String, dynamic>;
+    await client.tokens.write(
+      access: body['access'] as String,
+      refresh: body['refresh'] as String,
+    );
+  }
+
   /// Revokes the refresh token on the server (best effort) and forgets it.
   Future<void> logout() async {
     final saved = await client.tokens.read();

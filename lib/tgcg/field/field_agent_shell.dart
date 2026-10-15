@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../account/change_pin_dialog.dart';
 import '../results/result_capture_page.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -76,6 +77,11 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Change PIN',
+            onPressed: () => showChangePin(context),
+            icon: const Icon(Icons.password_rounded),
+          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: session.signOut,
