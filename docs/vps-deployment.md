@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest web release verified on 14 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest web release verified on 15 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest web release verified on 14 October 2026
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `aa3788ce00075cf67db65f5a9b33153c6257f63e`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `fb36a485cd6ef3ec943654c2cf89c32c6eab037d`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,12 +32,12 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261014-113850-24526e839521` (release directory timestamps use UTC).
-- Frontend build source: `44fbfc3f927830a926b243c99e71c38ef59f4536` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261014-080116-fcfd68e3228e`.
+- Published release: `/var/www/tgcg/releases/web-20261015-180635-c27de4158e43` (release directory timestamps use UTC).
+- Frontend build source: `afbbf0c31b5ac66f72d11e0f478d9101b16ac956` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261015-131307-2cbbe1103020`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `24526e83952161efab125787cdc41dd56db3d0af116e3780fe4c8388340b6352`.
-- Build: 854 files, 54,549,975 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
+- Main JavaScript SHA256: `c27de4158e43c4d6bdfdbb562bd36b2a8539bed06bd9bf919bdf72774b3d4413`.
+- Build: 854 files, 54,676,149 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -122,7 +122,53 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
-### Member profile and PVC-scan web release (14 October 2026)
+### Forum, national Situation Room and map member counts (15 October 2026)
+
+Deployed backend `fb36a48`, including `ed1df60`, before publishing web source `afbbf0c`. This includes the server forum, map navigation from wards to polling units and members, phone layout fixes and the `video_player` dependency. Current source version is `0.1.0+5`. No APK was built or published for this deployment; the user installs on their phone with `flutter run`.
+
+Validation: all **446 backend tests passed on an isolated PostgreSQL database**, with no failures or skips. All **228 Flutter tests passed**, analysis reported no issues, and the production web build succeeded with `--dart-define=TGCG_API_URL=https://api.tgcg.online`. The isolated test database was removed. Locked production dependencies and pinned Gunicorn were installed. Migration output:
+
+```text
+Applying forum.0001_initial... OK
+```
+
+The migration created forum settings, posts, attachments and replies. Its post-migrate hook synchronized system-role definitions: ward coordinators now have `moderateDiscussion`; agents and observers have `createDiscussionThread`; zonal, state, LGA and ward coordinators no longer have `viewSituationRoom`. The existing non-blocking OpenAPI status-enum warning remains. No environment changes were required; forum limits retain defaults of 15 MB/photo, 50 MB/video, 10 attachments and 100 MB total files/post. The private environment remains `600:tgcg:tgcg`.
+
+Existing custom polling-unit executive roles were changed using `remove_role_permission viewSituationRoom`, as the National Administrator. The dry run reported:
+
+```text
+PU Coordinator: loses it
+Assistant PU Coordinator: loses it
+PU Youth Leader: loses it
+Assistant PU Youth Leader: loses it
+PU Women Coordinator: loses it
+PU Organising Officer: loses it
+Dry run: nothing was saved. Add --commit to change them.
+```
+
+The commit returned `Removed viewSituationRoom from 6 role(s).` Each role has one new `role.updated` audit event attributed to the administrator; all other permissions and existing appointments were preserved.
+
+Nginx `/etc/nginx/tgcg-backend.inc` now has a dedicated `/api/v1/forum/` proxy location, covering post uploads and attachment downloads. It sets `client_max_body_size 160m`, `client_body_timeout 300s`, `proxy_read_timeout 300s` and `proxy_send_timeout 300s`, preserving the usual proxy headers. The existing `/media/` block still returns 404; forum and evidence files have no public alias. Forum files use only the authenticated `/api/v1/forum/attachments/` endpoint. Nginx configuration passed and was reloaded; the API was restarted and health returned `status=ok`, `database=ok`.
+
+Production feature checks used only the National Administrator. `GET /api/v1/forum/settings/` returned `approval_required=true` and `can_change=true`; its first read initializes the default settings row. `GET /api/v1/members/counts/?level=lga&code=KD-ZARIA&by=ward` returned ward counts including `18-23-05`. Both allowed the app origin. System-role and custom-role permissions were verified directly. No members or executives were signed in, no posts or replies were created, and no post content was fetched. Browser private media uses authenticated byte downloads, with images in memory and Blob URLs for videos; playback/upload with real production content was not exercised.
+
+All 854 uploaded web files matched their manifest; public JavaScript checksum, bootstrap and poster checks passed. The previous web release is retained. Secret-free results are in `/opt/tgcg/deployment/forum-release-checks.json`; build source and checksums are in `/opt/tgcg/deployment/web-release.json`. Deployment notes include the previously uncommitted import/Change PIN record below, with no personal details or post content. A successful backup preceded the deployment.
+
+### Earlier Kaura chapter import and Change PIN (15 October 2026)
+
+Deployed backend `3236ee4` and frontend feature commit `cab29e3`, including Change PIN, in web build `4cfa70e`. The final frontend build also guards duplicate PIN submissions and prevents a pending response from closing the account page after the dialog is dismissed. Both regressions were reproduced and fixed without changing UI text. All 216 Flutter tests passed and analysis found no issues.
+
+Before production deployment, all **428 backend tests passed on a separate PostgreSQL database**, including chapter import, working scoped executive roles, repeated imports and password changes. The isolated test database was removed. Locked production dependencies and the pinned Gunicorn runtime were installed. Migration `membership.0011_registration_channel_import` was applied; `0010_pvc_update` was already present. The API was restarted and returned healthy database status. No runtime settings changed; the private environment remains `600:tgcg:tgcg`. The deployment check retained its non-blocking OpenAPI status-enum naming warning.
+
+The National Administrator imported the Zaria LGA chapter's Kaura ward polling-unit executive list for ward `18-23-05`, using source `TGCG Zaria LGA chapter: polling unit executives list`. The private dry run matched the required 186 accepted rows, 10 held rows and the exact expected held-row set. It saved nothing. The subsequent commit created **186 members with 186 polling-unit role appointments** in one transaction; postchecks verified active accounts, verified membership and each appointment's exact polling-unit scope. No SMS was sent.
+
+The CSV was transferred outside all web roots into a private runtime directory, owned by `tgcg` with mode 600. It was not committed or included in deployment artifacts. Command output was captured in memory; only safe summary counts were retained. The job ran independently of the SSH connection with console output disabled, and `shred -u` removed the VPS CSV immediately afterward. No names, phone numbers or individual rows appear in these notes. Summary-only status is retained privately in `/opt/tgcg/deployment/kaura-import-status.json`.
+
+The rebuilt web release contains 854 files; every file matched the upload manifest. Public JavaScript SHA256, bootstrap and poster checks passed. The prior web release is retained.
+
+An APK version 4 was built and verified during the earlier work, but its publication was cancelled when the user chose `flutter run`. It remains a private staging artifact with no published download route. The latest published installer remains version 3. No further APK build or publication was performed for the forum deployment.
+
+### Earlier member profile and PVC-scan web release (14 October 2026)
 
 Published the member profile, optional selfie, occupation, gender and date-of-birth changes, plus the member's single PVC scan and coordinator review. Frontend feature commit `f5ed2e6` is included in build `44fbfc3`; backend feature commit `67ec44d` is included in deployed `aa3788c`. Migration `membership.0010_pvc_update` created the PVC-update record and its one-pending-update-per-member constraint. It was the only pending migration. No dependencies or runtime settings changed; the private environment remains `600:tgcg:tgcg`.
 
