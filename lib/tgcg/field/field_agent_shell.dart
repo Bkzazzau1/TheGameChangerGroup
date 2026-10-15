@@ -43,6 +43,8 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: TgcgColors.surface,
+        // The theme's white icons are for dark bars: this one is light.
+        foregroundColor: TgcgColors.ink,
         surfaceTintColor: Colors.transparent,
         titleSpacing: 14,
         title: Row(

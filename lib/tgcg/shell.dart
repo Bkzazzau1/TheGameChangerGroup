@@ -68,6 +68,8 @@ class _TgcgShellState extends State<TgcgShell> {
               : AppBar(
                   elevation: 0,
                   backgroundColor: TgcgColors.surface,
+                  // The theme's white icons are for dark bars: this one is light.
+                  foregroundColor: TgcgColors.ink,
                   surfaceTintColor: Colors.transparent,
                   title: const _CompactBrand(),
                   actions: [
@@ -530,7 +532,14 @@ class _CompactBrand extends StatelessWidget {
         children: [
           TgcgLogo(size: 36),
           SizedBox(width: 8),
-          Text('TGCG-EMCOP', style: TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink)),
+          Flexible(
+            child: Text(
+              'TGCG-EMCOP',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink),
+            ),
+          ),
         ],
       );
 }

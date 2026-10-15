@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
+import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/dashboard_page.dart';
 import 'package:tgcg_emcop/tgcg/domain/permissions.dart';
 import 'package:tgcg_emcop/tgcg/field/field_agent_shell.dart';
@@ -14,6 +15,7 @@ import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/offline/offline_persistence.dart';
 import 'package:tgcg_emcop/tgcg/results/result_operations_store.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
+import 'package:tgcg_emcop/tgcg/ui/tgcg_design.dart';
 
 http.Response _json(Object body, [int status = 200]) =>
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
@@ -96,6 +98,91 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.text('Welcome to TGCG-EMCOP'), findsOneWidget);
+  });
+
+  group("a phone's light top bar draws its buttons dark", () {
+    const unit = {'level': 'pollingUnit', 'country': 'Nigeria', 'pollingUnitId': '18-23-05-001'};
+
+    Future<void> signIn(WidgetTester tester, Map<String, dynamic> user) async {
+      final backend = _server((key, query) => switch (key) {
+            'POST auth/login/' => _json({'access': 'A', 'refresh': 'R', 'user': user}),
+            'GET incidents/' || 'GET field-reports/' || 'GET results/' => _json(_page(0)),
+            _ => null,
+          });
+      // The real app, with its theme: white icons there are for dark bars.
+      await _pump(tester, TgcgApp(backend: backend), size: const Size(400, 900));
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), '08030000001');
+      await tester.enterText(find.byType(TextField).at(1), '08030000001');
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+    }
+
+    Color? drawn(WidgetTester tester, String tooltip) => tester
+        .widget<RichText>(
+          find.descendant(of: find.byTooltip(tooltip), matching: find.byType(RichText)).first,
+        )
+        .text
+        .style
+        ?.color;
+
+    testWidgets("the operations app's menu button", (tester) async {
+      const permissions = [
+        'createIncident',
+        'submitFieldReport',
+        'submitElectionResult',
+        'viewIncidents',
+        'viewSituationRoom',
+        'verifyMemberIdentity',
+        'viewMeetingRoom',
+        'joinMeeting',
+      ];
+      await signIn(tester, {
+        'access_id': 'TGCG-000200',
+        'full_name': 'Musa Bello',
+        'role': 'member',
+        'scope': unit,
+        'capabilities': permissions,
+        'membership_number': 'TGCG-000200',
+        'access': [
+          {
+            'source': 'assignment',
+            'assignment': 'a1',
+            'role': 'pu-organising-officer',
+            'role_name': 'PU Organising Officer',
+            'protected': false,
+            'areas': [unit],
+            'permissions': permissions,
+          },
+        ],
+      });
+
+      expect(drawn(tester, 'Open navigation menu'), TgcgColors.ink);
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+      for (final item in ['Result Capture', 'Field Monitoring', 'Situation Room', 'Meeting Room']) {
+        expect(
+          find.descendant(of: find.byType(Drawer), matching: find.text(item)),
+          findsOneWidget,
+          reason: item,
+        );
+      }
+    });
+
+    testWidgets("the polling agent's PIN and sign-out buttons", (tester) async {
+      await signIn(tester, {
+        'access_id': 'AG-00001',
+        'full_name': 'Musa Bello',
+        'role': 'pollingUnitAgent',
+        'scope': unit,
+        'capabilities': ['createIncident', 'submitFieldReport', 'submitElectionResult'],
+      });
+
+      for (final button in ['Change PIN', 'Sign out']) {
+        expect(drawn(tester, button), TgcgColors.ink, reason: button);
+      }
+    });
   });
 
   test('a build made without TGCG_API_URL uses the live server', () {
