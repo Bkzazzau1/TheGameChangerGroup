@@ -331,6 +331,57 @@ void main() {
     expect(find.text('Verified'), findsWidgets);
   });
 
+  testWidgets('an identity verified under the policy shows that no person decided', (tester) async {
+    final server = _Server((request) => switch (_path(request)) {
+          'members/' => _json({
+              'count': 1,
+              'next': null,
+              'results': [
+                {
+                  'membership_number': 'TGCG-000301',
+                  'full_name': 'Hauwa Sani',
+                  'verification_status': 'verified',
+                  'membership_state': 'active',
+                  'scope': _kaduna,
+                  'phone_number': null,
+                  'sensitive_visible': false,
+                  'roles': <Object>[],
+                },
+              ],
+            }),
+          'members/TGCG-000301/verification/' => _json({
+              'membership_number': 'TGCG-000301',
+              'verification_status': 'verified',
+              'verified_at': '2026-10-16T15:00:00Z',
+              'reviewed_by': null,
+              'verified_automatically': true,
+              'checks': [
+                {'kind': 'cardMatch', 'result': 'passed', 'detail': 'The name and VIN given match the text read from the card photo.', 'checked_at': null, 'checked_by': null},
+                {'kind': 'faceMatch', 'result': 'unsupported', 'detail': 'No trusted reference photo is available to compare the selfie with.', 'checked_at': null, 'checked_by': null},
+              ],
+            }),
+          _ => null,
+        });
+    await _pump(
+      tester,
+      server.connect(),
+      const MemberReviewPage(),
+      (session) => session.signInFromServer(
+        fullName: 'Kaduna Reviewer',
+        accessId: 'TGCG-000100',
+        scope: GeographicScope.nigeria,
+        capabilities: {'verifyMemberIdentity'},
+        membershipNumber: 'TGCG-000100',
+      ),
+    );
+
+    await tester.tap(find.text('Hauwa Sani'));
+    await tester.pumpAndSettle();
+    expect(find.text('Verified automatically'), findsOneWidget);
+    expect(find.textContaining('Last decision by'), findsNothing);
+    expect(find.text('Name and VIN match the card photo'), findsOneWidget);
+  });
+
   testWidgets("a reviewer gives a checked member's PVC scan its second check", (tester) async {
     var status = 'pending';
     Map<String, dynamic> update() => {

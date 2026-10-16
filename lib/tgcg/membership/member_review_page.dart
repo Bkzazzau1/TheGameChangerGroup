@@ -418,6 +418,11 @@ class _IdentityReviewDialogState extends State<IdentityReviewDialog> {
                             Text(
                               'Last decision by ${verification.reviewedBy}',
                               style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
+                            )
+                          else if (verification.verifiedAutomatically)
+                            const Text(
+                              'Verified automatically',
+                              style: TextStyle(color: TgcgColors.muted, fontSize: 12),
                             ),
                         ],
                       ),

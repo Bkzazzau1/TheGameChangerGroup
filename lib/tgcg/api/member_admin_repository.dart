@@ -176,6 +176,7 @@ class VerificationCheckResult {
 
 String checkLabel(String kind) => switch (kind) {
   'pvcCaptured' => 'PVC details captured',
+  'cardMatch' => 'Name and VIN match the card photo',
   'pvcValidated' => 'PVC confirmed with INEC',
   'duplicates' => 'No duplicate registration',
   'phoneVerified' => 'Phone confirmed by SMS',
@@ -193,6 +194,7 @@ class MemberVerification {
     required this.checks,
     this.verifiedAt,
     this.reviewedBy,
+    this.verifiedAutomatically = false,
   });
 
   final String membershipNumber;
@@ -200,6 +202,9 @@ class MemberVerification {
   final List<VerificationCheckResult> checks;
   final DateTime? verifiedAt;
   final String? reviewedBy;
+
+  /// Verified under TGCG's policy for complete profiles, not by a person.
+  final bool verifiedAutomatically;
 
   bool get hasFailedCheck => checks.any((check) => check.result == 'failed');
 
@@ -212,6 +217,7 @@ class MemberVerification {
     ],
     verifiedAt: _date(json['verified_at']),
     reviewedBy: json['reviewed_by'] as String?,
+    verifiedAutomatically: json['verified_automatically'] as bool? ?? false,
   );
 }
 

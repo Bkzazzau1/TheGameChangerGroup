@@ -18,6 +18,25 @@ forms hard:
 - **Anyone given a role: always.** Roles are given only to verified members,
   and stop if verification is withdrawn.
 
+## Automatic verification
+
+Decided on 16 October 2026: a member whose profile is complete is verified
+without waiting for a coordinator. All of these must hold:
+
+- the PVC details came from a photo of the card, with the polling unit
+  code read from it rather than chosen from the list;
+- the server read that photo itself and found the name and VIN given on
+  it ("Name and VIN match the card photo");
+- a selfie was taken;
+- the gender and date of birth are given;
+- nobody else has the same name and birth date.
+
+This is TGCG's policy, not proof of identity. The INEC record, liveness and
+face-match checks stay "not available", never passed. An automatically
+verified member gets everything a coordinator's verification gives,
+including roles. Members who fall short go to a coordinator as before. See
+the backend's `docs/access-control.md`.
+
 ## Done on 12 October 2026
 
 - [x] **PVC reading.** The reader takes only a VIN of exactly 19 letters and
