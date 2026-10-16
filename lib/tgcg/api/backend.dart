@@ -14,6 +14,7 @@ import 'member_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
 import 'tracking_repository.dart';
+import 'wallet_repository.dart';
 
 /// Everything that talks to the TGCG server.
 class BackendServices {
@@ -29,7 +30,8 @@ class BackendServices {
         overview = OverviewRepository(client, TrackingRepository(client)),
         access = AccessRepository(client),
         members = MemberAdminRepository(client),
-        forum = ForumRepository(client);
+        forum = ForumRepository(client),
+        wallets = WalletRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -75,6 +77,9 @@ class BackendServices {
 
   /// The discussion forum: posts, replies and their approval.
   final ForumRepository forum;
+
+  /// Members' wallets and the payments TGCG makes into them.
+  final WalletRepository wallets;
 }
 
 /// Makes [BackendServices] available below it. The app always provides

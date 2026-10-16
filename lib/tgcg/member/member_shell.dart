@@ -10,6 +10,7 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
+import '../api/wallet_repository.dart';
 import '../location/directions.dart';
 import '../media/device_media.dart';
 import '../media/save_download.dart';
@@ -21,6 +22,7 @@ import 'disability_picker.dart';
 import 'membership_card_view.dart';
 import 'pvc_scan_page.dart';
 import 'selfie_check.dart';
+import 'wallet_page.dart';
 
 /// The member app: membership card, polling unit, announcements, volunteering
 /// and the member's own appointments.
@@ -288,6 +290,7 @@ class _CardTab extends StatelessWidget {
               const SizedBox(height: 12),
               _CardDownload(card: card, save: saveCard),
               const SizedBox(height: 18),
+              const _WalletRow(),
               TgcgSectionCard(
                 title: 'My details',
                 child: Column(
@@ -1149,6 +1152,55 @@ class _Detail extends StatelessWidget {
             ?action,
           ],
         ),
+      );
+}
+
+/// The wallet's balance, opening the wallet. Nothing shows when the server
+/// has no wallet to give.
+class _WalletRow extends StatefulWidget {
+  const _WalletRow();
+
+  @override
+  State<_WalletRow> createState() => _WalletRowState();
+}
+
+class _WalletRowState extends State<_WalletRow> {
+  Future<MemberWallet>? _wallet;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _wallet ??= TgcgBackend.of(context)?.wallets.myWallet();
+  }
+
+  Future<void> _open() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const MyWalletPage()),
+    );
+    if (!mounted) return;
+    setState(() {
+      _wallet = TgcgBackend.of(context)?.wallets.myWallet();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<MemberWallet>(
+        future: _wallet,
+        builder: (context, snapshot) {
+          final wallet = snapshot.data;
+          if (wallet == null) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TgcgSectionCard(
+              title: 'My wallet',
+              trailing: TextButton(onPressed: _open, child: const Text('Open')),
+              child: _Detail(
+                'Balance',
+                wallet.hasWallet ? formatNaira(wallet.balance) : 'Not open yet',
+              ),
+            ),
+          );
+        },
       );
 }
 

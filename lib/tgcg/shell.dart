@@ -33,6 +33,7 @@ import 'mapping/unit_mapping_page.dart';
 import 'tracking/agents_on_ground_page.dart';
 import 'ui/demo_data_notice.dart';
 import 'ui/tgcg_design.dart';
+import 'wallets/wallet_payments_page.dart';
 
 class TgcgShell extends StatefulWidget {
   const TgcgShell({super.key});
@@ -163,6 +164,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.governance => const GovernancePage(),
         TgcgModule.unitMapping => const UnitMappingPage(),
         TgcgModule.agentTracking => const AgentsOnGroundPage(),
+        TgcgModule.wallets => const WalletPaymentsPage(),
       };
 }
 
@@ -200,6 +202,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.roleAssignment, 'Roles & Access', Icons.manage_accounts_outlined, _NavGroup.control),
   _Destination(TgcgModule.memberReview, 'Member Review', Icons.verified_user_outlined, _NavGroup.control),
+  _Destination(TgcgModule.wallets, 'Wallets', Icons.account_balance_wallet_outlined, _NavGroup.control),
   _Destination(TgcgModule.systemMonitoring, 'System Monitoring', Icons.monitor_heart_outlined, _NavGroup.control),
   _Destination(TgcgModule.reports, 'Reports & Exports', Icons.description_outlined, _NavGroup.control),
   _Destination(TgcgModule.governance, 'Data & Governance', Icons.shield_outlined, _NavGroup.control),
@@ -578,6 +581,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.governance => 'Data & Governance',
       TgcgModule.unitMapping => 'Polling Unit Mapping',
       TgcgModule.agentTracking => 'Agents on the Ground',
+      TgcgModule.wallets => 'Wallets',
     };
 
 

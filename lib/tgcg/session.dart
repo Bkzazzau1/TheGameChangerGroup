@@ -35,6 +35,7 @@ enum TgcgModule {
   reports,
   governance,
   memberReview,
+  wallets,
 }
 
 /// The modules that work on the server's records today. The others still
@@ -52,6 +53,7 @@ const liveModules = {
   TgcgModule.collation,
   TgcgModule.discussionRoom,
   TgcgModule.meetingRoom,
+  TgcgModule.wallets,
 };
 
 class TgcgSessionController extends ChangeNotifier {
@@ -374,6 +376,14 @@ Set<TgcgModule> allowedModulesFor(
     TgcgCapability.suspendMembers,
   ])) {
     modules.add(TgcgModule.memberReview);
+  }
+  // Wallets: payments to members, for finance staff in their areas.
+  if (any(const [
+    TgcgCapability.viewWallets,
+    TgcgCapability.creditWallets,
+    TgcgCapability.approveWalletCredits,
+  ])) {
+    modules.add(TgcgModule.wallets);
   }
   // Polling-unit mapping: whoever pins units and confirms agents' locations.
   if (can(TgcgCapability.confirmAgentLocation)) {

@@ -126,10 +126,14 @@ The connection code lives in `lib/tgcg/api/`:
   the pass to join a meeting's call.
 - `overview_repository.dart` reads the Overview's counts: members, results,
   verified results and today's agent check-ins.
+- `wallet_repository.dart` reads a member's own wallet and sets its payout
+  account, and lists, requests and decides payments for finance staff.
 
 Signed in to a server, these screens work on server records: the Overview,
-Role Management, Member Review, Unit Mapping, Agents on the Ground, the Situation
-Room, Field Monitoring, Result Capture, Collation and the Meeting Room.
+Role Management, Member Review, Wallets, Unit Mapping, Agents on the Ground,
+the Situation Room, Field Monitoring, Result Capture, Collation and the
+Meeting Room. A member's wallet opens from their card (the member app) or
+the agent's home.
 Incident actions (acknowledge, assign, escalate, resolve, close, reopen),
 field report reviews and result decisions (verify, dispute, reject) go to the
 server, which checks each one. Collation shows the server's unofficial totals

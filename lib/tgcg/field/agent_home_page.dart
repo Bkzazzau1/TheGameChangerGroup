@@ -8,6 +8,7 @@ import '../domain/permissions.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
 import '../member/member_shell.dart';
+import '../member/wallet_page.dart';
 import '../membership/member_review_page.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
@@ -167,6 +168,15 @@ class _AgentHomePageState extends State<AgentHomePage> {
             detail: 'Your details and photos, and the card to download',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const MyMembershipCardPage()),
+            ),
+          ),
+        if (session.membershipNumber != null)
+          _Action(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'My wallet',
+            detail: 'Payments from TGCG, and the account they go to',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const MyWalletPage()),
             ),
           ),
         if (session.can(TgcgCapability.verifyMemberIdentity))

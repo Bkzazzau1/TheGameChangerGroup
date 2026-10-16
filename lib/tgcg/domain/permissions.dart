@@ -79,6 +79,10 @@ enum TgcgCapability {
   verifyMemberIdentity,
   suspendMembers,
   reviewPollingUnitChanges,
+  // Wallets: what TGCG owes members, paid with a second person's approval.
+  viewWallets,
+  creditWallets,
+  approveWalletCredits,
   appointNationalAdministrator,
   approveAdministratorRemoval,
 }
