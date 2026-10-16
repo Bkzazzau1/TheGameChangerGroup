@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest web release verified on 15 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest release verified on 16 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest web release verified on 15 October 2026
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `fb36a485cd6ef3ec943654c2cf89c32c6eab037d`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `3ff6e3b4d0e6fca25368a245908cfa3668f9db5d`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -25,24 +25,24 @@ Initial setup on 12 October 2026; latest web release verified on 15 October 2026
 - Production environment: `/opt/tgcg/backend/.env`, mode 600. The generated secret remains on the VPS.
 - Nginx configuration: `/etc/nginx/nginx.conf`, `/etc/nginx/conf.d/tgcg.conf` and `/etc/nginx/tgcg-*.inc`.
 - TLS certificate: `/etc/letsencrypt/live/tgcg.online/`; renewal uses `certbot-renew.timer`.
-- Geography: 8,809 wards, 176,846 polling units, 11,382 imported INEC locations.
+- Geography: 8,809 wards, 176,846 polling units; 74,047 polling units with INEC locations.
 - Administrator: access ID and display name `TGCG`, national administrator with country scope.
 
 Nginx publishes the API and administration over HTTPS while Gunicorn remains on loopback. Flutter uses `https://api.tgcg.online`; browser access is limited to the app origin. Termii SMS credentials remain to be configured.
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261015-180635-c27de4158e43` (release directory timestamps use UTC).
-- Frontend build source: `afbbf0c31b5ac66f72d11e0f478d9101b16ac956` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261015-131307-2cbbe1103020`.
+- Published release: `/var/www/tgcg/releases/web-20261016-100421-489a1911dc7d` (release directory timestamps use UTC).
+- Frontend build source: `066944ceae2613024bcf286021528d6f2644bb9a` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261015-180635-c27de4158e43`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `c27de4158e43c4d6bdfdbb562bd36b2a8539bed06bd9bf919bdf72774b3d4413`.
-- Build: 854 files, 54,676,149 uncompressed bytes. All files matched the upload manifest; the public bundle checksum was checked after publication.
+- Main JavaScript SHA256: `489a1911dc7d84115278608045bfabbea28a142c14a5c3578e6644c37dd08a78`.
+- Build: 856 files, 58,889,947 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
-The browser version keeps its offline queue in memory, so pending work does not survive a reload. Incident and result photos use authenticated multipart evidence uploads and can be opened for review. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web; unsupported screens are hidden. The published desktop welcome/poster/sign-in screen was verified in the browser.
+The browser version keeps its offline queue in memory, so pending work does not survive a reload. Incident and result photos use authenticated multipart evidence uploads and can be opened for review. Browser PVC photos go through `POST /api/v1/register/read-pvc/`: the VPS sends the first reading request to Google Cloud Vision and uses Tesseract locally if Google fails or returns no text. Mobile OCR runs on the device. The browser registration form and polling-unit change dialog use the returned text. Cardholders must check every extracted field, especially VIN and polling-unit digits. Audio-file recording remains unavailable on web; unsupported screens are hidden. The desktop welcome/poster/sign-in screen was verified in the browser for an earlier release.
 
 The release was built with:
 
@@ -96,6 +96,7 @@ Private uploads remain under `/opt/tgcg/backend/media`; they require the applica
 ## Scheduled work and backups
 
 - `tgcg-maintenance.timer`: removes expired location history and USSD progress daily at 03:00 Africa/Lagos.
+- `tgcg-recordings.service` and `tgcg-recordings.timer`: enabled for recording maintenance every minute, including ending streams older than 120 minutes. The initial run succeeded; provider error output is discarded to keep credentials out of logs.
 - `tgcg-backup.timer`: backs up PostgreSQL, private media, `.env`, Nginx configuration, TLS configuration and deployment metadata daily at 03:15 Africa/Lagos.
 - Backup directories: `/var/backups/tgcg/<UTC timestamp>-<unique suffix>`, accessible to root.
 - Initial backup: `/var/backups/tgcg/20261012T072156Z-gTgoU1`.
@@ -121,6 +122,35 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Field duty, live incident video, member cards and locations (16 October 2026)
+
+Deployed backend `3ff6e3b4d0e6fca25368a245908cfa3668f9db5d` and web build source `066944ceae2613024bcf286021528d6f2644bb9a`. The backend includes `c17586f` (membership-card PDF downloads and disabilities), `57a8508` (INEC locations for ten more states), `6d42f4c` (live incident video), `daaf5f7` (GPS required for polling-unit incident reports) and `5ea0e64` (polling-unit executive check-ins/location sharing). Review found that field-worker coverage counted appointments even when their permission restrictions excluded `fieldDuty`; `3ff6e3b` fixes that per-appointment check, with 18 new regression tests. An empty restriction list grants nothing; null restrictions retain the role's permissions.
+
+All **488 backend tests passed on an isolated PostgreSQL database**, with zero failures and zero skips (244.69 seconds); Ruff passed. All **260 Flutter tests passed** and analysis found no issues. The production web build passed with the required API define. Bundle filename and asset-manifest checks found no private paths; compiled JavaScript passed the credential-pattern checks. No app UI guidance was added.
+
+Both production migrations succeeded:
+
+```text
+Applying field.0005_live_stream... OK
+Applying membership.0012_member_disabilities... OK
+```
+
+The loader returned:
+
+```text
+INEC locations applied to 62,665 polling units (62,665 new, 0 updated, 11,382 unchanged).
+```
+
+It rejected 7,876 `no_location`, 1,440 `outside_lga` and 4 `shared_spot` candidates; 74,047 polling units now have INEC locations. A dry run reported `gains it` for all six custom polling-unit executive roles before the committed command returned `Added fieldDuty to 6 role(s).` Six `role.updated` audit events identify National Administrator `TGCG` as the actor. The removed Situation Room permission remains removed. Member, User, Incident, Evidence and Post counts were unchanged.
+
+Locked dependencies were synchronized and pinned Gunicorn 26.2.0 was reinstalled afterward; API/database health passed. No migrations remain pending, and all 186 custom-role appointments remain present. The private environment remains unchanged at `600:tgcg:tgcg`. Nginx was unchanged: forum uploads retain `160m` and 300-second timeouts, private `/media/` remains blocked with 404, SMS-code routes remain 503, and USSD callback protection remains in place. The recording maintenance service completed successfully and its timer is enabled and active, running every minute. Free VPS disk space was approximately 106 GB.
+
+LiveKit URL, API key and API secret are all absent from the VPS. The local configuration has a URL but blank key/secret values; no credentials were copied. The user selected live viewing only: no paid recording storage was created. After credentials are configured, create a webhook in LiveKit Cloud under **Settings > Webhooks > Create**, using `https://api.tgcg.online/api/v1/livekit/webhook/` and the matching `LIVEKIT_API_KEY` for its signature. The webhook is not configured yet, and real live-video verification remains pending.
+
+All 16 public checks passed: index, bootstrap, poster and matching JavaScript checksum returned 200; entrypoints use `no-store`; missing JavaScript and private forum/evidence media returned 404. API health returned 200 with healthy database status. Anonymous member-card access returned 401 with app-origin CORS and a successful preflight. Registration options still report `phone_code_required=false`; public place lookups returned 37 states, 23 Kaduna LGAs, 13 Zaria wards and 51 units for ward `18-23-01`, with CORS and preflights passing. Both temporary SMS-code routes still return 503. No production test members, incidents or posts were created. Results are stored privately in `/opt/tgcg/deployment/release-checks-20261016.json`.
+
+Backups succeeded before deployment and after verification; database archive listings were checked by the backup service. Private media is included in the backup archives. The isolated PostgreSQL test database was removed. The previous web release remains retained. No APK was built or published for this request: automatic approval review rejected that build as outside the web/VPS scope before any APK process ran. The latest public installer remains version 3; the earlier version 4 remains private staging only.
 
 ### Forum, national Situation Room and map member counts (15 October 2026)
 
@@ -320,7 +350,7 @@ Production checks passed without creating a test membership or sign-in account:
 | Callback credential logging and existing private URL | No credential in Nginx logs or the new API journal; private URL still matches |
 | Built web assets | All 855 files matched the uploaded manifest; public JavaScript checksum matched |
 
-The current web release is `/var/www/tgcg/releases/web-20261013-122745-a3cbb36d5073`; the previous release is retained. Secret-free operational results are in `/opt/tgcg/deployment/ussd-quick-validation.json`. Backups cover the release and operational configuration. Source checkouts are synchronized with GitHub; later documentation commits do not require rebuilding this web bundle.
+That deployment used `/var/www/tgcg/releases/web-20261013-122745-a3cbb36d5073`; its previous release was retained. Secret-free operational results are in `/opt/tgcg/deployment/ussd-quick-validation.json`. Backups cover the release and operational configuration. Source checkouts are synchronized with GitHub; later documentation commits do not require rebuilding this web bundle.
 
 The operational dashboards marked as demonstrations still need server integration before their totals can be used as live reports.
 
