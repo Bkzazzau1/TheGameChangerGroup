@@ -7,6 +7,7 @@ import '../api/backend.dart';
 import '../domain/permissions.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
+import '../member/member_shell.dart';
 import '../membership/member_review_page.dart';
 import '../offline/offline_persistence.dart';
 import '../results/result_operations_store.dart';
@@ -159,6 +160,15 @@ class _AgentHomePageState extends State<AgentHomePage> {
           detail: 'Calls from your coordinators',
           onTap: () => widget.onOpenModule(TgcgModule.meetingRoom),
         ),
+        if (session.membershipNumber != null)
+          _Action(
+            icon: Icons.badge_outlined,
+            title: 'My membership card',
+            detail: 'Your details and photos, and the card to download',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const MyMembershipCardPage()),
+            ),
+          ),
         if (session.can(TgcgCapability.verifyMemberIdentity))
           _Action(
             icon: Icons.verified_user_outlined,

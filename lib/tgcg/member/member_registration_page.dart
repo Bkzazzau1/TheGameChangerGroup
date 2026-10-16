@@ -12,6 +12,7 @@ import '../media/device_media.dart';
 import '../membership/pvc_recognition_service.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'disability_picker.dart';
 import 'polling_unit_finder_page.dart';
 import 'selfie_check.dart';
 
@@ -184,6 +185,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   DateTime? _dateOfBirth;
   final _occupation = TextEditingController();
   final _email = TextEditingController();
+  var _disabilities = <String>[];
+  final _disabilityOther = TextEditingController();
   PhotoBytes? _selfie;
   SelfieCheck? _selfieCheck;
   bool _checkingSelfie = false;
@@ -204,7 +207,18 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   @override
   void dispose() {
     _ticker?.cancel();
-    for (final controller in [_phone, _code, _name, _vin, _delim, _occupation, _email, _pin, _pinAgain]) {
+    for (final controller in [
+      _phone,
+      _code,
+      _name,
+      _vin,
+      _delim,
+      _occupation,
+      _email,
+      _disabilityOther,
+      _pin,
+      _pinAgain,
+    ]) {
       controller.dispose();
     }
     super.dispose();
@@ -485,6 +499,10 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       });
 
   void _aboutNext() {
+    if (_disabilities.contains('other') && _disabilityOther.text.trim().isEmpty) {
+      setState(() => _errors = {'disability_other': 'Say which other disability.'});
+      return;
+    }
     if (_selfie != null && !_selfieReady) {
       setState(() => _errors = {'photo': 'Take the photo again, or remove it.'});
       return;
@@ -535,6 +553,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           dateOfBirth: _dateOfBirth,
           occupation: _occupation.text.trim(),
           email: _email.text.trim(),
+          disabilities: _disabilities,
+          disabilityOther: _disabilities.contains('other') ? _disabilityOther.text.trim() : '',
           pin: _pin.text,
           selfie: _selfieReady ? _selfie : null,
           pvcImage: _pvcPhoto,
@@ -559,6 +579,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       'date_of_birth': _Step.about,
       'occupation': _Step.about,
       'email': _Step.about,
+      'disabilities': _Step.about,
+      'disability_other': _Step.about,
       'photo': _Step.about,
       'pin': _Step.pin,
       'consent': _Step.pin,
@@ -892,6 +914,19 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(labelText: 'Email', errorText: _errors['email']),
         ),
+        const SizedBox(height: 18),
+        const Text('Disability', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        DisabilityChoices(
+          kinds: _disabilities,
+          other: _disabilityOther,
+          otherError: _errors['disability_other'],
+          onChanged: (kinds) => setState(() {
+            _disabilities = kinds;
+            _errors.remove('disability_other');
+          }),
+        ),
+        if (_errors['disabilities'] != null) _FieldError(_errors['disabilities']!),
         const SizedBox(height: 18),
         const Text('Photo of you', style: TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),

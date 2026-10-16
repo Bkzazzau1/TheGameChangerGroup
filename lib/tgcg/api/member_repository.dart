@@ -60,6 +60,9 @@ class MemberCard {
     this.pollingUnit,
     this.hasPhoto = false,
     this.hasCardPhoto = false,
+    this.disabilities = const [],
+    this.disabilityOther = '',
+    this.cardMissing = const [],
   });
 
   final String membershipNumber;
@@ -88,6 +91,14 @@ class MemberCard {
   final bool hasPhoto;
   final bool hasCardPhoto;
 
+  /// Codes from [disabilityKinds], and the member's words for "other".
+  final List<String> disabilities;
+  final String disabilityOther;
+
+  /// What the member must add before downloading the card (codes in
+  /// [cardNeeds]); empty when it is ready.
+  final List<String> cardMissing;
+
   bool get identityChecked => verificationStatus == 'verified';
 
   /// Signed value printed as the card's QR code; staff scan it to verify.
@@ -113,9 +124,40 @@ class MemberCard {
       hasPhoto: json['photo_url'] != null,
       hasCardPhoto: json['has_card_photo'] as bool? ?? false,
       qrToken: json['qr_token'] as String,
+      disabilities: [for (final kind in (json['disabilities'] as List?) ?? const []) '$kind'],
+      disabilityOther: (json['disability_other'] as String?) ?? '',
+      cardMissing: [for (final need in (json['card_missing'] as List?) ?? const []) '$need'],
     );
   }
 }
+
+/// The kinds of disability a member may record, as the server names them.
+const disabilityKinds = [
+  ('physical', 'Physical / mobility'),
+  ('visual', 'Visual'),
+  ('hearing', 'Hearing'),
+  ('speech', 'Speech'),
+  ('intellectual', 'Intellectual'),
+  ('psychosocial', 'Psychosocial (mental health)'),
+  ('albinism', 'Albinism'),
+  ('other', 'Other'),
+];
+
+/// A member's disabilities in words, e.g. "Visual, Other: epilepsy".
+String disabilityText(List<String> kinds, String other) => [
+      for (final (code, label) in disabilityKinds)
+        if (kinds.contains(code)) code == 'other' && other.isNotEmpty ? 'Other: $other' : label,
+    ].join(', ');
+
+/// What the card still needs, as the server lists it in `card_missing`.
+const cardNeeds = {
+  'active_membership': 'an active membership',
+  'full_name': 'your full name',
+  'photo': 'a photo of you',
+  'pvc_photo': 'a photo of your PVC',
+  'gender': 'your gender',
+  'date_of_birth': 'your date of birth',
+};
 
 /// The member's polling unit and how many members share it (`/me/polling-unit/`).
 class MyPollingUnit {
@@ -220,6 +262,8 @@ class MemberRegistration {
     this.dateOfBirth,
     this.occupation = '',
     this.email = '',
+    this.disabilities = const [],
+    this.disabilityOther = '',
   });
 
   final String phoneNumber;
@@ -242,6 +286,10 @@ class MemberRegistration {
   final String pin;
   final ({Uint8List bytes, String name})? selfie;
   final ({Uint8List bytes, String name})? pvcImage;
+
+  /// Codes from [disabilityKinds], if the member chose to give them.
+  final List<String> disabilities;
+  final String disabilityOther;
 }
 
 /// The details a member sends from their one PVC scan, checked against the
@@ -361,6 +409,8 @@ class MemberRepository {
         if (dob != null) 'date_of_birth': _day(dob),
         'occupation': data.occupation,
         'email': data.email,
+        if (data.disabilities.isNotEmpty) 'disabilities': data.disabilities,
+        if (data.disabilityOther.isNotEmpty) 'disability_other': data.disabilityOther,
         'pin': data.pin,
         'consent': 'true',
       },
@@ -443,7 +493,21 @@ class MemberRepository {
         await client.patch('me/member/', body: {'date_of_birth': _day(date)}) as Map<String, dynamic>,
       );
 
+  /// Codes from [disabilityKinds] (none to take them back) and the words
+  /// for "other". The member may change them at any time.
+  Future<MemberCard> updateDisabilities(List<String> kinds, String other) async =>
+      MemberCard.fromJson(
+        await client.patch(
+          'me/member/',
+          body: {'disabilities': kinds, 'disability_other': other},
+        ) as Map<String, dynamic>,
+      );
+
   Future<Uint8List> photo() => client.getBytes('me/member/photo/');
+
+  /// The card as a PDF, front and back. The server refuses it while
+  /// [MemberCard.cardMissing] lists something.
+  Future<Uint8List> cardPdf() => client.getBytes('me/member/card/');
 
   /// Adds the selfie left out when joining. It can be replaced until the
   /// member's identity is checked; after that a coordinator changes it.

@@ -305,6 +305,7 @@ void main() {
           role: TgcgRole.pollingUnitAgent,
           fullName: 'Musa Bello',
           accessId: 'AG-00001',
+          membershipNumber: 'TGCG-000001',
           scope: const GeographicScope(
             level: GeographyLevel.pollingUnit,
             country: 'Nigeria',
@@ -348,6 +349,8 @@ void main() {
       expect(find.textContaining('KWARBAI I'), findsWidgets);
       expect(find.textContaining('Checked in today at'), findsOneWidget);
       expect(find.text('Off duty'), findsOneWidget);
+      // Agents download their membership card from here.
+      expect(find.text('My membership card'), findsOneWidget);
       // The forum is for everyone with a role, agents too (15 October 2026).
       for (final tab in ['Home', 'Report', 'Result', 'Meetings', 'Forum']) {
         expect(find.widgetWithText(NavigationDestination, tab), findsOneWidget, reason: tab);

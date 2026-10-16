@@ -12,10 +12,12 @@ import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
 import '../location/directions.dart';
 import '../media/device_media.dart';
+import '../media/save_download.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'member_registration_page.dart'
     show ScanPvc, TakeSelfie, readScanOnServer, scanPvcWithDevice, takeSelfieWithDevice;
+import 'disability_picker.dart';
 import 'membership_card_view.dart';
 import 'pvc_scan_page.dart';
 import 'selfie_check.dart';
@@ -29,10 +31,14 @@ class MemberShell extends StatefulWidget {
     this.scanPvc = scanPvcWithDevice,
     this.takeSelfie = takeSelfieWithDevice,
     this.checkSelfie = checkSelfieOnDevice,
+    this.saveCard = saveDownload,
   });
 
   /// Opens the maps app (replaced in tests).
   final LaunchDirections launch;
+
+  /// Hands the downloaded card to the member (replaced in tests).
+  final SaveDownload saveCard;
 
   /// Reads a photo of the voter card: an updated one for a polling unit
   /// change, or one left out when joining (replaced in tests).
@@ -130,6 +136,7 @@ class _MemberShellState extends State<MemberShell> {
               scanPvc: widget.scanPvc,
               takeSelfie: widget.takeSelfie,
               checkSelfie: widget.checkSelfie,
+              saveCard: widget.saveCard,
             ),
           1 => _UnitTab(unit: _unit!, launch: widget.launch, scanPvc: widget.scanPvc),
           2 => _NewsTab(news: _news!),
@@ -155,6 +162,66 @@ class _MemberShellState extends State<MemberShell> {
       ),
     );
   }
+}
+
+/// The member's card, details and photos, as in the member app's Card tab,
+/// for members who use another app: agents, executives and coordinators.
+class MyMembershipCardPage extends StatefulWidget {
+  const MyMembershipCardPage({
+    super.key,
+    this.scanPvc = scanPvcWithDevice,
+    this.takeSelfie = takeSelfieWithDevice,
+    this.checkSelfie = checkSelfieOnDevice,
+    this.saveCard = saveDownload,
+  });
+
+  final ScanPvc scanPvc;
+  final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
+  final SaveDownload saveCard;
+
+  @override
+  State<MyMembershipCardPage> createState() => _MyMembershipCardPageState();
+}
+
+class _MyMembershipCardPageState extends State<MyMembershipCardPage> {
+  Future<(MemberCard, Uint8List?)>? _card;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _card ??= _load();
+  }
+
+  Future<(MemberCard, Uint8List?)> _load() async {
+    final members = TgcgBackend.of(context)!.member;
+    final card = await members.card();
+    Uint8List? photo;
+    if (card.hasPhoto) {
+      try {
+        photo = await members.photo();
+      } on ApiException {
+        // The card still shows without the photo.
+      }
+    }
+    return (card, photo);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: TgcgColors.canvas,
+        appBar: AppBar(title: const Text('Membership card')),
+        body: SafeArea(
+          child: _CardTab(
+            card: _card!,
+            onChanged: () => setState(() => _card = _load()),
+            scanPvc: widget.scanPvc,
+            takeSelfie: widget.takeSelfie,
+            checkSelfie: widget.checkSelfie,
+            saveCard: widget.saveCard,
+          ),
+        ),
+      );
 }
 
 /// Shows a loading spinner, an error with a hint, or the loaded data.
@@ -195,12 +262,14 @@ class _CardTab extends StatelessWidget {
     required this.scanPvc,
     required this.takeSelfie,
     required this.checkSelfie,
+    required this.saveCard,
   });
   final Future<(MemberCard, Uint8List?)> card;
   final VoidCallback onChanged;
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
   final CheckSelfie checkSelfie;
+  final SaveDownload saveCard;
 
   @override
   Widget build(BuildContext context) => _Loaded(
@@ -216,6 +285,8 @@ class _CardTab extends StatelessWidget {
                 const SizedBox(height: 14),
               ],
               Center(child: MembershipCardView(card: card, photo: photo)),
+              const SizedBox(height: 12),
+              _CardDownload(card: card, save: saveCard),
               const SizedBox(height: 18),
               TgcgSectionCard(
                 title: 'My details',
@@ -259,6 +330,16 @@ class _CardTab extends StatelessWidget {
                       action: TextButton(
                         onPressed: () => _editOccupation(context, card),
                         child: Text(card.occupation.isEmpty ? 'Add' : 'Change'),
+                      ),
+                    ),
+                    _Detail(
+                      'Disability',
+                      card.disabilities.isEmpty
+                          ? 'None given'
+                          : disabilityText(card.disabilities, card.disabilityOther),
+                      action: TextButton(
+                        onPressed: () => _pickDisabilities(context, card),
+                        child: Text(card.disabilities.isEmpty ? 'Add' : 'Change'),
                       ),
                     ),
                     _Detail(
@@ -348,6 +429,30 @@ class _CardTab extends StatelessWidget {
     } on ApiException catch (error) {
       messenger.showSnackBar(
         SnackBar(content: Text(error.fieldError('date_of_birth') ?? error.message)),
+      );
+    }
+  }
+
+  /// The member's own, to give, change or take back at any time.
+  Future<void> _pickDisabilities(BuildContext context, MemberCard card) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await showDialog<(List<String>, String)>(
+      context: context,
+      builder: (_) => DisabilityDialog(kinds: card.disabilities, other: card.disabilityOther),
+    );
+    if (picked == null) return;
+    final (kinds, other) = picked;
+    try {
+      await members.updateDisabilities(kinds, other);
+      onChanged();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.fieldError('disability_other') ?? error.fieldError('disabilities') ?? error.message,
+          ),
+        ),
       );
     }
   }
@@ -452,6 +557,68 @@ class _CardTab extends StatelessWidget {
     }
   }
 
+}
+
+/// Downloads the card as a PDF (front and back) once nothing is missing;
+/// until then, says what to add first.
+class _CardDownload extends StatefulWidget {
+  const _CardDownload({required this.card, required this.save});
+
+  final MemberCard card;
+  final SaveDownload save;
+
+  @override
+  State<_CardDownload> createState() => _CardDownloadState();
+}
+
+class _CardDownloadState extends State<_CardDownload> {
+  var _busy = false;
+
+  Future<void> _download() async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      final pdf = await members.cardPdf();
+      final name = '${widget.card.membershipNumber}-card.pdf';
+      final saved = await widget.save(pdf, name, 'application/pdf');
+      if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Saved in $saved')));
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('The card could not be saved: $error')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final missing = widget.card.cardMissing;
+    return Column(
+      children: [
+        FilledButton.icon(
+          onPressed: missing.isEmpty && !_busy ? _download : null,
+          icon: _busy
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.download_rounded),
+          label: const Text('Download card (PDF)'),
+        ),
+        if (missing.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'First add ${missing.map((need) => cardNeeds[need] ?? need).join(', ')}.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _UnitTab extends StatelessWidget {

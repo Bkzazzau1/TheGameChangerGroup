@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
+import '../api/member_repository.dart' show disabilityText;
 import '../geography/ward_polling_units_page.dart';
 import '../ui/tgcg_design.dart';
 
@@ -207,6 +208,8 @@ class _MemberDetailsPageState extends State<MemberDetailsPage> {
       if (member.gender.isNotEmpty) ('Gender', _capitalised(member.gender)),
       if (birth != null) ('Date of birth', _day(birth)),
       if (member.occupation.isNotEmpty) ('Occupation', member.occupation),
+      if (member.disabilities.isNotEmpty)
+        ('Disability', disabilityText(member.disabilities, member.disabilityOther)),
       ('PVC', member.vin != null ? 'VIN ending ${member.vin}' : (member.hasPvc ? 'On file' : 'Not added')),
       if (member.registrationChannel.isNotEmpty)
         ('Joined through', _channel(member.registrationChannel)),

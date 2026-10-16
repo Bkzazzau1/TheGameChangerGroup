@@ -29,6 +29,8 @@ class StaffMember {
     this.gender = '',
     this.dateOfBirth,
     this.occupation = '',
+    this.disabilities = const [],
+    this.disabilityOther = '',
     this.registrationChannel = '',
     this.phoneVerified = false,
     this.hasAppAccount = false,
@@ -70,6 +72,11 @@ class StaffMember {
   final DateTime? dateOfBirth;
   final String occupation;
 
+  /// Disability codes and words for "other": private details, empty unless
+  /// personal details are visible.
+  final List<String> disabilities;
+  final String disabilityOther;
+
   /// How they joined: self (the app), ussd, assisted or import.
   final String registrationChannel;
   final bool phoneVerified;
@@ -99,6 +106,8 @@ class StaffMember {
     gender: json['gender'] as String? ?? '',
     dateOfBirth: DateTime.tryParse('${json['date_of_birth'] ?? ''}'),
     occupation: json['occupation'] as String? ?? '',
+    disabilities: [for (final kind in (json['disabilities'] as List?) ?? const []) '$kind'],
+    disabilityOther: json['disability_other'] as String? ?? '',
     registrationChannel: json['registration_channel'] as String? ?? '',
     phoneVerified: json['phone_verified'] as bool? ?? false,
     hasAppAccount: json['has_app_account'] as bool? ?? false,

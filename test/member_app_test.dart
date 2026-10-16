@@ -11,6 +11,7 @@ import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/auth_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
+import 'package:tgcg_emcop/tgcg/member/disability_picker.dart';
 import 'package:tgcg_emcop/tgcg/member/forgot_pin_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_registration_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
@@ -348,6 +349,30 @@ void main() {
         'consent': 'true',
       });
       expect(upload.files, isEmpty);
+    });
+
+    testWidgets('a member may give their disabilities when joining', (tester) async {
+      final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
+      await open(tester, api);
+      await enterPhone(tester);
+      await typeCard(tester);
+
+      expect(find.text('About you (optional)'), findsOneWidget);
+      for (final kind in ['Visual', 'Other']) {
+        await tester.ensureVisible(find.widgetWithText(FilterChip, kind));
+        await tester.tap(find.widgetWithText(FilterChip, kind));
+        await tester.pumpAndSettle();
+      }
+      // "Other" needs the member's own words.
+      await next(tester);
+      expect(find.text('Say which other disability.'), findsOneWidget);
+      await tester.enterText(find.widgetWithText(TextField, 'Which other disability'), 'Epilepsy');
+      await next(tester);
+      await choosePin(tester);
+
+      final upload = api.requests.last as http.MultipartRequest;
+      expect(jsonDecode(upload.fields['disabilities']!), ['visual', 'other']);
+      expect(upload.fields['disability_other'], 'Epilepsy');
     });
 
     testWidgets('while SMS works the code comes first; a scan and a selfie go with the rest',
@@ -1187,6 +1212,44 @@ void main() {
       expect(action('Gender'), findsOneWidget);
     });
 
+    testWidgets('their disability, which they may change or take back', (tester) async {
+      var card = <String, dynamic>{..._card(verification: 'verified'), 'disabilities': <String>[]};
+      final server = _Server((request) => switch ((request.method, _path(request))) {
+            ('GET', 'me/member/') => _json(card),
+            ('PATCH', 'me/member/') =>
+              _json(card = {...card, ...jsonDecode(request.body) as Map<String, dynamic>}),
+            (_, final path) => memberHome(path),
+          });
+      await _pump(tester, server.connect(), const MemberShell(), member: true);
+      await tester.pumpAndSettle();
+      expect(find.text('None given'), findsOneWidget);
+
+      // Not from the PVC, so still the member's own after the identity check.
+      await tester.tap(action('Disability'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Hearing'));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        jsonDecode(server.bodies['PATCH /api/v1/me/member/']!),
+        {'disabilities': ['hearing'], 'disability_other': ''},
+      );
+      expect(find.text('Hearing'), findsOneWidget);
+
+      await tester.tap(action('Disability'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Hearing'));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        jsonDecode(server.bodies['PATCH /api/v1/me/member/']!),
+        {'disabilities': <String>[], 'disability_other': ''},
+      );
+      expect(find.text('None given'), findsOneWidget);
+    });
+
     testWidgets("once the identity is checked, what is on record is a coordinator's to change",
         (tester) async {
       final server = _Server((request) => switch (_path(request)) {
@@ -1375,6 +1438,120 @@ void main() {
     expect(sent, contains('18/23/01/020'));
     expect(sent, contains('name="pvc_image"'));
     expect(find.textContaining('Waiting for review: move to 18-23-01-020'), findsOneWidget);
+  });
+
+  group('the membership card download', () {
+    http.Response? home(http.Request request, Map<String, dynamic> card, {http.Response? pdf}) =>
+        switch (_path(request)) {
+          'me/member/' => _json(card),
+          'me/member/card/' =>
+            pdf ?? http.Response.bytes([37, 80, 68, 70], 200, headers: {'content-type': 'application/pdf'}),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 1, 'members_in_ward': 2}),
+          'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
+          'me/volunteer/' => _json(<Object>[]),
+          _ => null,
+        };
+
+    testWidgets('a ready card downloads as a PDF', (tester) async {
+      final saved = <(List<int>, String, String)>[];
+      final server = _Server((request) => home(request, {..._card(), 'card_missing': <String>[]}));
+      await _pump(
+        tester,
+        server.connect(),
+        MemberShell(saveCard: (bytes, name, type) async {
+          saved.add((bytes, name, type));
+          return null;
+        }),
+        member: true,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Download card (PDF)'));
+      await tester.pumpAndSettle();
+      final (bytes, name, type) = saved.single;
+      expect(bytes, [37, 80, 68, 70]);
+      expect((name, type), ('TGCG-000123-card.pdf', 'application/pdf'));
+    });
+
+    testWidgets('until it is ready, the card says what to add first', (tester) async {
+      final server = _Server(
+        (request) => home(request, {
+          ..._card(),
+          'card_missing': ['photo', 'pvc_photo'],
+        }),
+      );
+      await _pump(tester, server.connect(), const MemberShell(), member: true);
+      await tester.pumpAndSettle();
+
+      final button = find.widgetWithText(FilledButton, 'Download card (PDF)');
+      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      expect(find.text('First add a photo of you, a photo of your PVC.'), findsOneWidget);
+    });
+
+    testWidgets("the server's refusal is shown", (tester) async {
+      final server = _Server(
+        (request) => home(
+          request,
+          {..._card(), 'card_missing': <String>[]},
+          pdf: _json({
+            'detail': 'To download your card, add a photo of you.',
+            'missing': ['photo'],
+          }, 409),
+        ),
+      );
+      await _pump(
+        tester,
+        server.connect(),
+        MemberShell(saveCard: (bytes, name, type) async => fail('nothing to save')),
+        member: true,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Download card (PDF)'));
+      await tester.pumpAndSettle();
+      expect(find.text('To download your card, add a photo of you.'), findsOneWidget);
+    });
+
+    testWidgets('agents and executives have the same card page', (tester) async {
+      final saved = <String>[];
+      final server = _Server((request) => home(request, {..._card(), 'card_missing': <String>[]}));
+      await _pump(
+        tester,
+        server.connect(),
+        MyMembershipCardPage(saveCard: (bytes, name, type) async {
+          saved.add(name);
+          return null;
+        }),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Membership card'), findsOneWidget);
+      expect(find.text('TGCG-000123'), findsOneWidget);
+      await tester.tap(find.text('Download card (PDF)'));
+      await tester.pumpAndSettle();
+      expect(saved, ['TGCG-000123-card.pdf']);
+    });
+
+    testWidgets('the disability dialog needs words for other', (tester) async {
+      await _pump(
+        tester,
+        _Server((_) => null).connect(),
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<(List<String>, String)>(
+              context: context,
+              builder: (_) => const DisabilityDialog(kinds: ['other'], other: ''),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.text('Say which other disability.'), findsOneWidget);
+    });
   });
 
   testWidgets('a member holding appointments signs in to the operations app', (tester) async {
