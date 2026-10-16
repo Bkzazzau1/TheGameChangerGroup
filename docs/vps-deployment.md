@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 16 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `3ff6e3b4d0e6fca25368a245908cfa3668f9db5d`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `ec8311a4b1991fe61c5da959b8ce74ac8db7f558`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -122,6 +122,25 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### State chapter imports completed (16 October 2026)
+
+Deployed backend `ec8311a4b1991fe61c5da959b8ce74ac8db7f558` from `3ff6e3b`; API/database health passed. All **493 backend tests passed on an isolated PostgreSQL database**, with zero failures and zero skips (243.49 seconds), and Ruff passed. The isolated test database was removed. No dependencies or migrations changed. The web build remains `066944ceae2613024bcf286021528d6f2644bb9a`; no web, APK or UI changes were made for this backend-only deployment.
+
+A successful backup preceded the imports. Four private chapter CSVs were placed outside all web roots under `/run/tgcg-state-import-20261016`, owned by `tgcg` with mode 600; transfer checksums matched. The `tgcg-state-import-20261016` systemd job discarded console output and captured importer output only in memory. Each file passed its expected dry-run gate, single-transaction commit and postchecks. No names, phone numbers, VINs, source rows or individual references are recorded here.
+
+| Chapter file | Status | Members | Appointments | Roles | New roles | Delegation grants | Held |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Kebbi | Committed and independently verified | 25 | 25 | 22 | 21 | 1 | 4 |
+| Jigawa | Committed and independently verified | 26 | 26 | 22 | 15 | 4 | 0 |
+| Kaduna 1 | Committed and independently verified | 833 | 844 | 54 | 28 | 74 | 140 |
+| Kaduna 2 | Committed and independently verified | 1,053 | 1,056 | 16 | 2 | 10 | 199 |
+
+Totals: **1,937 new members and sign-in accounts, 1,951 appointments, 89 delegation grants and 66 new role definitions**. Independent PostgreSQL checks against each exact import source verified these counts, active accounts, verified membership, active appointments and the intended grants. No SMS was sent; the import command does not call SMS.
+
+The 343 held entries comprise 341 entries designated by the dry-run plan plus two already-registered members in Kaduna 1. Kebbi held two invalid entries and two held-list entries. Kaduna 1 held 98 held-list entries, 39 invalid entries, one missing-name entry and the two already-registered entries. Kaduna 2 held 147 held-list entries, 51 invalid entries and one missing-name entry, with no additional already-registered entries. The two existing members were held back: this run created no memberships, appointments or delegation grants for them. Both Kaduna files were processed; no earlier import of these Kaduna state chapter files is recorded.
+
+All four source CSVs were shredded and their removal independently verified; the private import plan was also removed. The job completed with `Result=success` and `ExecMainStatus=0`, then stopped cleanly after verification with a successful `ExecStopPost`. Aggregate-only job results remain private at `/opt/tgcg/deployment/state-imports-20261016/summary.json`, containing counts, phase and error codes only. Public API health returned HTTP 200 with `status=ok`, `database=ok`; the active web path and public JavaScript checksum were unchanged. Backups succeeded before import and after verification; the post-import backup returned `Result=success` and `ExecMainStatus=0`.
 
 ### Field duty, live incident video, member cards and locations (16 October 2026)
 
