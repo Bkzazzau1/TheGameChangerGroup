@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest release verified on 16 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest release verified on 17 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 16 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `ec8311a4b1991fe61c5da959b8ce74ac8db7f558`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `979009f5dd2de9c9dbb97acd53131a8cc73e2a7b`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -25,19 +25,19 @@ Initial setup on 12 October 2026; latest release verified on 16 October 2026 (Af
 - Production environment: `/opt/tgcg/backend/.env`, mode 600. The generated secret remains on the VPS.
 - Nginx configuration: `/etc/nginx/nginx.conf`, `/etc/nginx/conf.d/tgcg.conf` and `/etc/nginx/tgcg-*.inc`.
 - TLS certificate: `/etc/letsencrypt/live/tgcg.online/`; renewal uses `certbot-renew.timer`.
-- Geography: 8,809 wards, 176,846 polling units; 74,047 polling units with INEC locations.
+- Geography: 8,809 wards, 176,846 polling units; 160,873 polling units with INEC locations across all 36 states and the FCT.
 - Administrator: access ID and display name `TGCG`, national administrator with country scope.
 
 Nginx publishes the API and administration over HTTPS while Gunicorn remains on loopback. Flutter uses `https://api.tgcg.online`; browser access is limited to the app origin. Termii SMS credentials remain to be configured.
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261016-100421-489a1911dc7d` (release directory timestamps use UTC).
-- Frontend build source: `066944ceae2613024bcf286021528d6f2644bb9a` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261015-180635-c27de4158e43`.
+- Published release: `/var/www/tgcg/releases/web-20261017-114554-fe6bb1f580b7` (release directory timestamps use UTC).
+- Frontend build source: `4854dba88b31959d69d94c25ac251e6b37c82d38` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261016-100421-489a1911dc7d`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `489a1911dc7d84115278608045bfabbea28a142c14a5c3578e6644c37dd08a78`.
-- Build: 856 files, 58,889,947 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
+- Main JavaScript SHA256: `fe6bb1f580b74a4e11b6b2f0803890940b919be10a17d6e31d8f76d345bc2683`.
+- Build: 856 files, 59,039,692 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -97,6 +97,7 @@ Private uploads remain under `/opt/tgcg/backend/media`; they require the applica
 
 - `tgcg-maintenance.timer`: removes expired location history and USSD progress daily at 03:00 Africa/Lagos.
 - `tgcg-recordings.service` and `tgcg-recordings.timer`: enabled for recording maintenance every minute, including ending streams older than 120 minutes. The initial run succeeded; provider error output is discarded to keep credentials out of logs.
+- `tgcg-messages.service` and `tgcg-messages.timer`: enabled and active for message delivery every minute, using `deliver_messages --seconds 55 --batch 10`. The initial run succeeded with `Handled 0 message(s).`; only aggregate counts reach stdout and stderr is discarded.
 - `tgcg-backup.timer`: backs up PostgreSQL, private media, `.env`, Nginx configuration, TLS configuration and deployment metadata daily at 03:15 Africa/Lagos.
 - Backup directories: `/var/backups/tgcg/<UTC timestamp>-<unique suffix>`, accessible to root.
 - Initial backup: `/var/backups/tgcg/20261012T072156Z-gTgoU1`.
@@ -122,6 +123,44 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Projects, messaging, card verification and locations (17 October 2026)
+
+Deployed backend `979009f5dd2de9c9dbb97acd53131a8cc73e2a7b` with the existing deployment helper, then published web source `4854dba88b31959d69d94c25ac251e6b37c82d38`. All **521 backend tests passed on an isolated PostgreSQL database**, with zero failures and zero skips (246.21 seconds), and Ruff passed. All **281 Flutter tests passed**, analysis found no issues, and the production web build succeeded with the required API define. Artifact filename, asset-manifest and credential-pattern checks passed. No UI guidance was added.
+
+Locked dependencies include `cryptography==50.0.2`; pinned Gunicorn 26.2.0 was reinstalled after synchronization. All nine production migrations succeeded:
+
+```text
+Applying membership.0013_verification_card_match... OK
+Applying projects.0001_initial... OK
+Applying field.0006_project_links... OK
+Applying membership.0014_member_whatsapp_number... OK
+Applying messaging.0001_initial... OK
+Applying results.0004_project_links... OK
+Applying tracking.0004_project_links... OK
+Applying tracking.0005_end_sharing_from_before_projects... OK
+Applying wallets.0001_initial... OK
+```
+
+The location-sharing migration ends sessions started before projects were introduced. Production had zero active legacy duty sessions before and after deployment; no projects were created. All 12 system roles already existed. Member, User, Role, Appointment and Grant counts were unchanged before the separately authorized card-verification run.
+
+The loader returned:
+
+```text
+INEC locations applied to 86,826 polling units (86,826 new, 0 updated, 74,047 unchanged).
+```
+
+It rejected 13,414 `no_location`, 2,202 `outside_lga`, 2 `outside_nigeria` and 4 `shared_spot` candidates. Coverage is now 160,873 of 176,846 polling units across all 36 states and the FCT.
+
+The card-verification dry run selected 98 awaiting-review members, including 69 with card photos; 57 could be verified automatically if their cards matched. It read no cards and changed no records. After the user explicitly approved Google-first photo transfer using the existing key, the completed run processed 98 members and 69 cards, reported zero unread cards and automatically verified 30 members. Previously verified and rejected statuses were unchanged (zero changes). Aggregate-only results are private at `/opt/tgcg/deployment/verification-20261017/summary.json`; no personal details, card text or row identifiers are included here. No new provider keys were created.
+
+Messaging provider channels remain `[]`; the National Administrator's role-choice request returned 84 choices. Termii and Firebase credentials are absent, and production WhatsApp/Push transport defaults remain `termii`/`fcm`, without demo or console credentials. Registration still reports `phone_code_required=false`; Nginx still returns 503 for the temporary SMS-code routes. When adding Termii credentials later, also set `REGISTRATION_PHONE_CODE_REQUIRED=False` and retain those blocks; enabling registration SMS codes is a separate user decision. Queue, campaign and list counts are zero. No messages, projects, roles, lists or appointments were created manually.
+
+The enabled, active message service/timer runs every minute with `deliver_messages --seconds 55 --batch 10` and a 15-minute service timeout. It starts one batch, then checks its soft deadline between batches. The first run succeeded with `Handled 0 message(s).`; stdout contains counts only and stderr is discarded. Actual provider delivery remains pending credentials and configuration.
+
+All **19 public checks passed**: index, bootstrap, poster and matching JavaScript returned 200; entrypoints use `no-store`; missing JavaScript, private paths and media returned 404. API/database health, app-origin CORS, registration options and place lookups passed. Anonymous card, broadcast, roles and projects requests returned 401; SMS routes remained 503. Results are private at `/opt/tgcg/deployment/release-checks-20261017.json`.
+
+Backups succeeded before deployment and after verification. The isolated PostgreSQL test database was removed. No migrations remain pending, and the private environment retains mode `600:tgcg:tgcg`. No APK, phone testing or new secret-provider setup was performed, following the user's final override. No nonexistent version-5 APK link was added to README. The latest public Android installer remains version 3, with version 4 private staging unchanged.
 
 ### State chapter imports completed (16 October 2026)
 
