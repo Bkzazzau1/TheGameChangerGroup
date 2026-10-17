@@ -104,6 +104,7 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.roleAssignment ||
     TgcgModule.memberReview ||
     TgcgModule.wallets ||
+    TgcgModule.projects ||
     TgcgModule.unitMapping ||
     TgcgModule.agentTracking ||
     TgcgModule.situationRoom ||

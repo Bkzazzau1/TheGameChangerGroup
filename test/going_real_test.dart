@@ -348,7 +348,8 @@ void main() {
       expect(find.text('AG-00001 · Polling Unit Agent'), findsOneWidget);
       expect(find.textContaining('KWARBAI I'), findsWidgets);
       expect(find.textContaining('Checked in today at'), findsOneWidget);
-      expect(find.text('Off duty'), findsOneWidget);
+      // Location is shared only during a project they take part in.
+      expect(find.text('No project now'), findsOneWidget);
       // Agents download their membership card from here.
       expect(find.text('My membership card'), findsOneWidget);
       // The forum is for everyone with a role, agents too (15 October 2026).

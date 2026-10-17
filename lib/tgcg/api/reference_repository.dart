@@ -132,8 +132,15 @@ class ReferenceRepository {
   ReferenceRepository(this.client);
   final ApiClient client;
 
+  /// Elections taking results now: while a project naming them runs, or,
+  /// with no project, while open.
   Future<List<ServerElection>> openElections() async {
-    final body = await client.get('elections/', query: {'status': 'open'}) as List<dynamic>;
+    final body = await client.get('elections/', query: {'accepting': 'true'}) as List<dynamic>;
+    return [for (final item in body) ServerElection.fromJson(item as Map<String, dynamic>)];
+  }
+
+  Future<List<ServerElection>> elections() async {
+    final body = await client.get('elections/') as List<dynamic>;
     return [for (final item in body) ServerElection.fromJson(item as Map<String, dynamic>)];
   }
 

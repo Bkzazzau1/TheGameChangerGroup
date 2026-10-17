@@ -16,6 +16,7 @@ import 'member/member_shell.dart';
 import 'membership/membership_store.dart';
 import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
+import 'projects/project_mode.dart';
 import 'reports/report_store.dart';
 import 'results/result_operations_store.dart';
 import 'security/emergency_response_store.dart';
@@ -452,9 +453,17 @@ class _AuthenticationGate extends StatelessWidget {
     if (session.isMember) {
       return const MemberShell(key: ValueKey('member-shell'));
     }
+    // People with a role see the projects in their areas, and share their
+    // location while one they take part in runs.
     if (session.usesFieldApp) {
-      return const FieldAgentShell(key: ValueKey('field-agent-shell'));
+      return const ProjectMode(
+        key: ValueKey('field-agent-projects'),
+        child: FieldAgentShell(key: ValueKey('field-agent-shell')),
+      );
     }
-    return const TgcgShell(key: ValueKey('tgcg-shell'));
+    return const ProjectMode(
+      key: ValueKey('tgcg-projects'),
+      child: TgcgShell(key: ValueKey('tgcg-shell')),
+    );
   }
 }

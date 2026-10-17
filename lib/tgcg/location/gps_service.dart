@@ -90,10 +90,11 @@ class GpsService {
   Future<bool> openAppSettings() => Geolocator.openAppSettings();
 }
 
-/// Shares live location while an agent is on duty.
+/// Shares live location while someone takes part in a running project (the
+/// app starts and stops it; there is no switch).
 ///
 /// On Android this runs as a foreground service with a visible
-/// "TGCG on duty" notification, so the agent always knows they are sharing.
+/// "TGCG on duty" notification, so the person always knows they are sharing.
 /// Readings are queued in the offline outbox and uploaded when online.
 class DutyTracker extends ChangeNotifier {
   DutyTracker({GpsService gps = const GpsService()}) : _gps = gps;
@@ -113,9 +114,11 @@ class DutyTracker extends ChangeNotifier {
   GpsFix? get lastFix => _lastFix;
   int get queuedReadings => _queued;
 
+  /// [notice] is the text of the phone's ongoing notification.
   Future<void> start({
     required String ownerId,
     OfflinePersistenceController? persistence,
+    String notice = 'Sharing your location with your coordinator.',
   }) async {
     if (onDuty) return;
     await _gps.ensureAccess();
@@ -132,10 +135,9 @@ class DutyTracker extends ChangeNotifier {
             accuracy: LocationAccuracy.high,
             distanceFilter: 50,
             intervalDuration: const Duration(minutes: 3),
-            foregroundNotificationConfig: const ForegroundNotificationConfig(
+            foregroundNotificationConfig: ForegroundNotificationConfig(
               notificationTitle: 'TGCG on duty',
-              notificationText:
-                  'Sharing your location with your coordinator. Switch duty off in the app to stop.',
+              notificationText: notice,
               enableWakeLock: true,
               setOngoing: true,
             ),

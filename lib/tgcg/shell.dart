@@ -32,6 +32,8 @@ import 'session.dart';
 import 'mapping/unit_mapping_page.dart';
 import 'tracking/agents_on_ground_page.dart';
 import 'ui/demo_data_notice.dart';
+import 'projects/project_mode.dart';
+import 'projects/projects_page.dart';
 import 'ui/tgcg_design.dart';
 import 'wallets/wallet_payments_page.dart';
 
@@ -45,12 +47,26 @@ class TgcgShell extends StatefulWidget {
 class _TgcgShellState extends State<TgcgShell> {
   TgcgModule selectedModule = TgcgModule.overview;
 
-  void _select(TgcgModule module) => setState(() => selectedModule = module);
+  /// Whether the person has opened a page themselves.
+  bool _chosen = false;
+
+  void _select(TgcgModule module) => setState(() {
+        selectedModule = module;
+        _chosen = true;
+      });
 
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     final allowed = session.modules;
+    // While a project runs, the app opens on it.
+    final mode = ProjectMode.of(context);
+    if (!_chosen &&
+        mode != null &&
+        mode.running.isNotEmpty &&
+        allowed.contains(TgcgModule.projects)) {
+      selectedModule = TgcgModule.projects;
+    }
     if (!allowed.contains(selectedModule)) {
       selectedModule = TgcgModule.overview;
     }
@@ -120,13 +136,19 @@ class _TgcgShellState extends State<TgcgShell> {
                             showAlerts: allowed.contains(TgcgModule.alertCenter),
                             onAlerts: () => _select(TgcgModule.alertCenter),
                           ),
-                          Expanded(child: _pageFor(selectedModule)),
+                          const ProjectStrip(),
+                          Expanded(child: ProjectGpsGate(child: _pageFor(selectedModule))),
                         ],
                       ),
                     ),
                   ],
                 )
-              : _pageFor(selectedModule),
+              : Column(
+                  children: [
+                    const ProjectStrip(),
+                    Expanded(child: ProjectGpsGate(child: _pageFor(selectedModule))),
+                  ],
+                ),
         );
       },
     );
@@ -165,6 +187,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.unitMapping => const UnitMappingPage(),
         TgcgModule.agentTracking => const AgentsOnGroundPage(),
         TgcgModule.wallets => const WalletPaymentsPage(),
+        TgcgModule.projects => const ProjectsPage(),
       };
 }
 
@@ -184,6 +207,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.aiAnalytics, 'AI Data Analytics', Icons.query_stats_rounded, _NavGroup.command),
   _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
   _Destination(TgcgModule.membershipNetwork, 'Registered Members', Icons.groups_2_outlined, _NavGroup.command),
+  _Destination(TgcgModule.projects, 'Projects', Icons.flag_outlined, _NavGroup.command),
   _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
   _Destination(TgcgModule.agentTracking, 'Agents on the Ground', Icons.share_location_rounded, _NavGroup.command),
   _Destination(TgcgModule.securityResponse, 'Security Response', Icons.emergency_share_outlined, _NavGroup.command),
@@ -582,6 +606,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.unitMapping => 'Polling Unit Mapping',
       TgcgModule.agentTracking => 'Agents on the Ground',
       TgcgModule.wallets => 'Wallets',
+      TgcgModule.projects => 'Projects',
     };
 
 

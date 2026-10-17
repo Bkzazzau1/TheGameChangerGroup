@@ -13,37 +13,38 @@ void main() {
     // LGA and ward coordinators who verify identities (13 October 2026). Role
     // Assignment for zonal and state coordinators and Technical Support waits for
     // cascading appointments. Since 15 October 2026 the Situation Room is national,
-    // so no coordinator has it, nor Security Response, which needs it.
+    // so no coordinator has it, nor Security Response, which needs it. Projects
+    // (17 October 2026) for whoever watches live operations or assigns people.
     final grid = <TgcgRole, Set<TgcgModule>>{
       TgcgRole.nationalCollationOfficer: modules(
-        'overview liveOperations agentTracking alertCenter situationRoom evidenceCapture '
+        'overview projects liveOperations agentTracking alertCenter situationRoom evidenceCapture '
         'resultCapture aiVerification collation communications discussionRoom meetingRoom reports',
       ),
       TgcgRole.situationRoomDirector: modules(
-        'overview liveOperations agentTracking aiAnalytics alertCenter situationRoom '
+        'overview projects liveOperations agentTracking aiAnalytics alertCenter situationRoom '
         'securityResponse mediaIntelligence fieldMonitoring evidenceCapture resultCapture '
         'aiVerification collation communications bulkCommunications discussionRoom meetingRoom '
         'reports',
       ),
       TgcgRole.zonalCoordinator: modules(
-        'overview liveOperations agentTracking aiAnalytics alertCenter '
+        'overview projects liveOperations agentTracking aiAnalytics alertCenter '
         'mediaIntelligence accreditation unitMapping aiVerification '
         'fieldMonitoring evidenceCapture resultCapture collation communications '
         'bulkCommunications discussionRoom meetingRoom reports',
       ),
       TgcgRole.stateCoordinator: modules(
-        'overview liveOperations agentTracking aiAnalytics alertCenter '
+        'overview projects liveOperations agentTracking aiAnalytics alertCenter '
         'mediaIntelligence accreditation memberReview unitMapping aiVerification '
         'fieldMonitoring evidenceCapture resultCapture collation communications '
         'bulkCommunications discussionRoom meetingRoom reports',
       ),
       TgcgRole.lgaCoordinator: modules(
-        'overview liveOperations agentTracking alertCenter '
+        'overview projects liveOperations agentTracking alertCenter '
         'accreditation memberReview unitMapping aiVerification fieldMonitoring evidenceCapture '
         'resultCapture collation communications discussionRoom meetingRoom',
       ),
       TgcgRole.wardCoordinator: modules(
-        'overview liveOperations agentTracking accreditation memberReview '
+        'overview projects liveOperations agentTracking accreditation memberReview '
         'unitMapping fieldMonitoring evidenceCapture resultCapture collation communications '
         'discussionRoom meetingRoom',
       ),
@@ -62,7 +63,7 @@ void main() {
         'overview communications discussionRoom meetingRoom systemMonitoring governance',
       ),
       TgcgRole.readOnlyExecutive: modules(
-        'overview liveOperations agentTracking aiAnalytics situationRoom mediaIntelligence '
+        'overview projects liveOperations agentTracking aiAnalytics situationRoom mediaIntelligence '
         'collation meetingRoom reports',
       ),
     };

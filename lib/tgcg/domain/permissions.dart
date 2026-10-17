@@ -83,8 +83,12 @@ enum TgcgCapability {
   viewWallets,
   creditWallets,
   approveWalletCredits,
+  // Projects: scheduled field work. Coordinators assign people to them.
+  assignProjectParticipants,
   appointNationalAdministrator,
   approveAdministratorRemoval,
+  // Scheduling projects: National Administrators only.
+  manageProjects,
 }
 
 class TgcgPermissionPolicy {
@@ -178,9 +182,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.stateCoordinator: {
-      // As on the server: register members, pin units, see members' contacts
-      // and confirm their identities.
+      // As on the server: register members, pin units, see members' contacts,
+      // confirm their identities and assign people to projects.
       TgcgCapability.registerMembers,
+      TgcgCapability.assignProjectParticipants,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.verifyMemberIdentity,
@@ -213,9 +218,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.exportReports,
     },
     TgcgRole.lgaCoordinator: {
-      // As on the server: register members, pin units, see members' contacts
-      // and confirm their identities.
+      // As on the server: register members, pin units, see members' contacts,
+      // confirm their identities and assign people to projects.
       TgcgCapability.registerMembers,
+      TgcgCapability.assignProjectParticipants,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.verifyMemberIdentity,
@@ -243,9 +249,10 @@ class TgcgPermissionPolicy {
       TgcgCapability.viewEvidence,
     },
     TgcgRole.wardCoordinator: {
-      // As on the server: register members, pin units, see members' contacts
-      // and confirm their identities.
+      // As on the server: register members, pin units, see members' contacts,
+      // confirm their identities and assign people to projects.
       TgcgCapability.registerMembers,
+      TgcgCapability.assignProjectParticipants,
       TgcgCapability.confirmAgentLocation,
       TgcgCapability.viewMemberSensitiveData,
       TgcgCapability.verifyMemberIdentity,

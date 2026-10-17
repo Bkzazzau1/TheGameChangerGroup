@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart' show formatMoment;
 import '../api/backend.dart';
+import '../api/projects_repository.dart';
 import '../domain/permissions.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
 import '../member/member_shell.dart';
 import '../member/wallet_page.dart';
 import '../membership/member_review_page.dart';
-import '../offline/offline_persistence.dart';
+import '../projects/project_mode.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
 import '../sound/sound_alerts.dart';
@@ -132,7 +133,7 @@ class _AgentHomePageState extends State<AgentHomePage> {
           onCheckIn: _checkIn,
         ),
         const SizedBox(height: 10),
-        _OnDutyCard(ownerId: me),
+        const _ProjectDutyCard(),
         if (alerts.supported) ...[
           const SizedBox(height: 10),
           _SoundAlertsCard(alerts: alerts),
@@ -448,33 +449,46 @@ class _Sent extends StatelessWidget {
 }
 
 /// Switch for sharing live location while on duty on election day.
-class _OnDutyCard extends StatelessWidget {
-  const _OnDutyCard({required this.ownerId});
-
-  final String ownerId;
+/// Location sharing follows the project the person takes part in: on while
+/// it runs, off when it ends. There is no switch.
+class _ProjectDutyCard extends StatelessWidget {
+  const _ProjectDutyCard();
 
   @override
   Widget build(BuildContext context) {
+    final mode = ProjectMode.of(context);
     final tracker = DutyTracker.instance;
     return ListenableBuilder(
       listenable: tracker,
       builder: (context, _) {
+        final work = mode?.myWork;
+        final invitation = mode == null || mode.invitations.isEmpty ? null : mode.invitations.first;
+        final sharing = work != null && tracker.onDuty;
         final last = tracker.lastFix;
-        final since = tracker.since?.toLocal();
+        final (title, detail) = switch ((work, invitation)) {
+          (final TgcgProject work?, _) => (
+              sharing ? 'Sharing your location' : 'Starting to share your location',
+              '${work.name} until ${hourMinute(work.endsAt)}'
+                  '${last == null ? '' : ' · last fix ±${last.accuracyMeters.round()} m'}',
+            ),
+          (null, final TgcgProject invitation?) => (
+              'You are asked to take part in ${invitation.name}',
+              'From ${formatMoment(invitation.startsAt)} to ${formatMoment(invitation.endsAt)}',
+            ),
+          _ => ('No project now', 'Your location is not shared.'),
+        };
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
           decoration: BoxDecoration(
-            color: tracker.onDuty ? TgcgColors.primary : TgcgColors.surface,
+            color: sharing ? TgcgColors.primary : TgcgColors.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: tracker.onDuty ? TgcgColors.primary : TgcgColors.border,
-            ),
+            border: Border.all(color: sharing ? TgcgColors.primary : TgcgColors.border),
           ),
           child: Row(
             children: [
               Icon(
-                tracker.onDuty ? Icons.share_location_rounded : Icons.location_disabled_outlined,
-                color: tracker.onDuty ? TgcgColors.accentBright : TgcgColors.muted,
+                sharing ? Icons.share_location_rounded : Icons.location_disabled_outlined,
+                color: sharing ? TgcgColors.accentBright : TgcgColors.muted,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -482,58 +496,39 @@ class _OnDutyCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      tracker.onDuty ? 'On duty: sharing location' : 'Off duty',
+                      title,
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
-                        color: tracker.onDuty ? Colors.white : TgcgColors.ink,
+                        color: sharing ? Colors.white : TgcgColors.ink,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      tracker.onDuty
-                          ? 'Since ${_hhmm(since)}'
-                              '${last == null ? ' · waiting for GPS' : ' · last fix ±${last.accuracyMeters.round()} m'}'
-                          : 'Switch on when you start election-day duty. Your coordinator sees '
-                              'your position only while you are on duty.',
+                      detail,
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: tracker.onDuty ? const Color(0xFFC9D4F0) : TgcgColors.muted,
+                        color: sharing ? const Color(0xFFC9D4F0) : TgcgColors.muted,
                       ),
                     ),
                   ],
                 ),
               ),
-              Switch(
-                value: tracker.onDuty,
-                onChanged: (value) => _toggle(context, tracker, value),
-              ),
+              if (work == null && invitation != null)
+                FilledButton(
+                  onPressed: () => answerInvitation(context, invitation),
+                  child: const Text('Answer'),
+                ),
             ],
           ),
         );
       },
     );
   }
-
-  Future<void> _toggle(BuildContext context, DutyTracker tracker, bool value) async {
-    if (!value) {
-      await tracker.stop();
-      return;
-    }
-    try {
-      await tracker.start(
-        ownerId: ownerId,
-        persistence: OfflinePersistence.of(context, listen: false),
-      );
-    } on GpsUnavailable catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
-    }
-  }
-
-  static String _hhmm(DateTime? value) => value == null
-      ? '--:--'
-      : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 }
+
+String _hhmm(DateTime? value) => value == null
+    ? '--:--'
+    : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 
 /// Switch for sound alerts: while on duty the phone listens for danger, also
 /// with the screen locked, and raises an incident when it hears one.
@@ -557,7 +552,7 @@ class _SoundAlertsCard extends StatelessWidget {
           _ => alerts.problem ??
               (last == null
                   ? 'Listening, also with the screen locked'
-                  : 'Last alert ${_OnDutyCard._hhmm(last.at.toLocal())}: ${last.kind.label}'),
+                  : 'Last alert ${_hhmm(last.at.toLocal())}: ${last.kind.label}'),
         };
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),

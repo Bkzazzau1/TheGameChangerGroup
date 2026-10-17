@@ -11,6 +11,7 @@ import 'mapping_repository.dart';
 import 'meetings_repository.dart';
 import 'overview_repository.dart';
 import 'member_repository.dart';
+import 'projects_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
 import 'tracking_repository.dart';
@@ -31,7 +32,8 @@ class BackendServices {
         access = AccessRepository(client),
         members = MemberAdminRepository(client),
         forum = ForumRepository(client),
-        wallets = WalletRepository(client);
+        wallets = WalletRepository(client),
+        projects = ProjectsRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -80,6 +82,9 @@ class BackendServices {
 
   /// Members' wallets and the payments TGCG makes into them.
   final WalletRepository wallets;
+
+  /// Projects: scheduled field work, who takes part, and where they are.
+  final ProjectsRepository projects;
 }
 
 /// Makes [BackendServices] available below it. The app always provides

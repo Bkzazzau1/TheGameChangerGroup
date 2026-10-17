@@ -36,6 +36,7 @@ enum TgcgModule {
   governance,
   memberReview,
   wallets,
+  projects,
 }
 
 /// The modules that work on the server's records today. The others still
@@ -54,6 +55,7 @@ const liveModules = {
   TgcgModule.discussionRoom,
   TgcgModule.meetingRoom,
   TgcgModule.wallets,
+  TgcgModule.projects,
 };
 
 class TgcgSessionController extends ChangeNotifier {
@@ -376,6 +378,14 @@ Set<TgcgModule> allowedModulesFor(
     TgcgCapability.suspendMembers,
   ])) {
     modules.add(TgcgModule.memberReview);
+  }
+  // Projects: the administrator schedules them; coordinators assign and watch.
+  if (any(const [
+    TgcgCapability.manageProjects,
+    TgcgCapability.assignProjectParticipants,
+    TgcgCapability.viewLiveOperations,
+  ])) {
+    modules.add(TgcgModule.projects);
   }
   // Wallets: payments to members, for finance staff in their areas.
   if (any(const [
