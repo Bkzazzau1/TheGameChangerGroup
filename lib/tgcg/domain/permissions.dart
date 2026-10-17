@@ -85,6 +85,10 @@ enum TgcgCapability {
   approveWalletCredits,
   // Projects: scheduled field work. Coordinators assign people to them.
   assignProjectParticipants,
+  // Bulk messages: each channel is its own power, given by an administrator.
+  sendSms,
+  sendWhatsApp,
+  sendPushNotifications,
   appointNationalAdministrator,
   approveAdministratorRemoval,
   // Scheduling projects: National Administrators only.

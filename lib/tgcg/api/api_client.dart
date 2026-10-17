@@ -155,7 +155,7 @@ class ApiClient {
 
   Future<dynamic> put(String path, {Object? body}) => _send('PUT', path, body: body);
 
-  Future<dynamic> delete(String path) => _send('DELETE', path);
+  Future<dynamic> delete(String path, {Object? body}) => _send('DELETE', path, body: body);
 
   /// The raw body of an authenticated GET, such as a photo.
   Future<Uint8List> getBytes(String path) async {

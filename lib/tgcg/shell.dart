@@ -30,6 +30,8 @@ import 'results/result_capture_page.dart';
 import 'security/security_response_portal_page.dart';
 import 'session.dart';
 import 'mapping/unit_mapping_page.dart';
+import 'messaging/inbox_page.dart';
+import 'messaging/messages_page.dart';
 import 'tracking/agents_on_ground_page.dart';
 import 'ui/demo_data_notice.dart';
 import 'projects/project_mode.dart';
@@ -92,6 +94,7 @@ class _TgcgShellState extends State<TgcgShell> {
                   actions: [
                     const _CompactSync(),
                     const SizedBox(width: 2),
+                    const InboxButton(),
                     if (allowed.contains(TgcgModule.alertCenter))
                       IconButton(
                         tooltip: 'Alert Centre',
@@ -188,6 +191,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.agentTracking => const AgentsOnGroundPage(),
         TgcgModule.wallets => const WalletPaymentsPage(),
         TgcgModule.projects => const ProjectsPage(),
+        TgcgModule.messages => const MessagesPage(),
       };
 }
 
@@ -222,6 +226,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.collation, 'Collation', Icons.account_tree_outlined, _NavGroup.fieldOperations),
   _Destination(TgcgModule.communications, 'Communications', Icons.forum_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.bulkCommunications, 'Bulk Communications', Icons.send_to_mobile_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.messages, 'Messages', Icons.campaign_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.discussionRoom, 'Discussion Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.roleAssignment, 'Roles & Access', Icons.manage_accounts_outlined, _NavGroup.control),
@@ -490,6 +495,7 @@ class _CommandBar extends StatelessWidget {
               ),
             ),
           ],
+          if (session.isServerSession) const InboxButton(),
           const SizedBox(width: 4),
           Tooltip(
             message: '${session.roleTitle} • ${session.scope.label}',
@@ -607,6 +613,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.agentTracking => 'Agents on the Ground',
       TgcgModule.wallets => 'Wallets',
       TgcgModule.projects => 'Projects',
+      TgcgModule.messages => 'Messages',
     };
 
 

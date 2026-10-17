@@ -37,6 +37,7 @@ enum TgcgModule {
   memberReview,
   wallets,
   projects,
+  messages,
 }
 
 /// The modules that work on the server's records today. The others still
@@ -56,6 +57,7 @@ const liveModules = {
   TgcgModule.meetingRoom,
   TgcgModule.wallets,
   TgcgModule.projects,
+  TgcgModule.messages,
 };
 
 class TgcgSessionController extends ChangeNotifier {
@@ -386,6 +388,14 @@ Set<TgcgModule> allowedModulesFor(
     TgcgCapability.viewLiveOperations,
   ])) {
     modules.add(TgcgModule.projects);
+  }
+  // Messages: bulk SMS, WhatsApp and app notifications, each its own power.
+  if (any(const [
+    TgcgCapability.sendSms,
+    TgcgCapability.sendWhatsApp,
+    TgcgCapability.sendPushNotifications,
+  ])) {
+    modules.add(TgcgModule.messages);
   }
   // Wallets: payments to members, for finance staff in their areas.
   if (any(const [

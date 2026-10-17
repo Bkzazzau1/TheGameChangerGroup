@@ -49,6 +49,7 @@ class MemberCard {
     required this.qrToken,
     required this.memberSince,
     this.email = '',
+    this.whatsappNumber = '',
     this.vin,
     this.hasPvc = false,
     this.gender = '',
@@ -69,6 +70,9 @@ class MemberCard {
   final String fullName;
   final String phoneNumber;
   final String email;
+
+  /// Empty when WhatsApp is on [phoneNumber].
+  final String whatsappNumber;
 
   /// The PVC's VIN with most characters hidden.
   final String? vin;
@@ -111,6 +115,7 @@ class MemberCard {
       fullName: json['full_name'] as String,
       phoneNumber: json['phone_number'] as String,
       email: (json['email'] as String?) ?? '',
+      whatsappNumber: (json['whatsapp_number'] as String?) ?? '',
       vin: json['vin'] as String?,
       hasPvc: json['has_pvc'] as bool? ?? false,
       gender: (json['gender'] as String?) ?? '',
@@ -477,6 +482,12 @@ class MemberRepository {
 
   Future<MemberCard> updateEmail(String email) async => MemberCard.fromJson(
         await client.patch('me/member/', body: {'email': email}) as Map<String, dynamic>,
+      );
+
+  /// Empty means WhatsApp is on the member's phone number.
+  Future<MemberCard> updateWhatsappNumber(String number) async => MemberCard.fromJson(
+        await client.patch('me/member/', body: {'whatsapp_number': number.trim()})
+            as Map<String, dynamic>,
       );
 
   Future<MemberCard> updateOccupation(String occupation) async => MemberCard.fromJson(

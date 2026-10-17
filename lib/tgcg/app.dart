@@ -14,6 +14,7 @@ import 'governance/governance_store.dart';
 import 'login_page.dart';
 import 'member/member_shell.dart';
 import 'membership/membership_store.dart';
+import 'messaging/push.dart';
 import 'media/device_media.dart';
 import 'offline/offline_persistence.dart';
 import 'projects/project_mode.dart';
@@ -105,7 +106,14 @@ class _TgcgAppState extends State<TgcgApp> {
 
   void _createControllers() {
     final services = backend;
-    final session = sessionController = TgcgSessionController(onSignOut: services.auth.logout);
+    final session = sessionController = TgcgSessionController(
+      onSignOut: () async {
+        // While still signed in: this phone stops receiving the account's
+        // notifications. A slow network does not hold up the sign-out.
+        await PushNotifications.stop(services).timeout(const Duration(seconds: 5), onTimeout: () {});
+        await services.auth.logout();
+      },
+    );
     final offline = offlinePersistenceController = OfflinePersistenceController();
     final sync = syncController = SyncController(
       persistence: offline,
@@ -450,20 +458,30 @@ class _AuthenticationGate extends StatelessWidget {
     if (!session.isAuthenticated) {
       return const TgcgLoginPage(key: ValueKey('server-login'));
     }
+    // Every signed-in phone may receive app notifications.
     if (session.isMember) {
-      return const MemberShell(key: ValueKey('member-shell'));
+      return const PushRegistration(
+        key: ValueKey('member-push'),
+        child: MemberShell(key: ValueKey('member-shell')),
+      );
     }
     // People with a role see the projects in their areas, and share their
     // location while one they take part in runs.
     if (session.usesFieldApp) {
-      return const ProjectMode(
-        key: ValueKey('field-agent-projects'),
-        child: FieldAgentShell(key: ValueKey('field-agent-shell')),
+      return const PushRegistration(
+        key: ValueKey('field-agent-push'),
+        child: ProjectMode(
+          key: ValueKey('field-agent-projects'),
+          child: FieldAgentShell(key: ValueKey('field-agent-shell')),
+        ),
       );
     }
-    return const ProjectMode(
-      key: ValueKey('tgcg-projects'),
-      child: TgcgShell(key: ValueKey('tgcg-shell')),
+    return const PushRegistration(
+      key: ValueKey('tgcg-push'),
+      child: ProjectMode(
+        key: ValueKey('tgcg-projects'),
+        child: TgcgShell(key: ValueKey('tgcg-shell')),
+      ),
     );
   }
 }

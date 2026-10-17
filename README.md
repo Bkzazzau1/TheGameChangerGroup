@@ -130,12 +130,15 @@ The connection code lives in `lib/tgcg/api/`:
   account, and lists, requests and decides payments for finance staff.
 - `projects_repository.dart` schedules projects, assigns people to them,
   watches where they are, and answers invitations.
+- `messaging_repository.dart` previews and sends messages, lists sent ones
+  with their delivery, keeps saved lists, reads the inbox and registers the
+  phone for app notifications.
 
 Signed in to a server, these screens work on server records: the Overview,
-Projects, Role Management, Member Review, Wallets, Unit Mapping, Agents on
-the Ground, the Situation Room, Field Monitoring, Result Capture, Collation
-and the Meeting Room. A member's wallet opens from their card (the member
-app) or the agent's home.
+Projects, Messages, Role Management, Member Review, Wallets, Unit Mapping,
+Agents on the Ground, the Situation Room, Field Monitoring, Result Capture,
+Collation, the Forum and the Meeting Room. A member's wallet opens from their
+card (the member app) or the agent's home.
 
 Projects (`lib/tgcg/projects/`) are scheduled periods of field work, such as
 an election. Everyone with a role sees a strip at the top of the app while
@@ -143,6 +146,33 @@ one runs in their areas. Someone taking part accepts an invitation once;
 while the project runs their app shares their location without a switch
 and waits for GPS to be on, and the operations app opens on the project.
 Outside a project nobody shares location.
+
+Messages (`lib/tgcg/messaging/`) go out by SMS, WhatsApp and app
+notification. The National Administrator gives the powers to send them
+(send SMS, send WhatsApp, send app notifications) through roles, and a
+sender reaches only people in their own areas: the server works out who each
+message reaches. One message can go to several groups at once: people in
+chosen areas, narrowed by role, gender or a checked identity; a project's
+team; or a saved list. **Who it reaches** counts the people before sending,
+and **Sent** shows how far each message got on each channel. Everyone signed
+in has an inbox (the envelope in the top bar) with the messages sent to them,
+and a member whose WhatsApp is on another number adds it on their card.
+
+App notifications use Firebase Cloud Messaging and reach Android phones
+built with the Firebase project's Android app values:
+
+```bash
+flutter build apk --release --build-number=N \
+  --dart-define=TGCG_API_URL=https://api.tgcg.online \
+  --dart-define=TGCG_FIREBASE_API_KEY=... \
+  --dart-define=TGCG_FIREBASE_APP_ID=... \
+  --dart-define=TGCG_FIREBASE_SENDER_ID=... \
+  --dart-define=TGCG_FIREBASE_PROJECT_ID=...
+```
+
+Without them the app builds and runs without notifications, and messages
+still reach the inbox. The first Windows desktop build downloads the Firebase
+C++ SDK that `firebase_core` needs there.
 Incident actions (acknowledge, assign, escalate, resolve, close, reopen),
 field report reviews and result decisions (verify, dispute, reject) go to the
 server, which checks each one. Collation shows the server's unofficial totals
@@ -158,6 +188,7 @@ today's check-in and their duty, with tabs to report an incident, submit the
 result and join meetings.
 
 Only these screens are offered (`liveModules` in `lib/tgcg/session.dart`).
-The others, such as messages, the forum, reports and member enrolment, ran on
-sample records, so they stay hidden until each one works on the server. The
+The others, such as the old communications screens, reports and member
+enrolment, ran on sample records, so they stay hidden until each one works on
+the server. The
 role grid (`allowedModulesFor`) still says who will get them.

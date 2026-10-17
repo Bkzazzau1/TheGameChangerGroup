@@ -40,7 +40,7 @@ String areaLabel(GeographicScope scope) =>
 /// The message to show for a failed call.
 String failureMessage(Object error) => switch (error) {
   ApiException(isOffline: true) =>
-    'The server cannot be reached. Changes to roles and access need a connection.',
+    'The server cannot be reached. Check the connection and try again.',
   ApiException(:final message) => message,
   _ => 'Something went wrong. Try again.',
 };

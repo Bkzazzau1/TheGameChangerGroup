@@ -11,6 +11,7 @@ import 'mapping_repository.dart';
 import 'meetings_repository.dart';
 import 'overview_repository.dart';
 import 'member_repository.dart';
+import 'messaging_repository.dart';
 import 'projects_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
@@ -33,7 +34,8 @@ class BackendServices {
         members = MemberAdminRepository(client),
         forum = ForumRepository(client),
         wallets = WalletRepository(client),
-        projects = ProjectsRepository(client);
+        projects = ProjectsRepository(client),
+        messaging = MessagingRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -85,6 +87,9 @@ class BackendServices {
 
   /// Projects: scheduled field work, who takes part, and where they are.
   final ProjectsRepository projects;
+
+  /// Bulk messages, saved lists, the inbox and phones for app notifications.
+  final MessagingRepository messaging;
 }
 
 /// Makes [BackendServices] available below it. The app always provides

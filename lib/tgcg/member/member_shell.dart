@@ -12,6 +12,7 @@ import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
 import '../api/wallet_repository.dart';
 import '../location/directions.dart';
+import '../messaging/inbox_page.dart';
 import '../media/device_media.dart';
 import '../media/save_download.dart';
 import '../session.dart';
@@ -118,6 +119,7 @@ class _MemberShellState extends State<MemberShell> {
         ),
         actions: [
           IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
+          const InboxButton(),
           IconButton(
             tooltip: 'Change PIN',
             onPressed: () => showChangePin(context),
@@ -304,6 +306,14 @@ class _CardTab extends StatelessWidget {
                         child: Text(card.email.isEmpty ? 'Add' : 'Change'),
                       ),
                     ),
+                    _Detail(
+                      'WhatsApp',
+                      card.whatsappNumber.isEmpty ? 'Same as phone' : card.whatsappNumber,
+                      action: TextButton(
+                        onPressed: () => _editWhatsapp(context, card),
+                        child: const Text('Change'),
+                      ),
+                    ),
                     _Detail('PVC', card.vin ?? 'Not on record'),
                     _Detail(
                       'Gender',
@@ -479,6 +489,30 @@ class _CardTab extends StatelessWidget {
       onChanged();
     } on ApiException catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(error.fieldError('email') ?? error.message)));
+    }
+  }
+
+  Future<void> _editWhatsapp(BuildContext context, MemberCard card) async {
+    final members = TgcgBackend.of(context)!.member;
+    final messenger = ScaffoldMessenger.of(context);
+    final number = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextPrompt(
+        title: 'WhatsApp number',
+        label: 'Leave empty if it is your phone number',
+        action: 'Save',
+        initial: card.whatsappNumber,
+        keyboardType: TextInputType.phone,
+      ),
+    );
+    if (number == null) return;
+    try {
+      await members.updateWhatsappNumber(number);
+      onChanged();
+    } on ApiException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.fieldError('whatsapp_number') ?? error.message)),
+      );
     }
   }
 

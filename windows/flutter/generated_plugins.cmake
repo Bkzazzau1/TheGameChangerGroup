@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   camera_windows
   connectivity_plus
   file_selector_windows
+  firebase_core
   flutter_secure_storage_windows
   flutter_webrtc
   geolocator_windows

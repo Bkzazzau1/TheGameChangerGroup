@@ -1025,6 +1025,31 @@ void main() {
       expect(action('Photo of you'), findsOneWidget);
     });
 
+    testWidgets('a WhatsApp number other than the phone', (tester) async {
+      var card = _card();
+      final server = _Server((request) => switch ((request.method, _path(request))) {
+            ('GET', 'me/member/') => _json(card),
+            // The server keeps numbers in the +234 form.
+            ('PATCH', 'me/member/') => _json(card = {...card, 'whatsapp_number': '+2348057654321'}),
+            (_, final path) => memberHome(path),
+          });
+      await _pump(tester, server.connect(), const MemberShell(), member: true);
+      await tester.pumpAndSettle();
+      expect(find.text('Same as phone'), findsOneWidget);
+
+      await tester.tap(action('WhatsApp'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Leave empty if it is your phone number'),
+        ' 0805 765 4321 ',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(jsonDecode(server.bodies['PATCH /api/v1/me/member/']!), {'whatsapp_number': '0805 765 4321'});
+      expect(find.text('+2348057654321'), findsOneWidget);
+      expect(find.text('Same as phone'), findsNothing);
+    });
+
     for (final future in [true, false]) {
       testWidgets('a member corrects an OCR ${future ? 'future' : 'too-old'} date of birth',
           (tester) async {
