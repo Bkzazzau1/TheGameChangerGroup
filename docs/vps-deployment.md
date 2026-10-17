@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 17 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `979009f5dd2de9c9dbb97acd53131a8cc73e2a7b`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `e8ea828c41d661f31802b6d1f88e86a19900497f`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,12 +32,12 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261017-114554-fe6bb1f580b7` (release directory timestamps use UTC).
-- Frontend build source: `4854dba88b31959d69d94c25ac251e6b37c82d38` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261016-100421-489a1911dc7d`.
+- Published release: `/var/www/tgcg/releases/web-20261017-145729-c71f74e0a6dc` (release directory timestamps use UTC).
+- Frontend build source: `d2fb6a7ff259dcb5c256ba6d55876de0d5c1a745` from `Bkzazzau1/TheGameChangerGroup`. Later documentation commits do not change this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261017-114554-fe6bb1f580b7`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `fe6bb1f580b74a4e11b6b2f0803890940b919be10a17d6e31d8f76d345bc2683`.
-- Build: 856 files, 59,039,692 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
+- Main JavaScript SHA256: `c71f74e0a6dcd971e193b34693e3603a798d67336f537ed895ca6371d810ca0c`.
+- Build: 856 files, 59,064,055 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -123,6 +123,26 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Registration by another member and permission safeguards (17 October 2026 follow-up)
+
+Deployed backend `e8ea828c41d661f31802b6d1f88e86a19900497f` from `main` with the existing helper, including requested registration change `ac98348` and the approved permission/concurrency fix. A signed-in person can register another member with their name, phone number and agreement, then complete that registration until the identity is checked. The phone number is the initial password; the member can change it after signing in. Adding a card supplies the name and place from that card.
+
+The fix reloads and locks the Member before checking the registrar's permission, so a concurrent identity decision or membership suspension cannot leave stale permission in use. Corrections also lock and reload the User before checking whether first sign-in has occurred, protecting the phone number and initial password. PVC decisions and completion take locks in the same Member-then-PVC order. The 37 new regression tests include 14 real PostgreSQL checks. All **567 backend tests passed on an isolated PostgreSQL database**, with zero failures and zero skips (281.11 seconds); Ruff passed and the test database was removed.
+
+All **284 Flutter tests passed**, analysis found no issues, and the production web build from `d2fb6a7ff259dcb5c256ba6d55876de0d5c1a745` succeeded with the required API define. The published artifact has 856 files and 59,064,055 uncompressed bytes; main JavaScript SHA256 is `c71f74e0a6dcd971e193b34693e3603a798d67336f537ed895ca6371d810ca0c`. Filename, decoded asset-manifest and credential-pattern checks found no private artifacts or matching credentials. The preceding morning web release remains retained.
+
+The production migration succeeded, with no migrations pending:
+
+```text
+Applying membership.0015_registered_by_another_person... OK
+```
+
+API/database health and Nginx configuration checks passed; Nginx was unchanged. Geography remains at 160,873 INEC-located polling units, and the private environment retains `600:tgcg:tgcg`. Roles (84), assignments (2,137), grants (89), projects (0), messages (0) and lists (0) were unchanged. The aggregate baseline grew by one Member and one User; queries confirmed one of each was created during concurrent live activity. Deployment scripts registered no one and did not edit existing member data. Runtime settings, dependencies and timers were unchanged. No APK was built, and this documentation update adds no app UI text.
+
+All **14 public release checks passed**. Index, bootstrap, poster and JavaScript returned 200; index, bootstrap and JavaScript use `no-store`. The served JavaScript checksum matched. API/database health returned 200; anonymous `GET /api/v1/me/registered/` returned 401 with app-origin CORS and a successful preflight. Registration options still report `phone_code_required=false`; both SMS-code routes remain 503. Missing JavaScript, private configuration paths and forum/evidence media returned 404. Secret-free results are private at `/opt/tgcg/deployment/followup-public-checks-20261017.json`. No one signed in and no production records were created by these checks. Backups succeeded before deployment and after public verification (`Result=success`, `ExecMainStatus=0`); all four existing TGCG timers remain enabled and active.
+
+Termii setup does not authorize registration SMS codes: retain `REGISTRATION_PHONE_CODE_REQUIRED=False` and the temporary Nginx SMS-code blocks until the user separately approves enabling phone verification. This 17 October policy supersedes the older Termii enablement instructions below.
 
 ### Projects, messaging, card verification and locations (17 October 2026)
 
@@ -316,7 +336,7 @@ The user chose to handle phone testing with `flutter run`; release-APK Scan PVC 
 
 The new APK route was added to `/etc/nginx/tgcg-downloads.inc`; Nginx configuration passed and was reloaded. Release metadata is in `/opt/tgcg/deployment/web-release.json` and `/opt/tgcg/deployment/android-release.json`. Local and GitHub sources were pulled before building and the VPS source checkouts were fast-forwarded to those same releases. Backup verification succeeded before deployment.
 
-When Termii SMS is configured, adding its key enables registration phone codes by default. At the same time, remove the two temporary SMS locations, restart the API, test and reload Nginx, and verify SMS delivery with the approved sender.
+Superseded by the 17 October separate-approval policy above: adding Termii credentials must retain `REGISTRATION_PHONE_CODE_REQUIRED=False` and both temporary SMS locations. Enabling registration SMS codes requires a separate user decision.
 
 ### Previous Android installer: version 2 (14 October 2026)
 
@@ -352,7 +372,7 @@ Read-only public checks passed: authentication/profile and access payloads; auth
 
 Meeting planning is live. Audio/video is awaiting the project's `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`; they are not configured on the VPS yet. The browser host has no restrictive camera/microphone Permissions-Policy or CSP. API tests use mocked LiveKit; real audio/video still needs verification after credentials are configured. See backend `docs/meetings.md`. The restricted local `build/livekit-private.env` is Git ignored; participant tokens cannot replace the API secret used to issue per-user passes. Media uploads, recordings and remaining demonstration dashboards retain their documented limits.
 
-Configure `TERMII_API_KEY` and an approved `TERMII_SENDER_ID` in the server environment before enabling phone verification. Nginx currently returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`. After the real provider is configured and verified, remove those temporary locations, restart the API, test Nginx configuration and reload Nginx. No administrator phone or email was supplied.
+The Termii enablement instructions from this release are superseded by the 17 October separate-approval policy above. Nginx returns a clear 503 JSON response for SMS-code and PIN-code requests through `/etc/nginx/tgcg-sms-pending.inc`; retain those blocks and `REGISTRATION_PHONE_CODE_REQUIRED=False` when adding provider credentials unless the user separately approves phone verification. No administrator phone or email was supplied.
 
 ### Africa's Talking USSD sandbox enabled
 
