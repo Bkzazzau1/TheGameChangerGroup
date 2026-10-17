@@ -135,9 +135,12 @@ The connection code lives in `lib/tgcg/api/`:
   phone for app notifications.
 - `security_repository.dart` lists the security officers nearest an incident,
   sends it to one or takes it back, and carries the officer's answers.
+- `member_admin_repository.dart` finds members, reviews identities and
+  standing, and (with `member_insights.dart`) reads members and exco area by
+  area.
 
 Signed in to a server, these screens work on server records: the Overview,
-Projects, Messages, Role Management, Member Review, Wallets, Unit Mapping,
+Members & Exco, Projects, Messages, Role Management, Member Review, Wallets, Unit Mapping,
 Agents on the Ground, the Situation Room, Security Response, Field
 Monitoring, Result Capture, Collation, the Forum and the Meeting Room. A member's wallet opens from their
 card (the member app) or the agent's home.
@@ -192,6 +195,17 @@ flutter build apk --release --build-number=N \
 Without them the app builds and runs without notifications, and messages
 still reach the inbox. The first Windows desktop build downloads the Firebase
 C++ SDK that `firebase_core` needs there.
+
+Members & Exco (`lib/tgcg/membership/members_exco_page.dart`) is the
+National Administrator's view of the membership, from Nigeria down to a
+state, its LGAs, wards and polling units. For each area it shows who the
+members are (new members week by week, age, gender, how they joined, identity
+and what their profiles hold), its exco (people and posts by level and
+position, and how many are fully verified or have signed in), and each
+smaller area with its members and exco. Its tabs list the area's own exco or
+everyone below it, and its members, including those not fully verified,
+never signed in, with or without a post. The dashboard shows the members and
+exco of each account's own area.
 
 Security officers (`lib/tgcg/security/`) are members whose role holds the
 power to respond to security escalations, which the National Administrator

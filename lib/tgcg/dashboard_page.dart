@@ -9,7 +9,10 @@ import 'api/backend.dart';
 import 'api/overview_repository.dart';
 import 'api/tracking_repository.dart';
 import 'domain/permissions.dart';
+import 'api/member_admin_repository.dart' show AreaRef, MemberAnalysis;
 import 'field/field_operations_store.dart';
+import 'membership/members_exco_page.dart'
+    show ShareBar, formatCount, levelLabel, levelsLabel, share;
 import 'results/result_operations_store.dart';
 import 'session.dart';
 import 'shell.dart' show openMyAccess;
@@ -63,9 +66,10 @@ class _TgcgDashboardPageState extends State<TgcgDashboardPage> with ServerAutoRe
   Future<void> _load() async {
     final overview = _overview;
     if (overview == null || _loading || !mounted) return;
+    final area = AreaRef.of(TgcgSession.of(context, listen: false).scope);
     setState(() => _loading = true);
     try {
-      final numbers = await overview.load();
+      final numbers = await overview.load(area: area);
       if (!mounted) return;
       setState(() {
         _numbers = numbers;
@@ -172,6 +176,15 @@ class _TgcgDashboardPageState extends State<TgcgDashboardPage> with ServerAutoRe
               modules: modules,
               onOpenModule: onOpenModule,
             ),
+            if (numbers?.analysis case final analysis?) ...[
+              const SizedBox(height: 16),
+              _MembersAndExco(
+                analysis: analysis,
+                onOpen: modules.contains(TgcgModule.membershipNetwork)
+                    ? () => onOpenModule(TgcgModule.membershipNetwork)
+                    : null,
+              ),
+            ],
             if (numbers?.coverage case final coverage?) ...[
               const SizedBox(height: 16),
               _CheckInCoverage(
@@ -248,6 +261,17 @@ class _MetricGrid extends StatelessWidget {
                 icon: Icons.groups_2_outlined,
                 tone: TgcgMetricTone.info,
               ),
+            if (n?.analysis?.exco case final exco?)
+              TgcgMetricCard(
+                width: width,
+                label: 'Exco',
+                value: formatCount(exco.people),
+                detail: '${formatCount(exco.appointments)} posts · '
+                    '${formatCount(exco.fullyVerified)} fully verified',
+                icon: Icons.account_tree_outlined,
+                tone: TgcgMetricTone.ai,
+                onTap: _open(TgcgModule.membershipNetwork),
+              ),
             if (coverage != null)
               TgcgMetricCard(
                 width: width,
@@ -295,6 +319,118 @@ class _MetricGrid extends StatelessWidget {
           return Wrap(spacing: gap, runSpacing: gap, children: cards);
         },
       );
+}
+
+/// Members and exco in the account's area: exco by level, and the smaller
+/// areas with the most members.
+class _MembersAndExco extends StatelessWidget {
+  const _MembersAndExco({required this.analysis, required this.onOpen});
+
+  final MemberAnalysis analysis;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final members = analysis.members;
+    final exco = analysis.exco;
+    final by = analysis.by;
+    final top = [...analysis.parts]..sort((a, b) => b.members.compareTo(a.members));
+    const muted = TextStyle(color: TgcgColors.muted, fontSize: 11);
+    const strong = TextStyle(color: TgcgColors.ink, fontSize: 11.5, fontWeight: FontWeight.w700);
+    final levels = [
+      for (final level in GeographyLevel.values)
+        if ((exco.byLevel[level.name] ?? 0) > 0) (level, exco.byLevel[level.name]!),
+    ];
+    final panels = <Widget>[
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${formatCount(exco.people)} exco in ${formatCount(exco.appointments)} posts',
+            style: strong,
+          ),
+          const SizedBox(height: 8),
+          for (final (level, count) in levels)
+            ShareBar(label: levelLabel(level), value: count, total: exco.appointments),
+          ShareBar(label: 'Fully verified', value: exco.fullyVerified, total: exco.people),
+          ShareBar(
+            label: 'Signed in to the app',
+            value: exco.profile['signedIn'] ?? 0,
+            total: exco.people,
+          ),
+        ],
+      ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${formatCount(members.total)} members · +${formatCount(members.new30Days)} '
+            'in 30 days',
+            style: strong,
+          ),
+          const SizedBox(height: 8),
+          ShareBar(
+            label: 'Identity verified',
+            value: members.verification['verified'] ?? 0,
+            total: members.total,
+          ),
+          ShareBar(label: 'Fully verified', value: members.fullyVerified, total: members.total),
+          ShareBar(label: 'Women', value: members.gender['female'] ?? 0, total: members.total),
+          if (by != null && top.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text('Most members', style: strong),
+            const SizedBox(height: 4),
+            for (final part in top.take(5))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(part.area.name, style: muted)),
+                    Text(
+                      '${formatCount(part.members)} · ${formatCount(part.exco)} exco · '
+                      '${share(part.verified, part.members)} verified',
+                      style: muted,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    ];
+    return TgcgSectionCard(
+      title: 'Members and exco',
+      subtitle: by == null
+          ? null
+          : '${analysis.withExco} of ${analysis.parts.length} '
+              '${levelsLabel(by, inSentence: true)} have exco; ${analysis.withMembers} have '
+              'members.',
+      trailing: onOpen == null
+          ? null
+          : TextButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.groups_2_outlined, size: 17),
+              label: const Text('Members & Exco'),
+            ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 680) {
+            return Column(
+              children: [panels[0], const SizedBox(height: 14), panels[1]],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: panels[0]),
+              const SizedBox(width: 24),
+              Expanded(child: panels[1]),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 /// Today's agent check-ins in the account's area, area by area below it.

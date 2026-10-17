@@ -45,6 +45,7 @@ enum TgcgModule {
 /// on the server (the role grid in [allowedModulesFor] says who will get them).
 const liveModules = {
   TgcgModule.overview,
+  TgcgModule.membershipNetwork,
   TgcgModule.roleAssignment,
   TgcgModule.memberReview,
   TgcgModule.unitMapping,

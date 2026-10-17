@@ -6,6 +6,9 @@ import '../domain/models.dart';
 import 'access_repository.dart';
 import 'api_client.dart';
 import 'auth_repository.dart';
+import 'member_insights.dart';
+
+export 'member_insights.dart';
 
 DateTime? _date(Object? value) => value == null ? null : DateTime.tryParse('$value')?.toLocal();
 
@@ -34,6 +37,9 @@ class StaffMember {
     this.registrationChannel = '',
     this.phoneVerified = false,
     this.hasAppAccount = false,
+    this.gaps = const [],
+    this.signedIn = false,
+    this.verifiedHow,
   });
 
   final String membershipNumber;
@@ -82,7 +88,19 @@ class StaffMember {
   final bool phoneVerified;
   final bool hasAppAccount;
 
+  /// What the profile lacks to rest on the card (see [gapLabel]).
+  final List<String> gaps;
+
+  /// Has signed in to the app at least once.
+  final bool signedIn;
+
+  /// automatic, chapter or person; null unless verified.
+  final String? verifiedHow;
+
   bool get isVerified => verificationStatus == 'verified';
+
+  /// Verified, with VIN, card photo, selfie, gender and date of birth.
+  bool get fullyVerified => isVerified && gaps.isEmpty;
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
     membershipNumber: json['membership_number'] as String,
@@ -111,6 +129,9 @@ class StaffMember {
     registrationChannel: json['registration_channel'] as String? ?? '',
     phoneVerified: json['phone_verified'] as bool? ?? false,
     hasAppAccount: json['has_app_account'] as bool? ?? false,
+    gaps: [for (final gap in (json['gaps'] as List?) ?? const []) '$gap'],
+    signedIn: json['signed_in'] as bool? ?? false,
+    verifiedHow: json['verified_how'] as String?,
   );
 }
 
@@ -342,12 +363,16 @@ class MemberAdminRepository {
 
   final ApiClient client;
 
+  /// [show]: fullyVerified, notFullyVerified, neverSignedIn, withRole or
+  /// withoutRole. [area]: only members registered in that area.
   Future<ApiPage<StaffMember>> members({
     String search = '',
     String? verificationStatus,
     String? membershipState,
     String? phone,
     String? pollingUnit,
+    String? show,
+    AreaRef? area,
     int offset = 0,
   }) async => ApiPage.fromJson(
     await client.get(
@@ -358,10 +383,40 @@ class MemberAdminRepository {
         if (membershipState != null) 'membership_state': membershipState,
         if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
         if (pollingUnit != null) ...{'polling_unit__code': pollingUnit, 'ordering': 'full_name'},
+        'show': ?show,
+        if ((area?.filterKey, area?.code) case (final key?, final code?)) key: code,
         if (offset > 0) 'offset': '$offset',
       },
     ),
     StaffMember.fromJson,
+  );
+
+  /// Members and exco in [area], which must lie wholly within this account's reach.
+  Future<MemberAnalysis> analysis(AreaRef area) async => MemberAnalysis.fromJson(
+    await client.get('members/analysis/', query: area.query) as Map<String, dynamic>,
+  );
+
+  /// Exco posts in [area] from the top down; [at] keeps only posts at those levels.
+  Future<ApiPage<ExcoPost>> exco(
+    AreaRef area, {
+    List<GeographyLevel> at = const [],
+    String? role,
+    String? show,
+    String search = '',
+    int offset = 0,
+  }) async => ApiPage.fromJson(
+    await client.get(
+      'members/exco/',
+      query: {
+        ...area.query,
+        if (at.isNotEmpty) 'at': at.map((level) => level.name).join(','),
+        'role': ?role,
+        'show': ?show,
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+        if (offset > 0) 'offset': '$offset',
+      },
+    ),
+    ExcoPost.fromJson,
   );
 
   /// Registered members in each [by] area of the area [level]/[code]. The

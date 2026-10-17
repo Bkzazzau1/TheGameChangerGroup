@@ -69,8 +69,6 @@ class TgcgDemoDataPage extends StatelessWidget {
   }
 
   static String? _messageFor(TgcgModule module) => switch (module) {
-    TgcgModule.membershipNetwork =>
-      'Members, agent profiles and totals on this page are sample or local records, not the server member register.',
     TgcgModule.accreditation =>
       'Enrollment and agent profiles on this page use sample or local records. Polling-unit lookup uses the live API.',
     TgcgModule.geography =>
@@ -99,6 +97,7 @@ class TgcgDemoDataPage extends StatelessWidget {
       'Governance activity and profiles use sample or local records. Use Role Management for live server appointments.',
     // Live from the server.
     TgcgModule.overview ||
+    TgcgModule.membershipNetwork ||
     TgcgModule.roleAssignment ||
     TgcgModule.memberReview ||
     TgcgModule.wallets ||

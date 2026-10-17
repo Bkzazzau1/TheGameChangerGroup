@@ -248,7 +248,7 @@ void main() {
       );
     expect(everything.modules, liveModules);
     for (final sample in [
-      TgcgModule.membershipNetwork,
+      TgcgModule.aiVerification,
       TgcgModule.accreditation,
       TgcgModule.communications,
       TgcgModule.evidenceCapture,

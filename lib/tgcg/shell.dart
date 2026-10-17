@@ -20,7 +20,7 @@ import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
 import 'member/member_shell.dart';
 import 'membership/member_review_page.dart';
-import 'membership/national_membership_page.dart';
+import 'membership/members_exco_page.dart';
 import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
 import 'offline/offline_persistence.dart';
@@ -167,7 +167,7 @@ class _TgcgShellState extends State<TgcgShell> {
   Widget _contentFor(TgcgModule module) => switch (module) {
         TgcgModule.overview => TgcgDashboardPage(onOpenModule: _select),
         TgcgModule.accreditation => const PvcEnrollmentPage(),
-        TgcgModule.membershipNetwork => const NationalMembershipPage(),
+        TgcgModule.membershipNetwork => const MembersExcoPage(),
         TgcgModule.roleAssignment => const AccessControlPage(),
         TgcgModule.memberReview => const MemberReviewPage(),
         TgcgModule.geography => const GeographyPage(),
@@ -212,7 +212,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.liveOperations, 'Live Operations', Icons.travel_explore_rounded, _NavGroup.command),
   _Destination(TgcgModule.aiAnalytics, 'AI Data Analytics', Icons.query_stats_rounded, _NavGroup.command),
   _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
-  _Destination(TgcgModule.membershipNetwork, 'Registered Members', Icons.groups_2_outlined, _NavGroup.command),
+  _Destination(TgcgModule.membershipNetwork, 'Members & Exco', Icons.groups_2_outlined, _NavGroup.command),
   _Destination(TgcgModule.projects, 'Projects', Icons.flag_outlined, _NavGroup.command),
   _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
   _Destination(TgcgModule.agentTracking, 'Agents on the Ground', Icons.share_location_rounded, _NavGroup.command),
@@ -589,7 +589,7 @@ String _groupLabel(_NavGroup group) => switch (group) {
 String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.overview => 'Command Overview',
       TgcgModule.accreditation => 'Member Enrolment',
-      TgcgModule.membershipNetwork => 'Registered Members',
+      TgcgModule.membershipNetwork => 'Members & Exco',
       TgcgModule.roleAssignment => 'Roles & Access',
       TgcgModule.memberReview => 'Member Review',
       TgcgModule.geography => 'Geographic Operations',
