@@ -246,6 +246,16 @@ class _ComposeTabState extends State<_ComposeTab> {
       }
       final options = snapshot.data;
       if (options == null) return const Center(child: CircularProgressIndicator());
+      // The server offers only the channels whose service it has set up.
+      if (options.channels.isEmpty) {
+        return const Center(
+          child: TgcgEmptyState(
+            icon: Icons.cancel_schedule_send_outlined,
+            title: 'No way to send yet',
+            message: 'SMS, WhatsApp and app notifications are not available yet.',
+          ),
+        );
+      }
       final preview = _preview;
       return ListView(
         padding: const EdgeInsets.all(16),

@@ -204,6 +204,18 @@ void main() {
     expect(find.text('WhatsApp: 38 (2 with no number)'), findsOneWidget);
   });
 
+  testWidgets('with no channel set up on the server there is nothing to send on', (tester) async {
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET broadcasts/roles/' => _json({'roles': <Object>[], 'channels': <Object>[]}),
+      _ => null,
+    };
+    await _pump(tester, server, const MessagesPage(), can: {'sendSms', 'sendWhatsApp'});
+    expect(find.text('No way to send yet'), findsOneWidget);
+    expect(find.byType(FilterChip), findsNothing);
+    expect(find.text('Who it reaches'), findsNothing);
+  });
+
   testWidgets('saved lists that cannot be loaded say why', (tester) async {
     final server = _Server();
     server.answer = (key) => switch (key) {

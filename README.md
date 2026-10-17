@@ -151,7 +151,8 @@ Messages (`lib/tgcg/messaging/`) go out by SMS, WhatsApp and app
 notification. The National Administrator gives the powers to send them
 (send SMS, send WhatsApp, send app notifications) through roles, and a
 sender reaches only people in their own areas: the server works out who each
-message reaches. One message can go to several groups at once: people in
+message reaches, and offers only the channels whose service it has set up.
+One message can go to several groups at once: people in
 chosen areas, narrowed by role, gender or a checked identity; a project's
 team; or a saved list. **Who it reaches** counts the people before sending,
 and **Sent** shows how far each message got on each channel. Everyone signed
