@@ -11,10 +11,21 @@ import 'member_registration_page.dart' show PvcScan, cleanVin, isVin;
 /// ones typed when joining: at once, or after a coordinator's second check
 /// once the identity is checked. Returns how the scan went.
 class PvcScanPage extends StatefulWidget {
-  const PvcScanPage({super.key, required this.scan, required this.card});
+  const PvcScanPage({
+    super.key,
+    required this.scan,
+    required this.card,
+    this.profile,
+    this.forOther = false,
+  });
 
   final PvcScan scan;
   final MemberCard card;
+
+  /// Whose scan: the member's own unless given, as for someone they
+  /// registered ([forOther]).
+  final MemberProfile? profile;
+  final bool forOther;
 
   @override
   State<PvcScanPage> createState() => _PvcScanPageState();
@@ -22,6 +33,8 @@ class PvcScanPage extends StatefulWidget {
 
 class _PvcScanPageState extends State<PvcScanPage> {
   static const _fields = {'full_name', 'vin', 'delim', 'gender', 'date_of_birth', 'occupation'};
+
+  String _say(String yours, String theirs) => widget.forOther ? theirs : yours;
 
   // What the card showed, or else the member's own detail (the VIN is only
   // ever shown masked, so it comes from the card or is typed).
@@ -100,7 +113,7 @@ class _PvcScanPageState extends State<PvcScanPage> {
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
-      helpText: 'Date of birth, as on your PVC',
+      helpText: _say('Date of birth, as on your PVC', 'Date of birth, as on their PVC'),
     );
     if (picked != null) setState(() => _dateOfBirth = picked);
   }
@@ -109,14 +122,16 @@ class _PvcScanPageState extends State<PvcScanPage> {
     final delim = _delim.text.trim();
     setState(() {
       _errors = {
-        if (_name.text.trim().isEmpty) 'full_name': 'Enter your full name, as on the PVC.',
+        if (_name.text.trim().isEmpty)
+          'full_name': _say('Enter your full name, as on the PVC.', 'Enter their full name, as on the PVC.'),
         if (!isVin(_vin.text)) 'vin': 'A VIN has 19 letters and digits.',
-        if (delim.isEmpty) 'delim': 'Enter the polling unit code from your PVC.',
+        if (delim.isEmpty)
+          'delim': _say('Enter the polling unit code from your PVC.', 'Enter the polling unit code from their PVC.'),
       };
     });
     if (_unit == null && delim.isNotEmpty) await _lookUp();
     if (!mounted || _errors.isNotEmpty || _unit == null) return;
-    final members = TgcgBackend.of(context)!.member;
+    final members = widget.profile ?? TgcgBackend.of(context)!.member.own;
     final navigator = Navigator.of(context);
     setState(() => _busy = true);
     try {
@@ -151,7 +166,7 @@ class _PvcScanPageState extends State<PvcScanPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Your PVC')),
+        appBar: AppBar(title: Text(_say('Your PVC', 'Their PVC'))),
         body: SafeArea(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -161,10 +176,14 @@ class _PvcScanPageState extends State<PvcScanPage> {
                 child: Image.memory(widget.scan.photo.bytes, height: 180, fit: BoxFit.cover),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Check each detail against your card. They replace the details you typed '
-                'when you joined. A card is scanned only once.',
-                style: TextStyle(color: TgcgColors.muted, height: 1.4),
+              Text(
+                _say(
+                  'Check each detail against your card. They replace the details you typed '
+                      'when you joined. A card is scanned only once.',
+                  'Check each detail against their card. They replace the details typed '
+                      'when they were registered. A card is scanned only once.',
+                ),
+                style: const TextStyle(color: TgcgColors.muted, height: 1.4),
               ),
               if (widget.card.identityChecked) ...[
                 const SizedBox(height: 8),
@@ -215,7 +234,7 @@ class _PvcScanPageState extends State<PvcScanPage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Your polling unit: ${unit.label}',
+                    '${_say('Your', 'Their')} polling unit: ${unit.label}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),

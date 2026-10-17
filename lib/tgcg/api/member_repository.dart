@@ -2,7 +2,10 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../domain/models.dart';
 import 'api_client.dart';
+import 'auth_repository.dart' show geographicScopeFromJson;
+import 'meetings_repository.dart' show scopeInput;
 import 'reference_repository.dart';
 
 /// A member's polling unit, as the member app shows it.
@@ -128,7 +131,8 @@ class MemberCard {
       memberSince: DateTime.parse(json['member_since'] as String),
       hasPhoto: json['photo_url'] != null,
       hasCardPhoto: json['has_card_photo'] as bool? ?? false,
-      qrToken: json['qr_token'] as String,
+      // Not given for a member someone else registered: the card is theirs.
+      qrToken: (json['qr_token'] as String?) ?? '',
       disabilities: [for (final kind in (json['disabilities'] as List?) ?? const []) '$kind'],
       disabilityOther: (json['disability_other'] as String?) ?? '',
       cardMissing: [for (final need in (json['card_missing'] as List?) ?? const []) '$need'],
@@ -368,6 +372,163 @@ class PvcScanState {
 String _day(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
     '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
+/// The 11 digits people write for a Nigerian number: 08031234567 for
+/// +2348031234567. A member someone else registered signs in with it as
+/// the password.
+String localPhone(String phone) {
+  final digits = phone.replaceAll(RegExp(r'\D'), '');
+  return digits.length == 13 && digits.startsWith('234') ? '0${digits.substring(3)}' : phone;
+}
+
+/// One member's details, photo and PVC scan: the signed-in member's own
+/// (`/me/member/`), or those of a member they registered
+/// (`/me/registered/<number>/`), which they may complete until the identity
+/// is checked.
+class MemberProfile {
+  const MemberProfile(this.client, this.base);
+  final ApiClient client;
+
+  /// Where the details are, ending in a slash.
+  final String base;
+
+  Future<MemberCard> card() async => MemberCard.fromJson(await client.get(base) as Map<String, dynamic>);
+
+  Future<MemberCard> _update(Map<String, Object?> fields) async =>
+      MemberCard.fromJson(await client.patch(base, body: fields) as Map<String, dynamic>);
+
+  Future<MemberCard> updateEmail(String email) => _update({'email': email});
+
+  /// Empty means WhatsApp is on the member's phone number.
+  Future<MemberCard> updateWhatsappNumber(String number) => _update({'whatsapp_number': number.trim()});
+
+  Future<MemberCard> updateOccupation(String occupation) => _update({'occupation': occupation});
+
+  /// male or female. Like the date of birth, it can be added at any time, and
+  /// changed until the member's identity is checked.
+  Future<MemberCard> updateGender(String gender) => _update({'gender': gender});
+
+  Future<MemberCard> updateDateOfBirth(DateTime date) => _update({'date_of_birth': _day(date)});
+
+  /// Codes from [disabilityKinds] (none to take them back) and the words
+  /// for "other". The member may change them at any time.
+  Future<MemberCard> updateDisabilities(List<String> kinds, String other) =>
+      _update({'disabilities': kinds, 'disability_other': other});
+
+  Future<Uint8List> photo() => client.getBytes('${base}photo/');
+
+  /// Adds the selfie left out when joining. It can be replaced until the
+  /// member's identity is checked; after that a coordinator changes it.
+  Future<MemberCard> addPhoto(({Uint8List bytes, String name}) photo) async =>
+      MemberCard.fromJson(
+        await client.postMultipart(
+          '${base}photo/',
+          fields: const {},
+          files: () async => [http.MultipartFile.fromBytes('photo', photo.bytes, filename: photo.name)],
+        ) as Map<String, dynamic>,
+      );
+
+  /// Whether the member may make their one PVC scan, and how the last went.
+  Future<PvcScanState> pvcScan() async =>
+      PvcScanState.fromJson(await client.get('${base}pvc-scan/') as Map<String, dynamic>);
+
+  /// Sends the details read off the PVC, which replace the typed ones: at
+  /// once, or after a coordinator's second check once the identity is checked.
+  Future<PvcScanResult> sendPvcScan(PvcScanDetails scan) async {
+    final dob = scan.dateOfBirth;
+    return PvcScanResult.fromJson(
+      await client.postMultipart(
+        '${base}pvc-scan/',
+        fields: {
+          'full_name': scan.fullName,
+          'vin': scan.vin,
+          'delim': scan.delim,
+          if (scan.gender case final gender? when gender.isNotEmpty) 'gender': gender,
+          if (dob != null) 'date_of_birth': _day(dob),
+          if (scan.occupation.isNotEmpty) 'occupation': scan.occupation,
+        },
+        files: () async => [
+          http.MultipartFile.fromBytes('pvc_image', scan.photo.bytes, filename: scan.photo.name),
+        ],
+      ) as Map<String, dynamic>,
+    );
+  }
+
+  /// Takes back a scan still waiting for a coordinator, to scan again.
+  Future<PvcScanResult> withdrawPvcScan(String id) async => PvcScanResult.fromJson(
+        await client.post('${base}pvc-scan/$id/withdraw/') as Map<String, dynamic>,
+      );
+}
+
+/// A member the signed-in person registered, in their list (`/me/registered/`).
+class RegisteredMember {
+  const RegisteredMember({
+    required this.membershipNumber,
+    required this.fullName,
+    required this.phoneNumber,
+    this.place = GeographicScope.nigeria,
+    this.verificationStatus = '',
+    this.membershipState = 'active',
+    this.missing = const [],
+    this.canComplete = false,
+    this.signedIn = false,
+  });
+
+  final String membershipNumber;
+  final String fullName;
+  final String phoneNumber;
+
+  /// Nigeria until a place is given or their PVC is scanned.
+  final GeographicScope place;
+  final String verificationStatus;
+  final String membershipState;
+
+  /// What their card still needs (codes in [cardNeeds]).
+  final List<String> missing;
+
+  /// The person who registered them may complete the registration until the
+  /// identity is checked.
+  final bool canComplete;
+  final bool signedIn;
+
+  factory RegisteredMember.fromJson(Map<String, dynamic> json) => RegisteredMember(
+        membershipNumber: json['membership_number'] as String,
+        fullName: json['full_name'] as String,
+        phoneNumber: json['phone_number'] as String,
+        place: json['scope'] is Map<String, dynamic>
+            ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
+            : GeographicScope.nigeria,
+        verificationStatus: (json['verification_status'] as String?) ?? '',
+        membershipState: (json['membership_state'] as String?) ?? 'active',
+        missing: [for (final need in (json['missing'] as List?) ?? const []) '$need'],
+        canComplete: json['can_complete'] == true,
+        signedIn: json['signed_in'] == true,
+      );
+}
+
+/// The details of a member the signed-in person registered, to complete.
+class RegisteredMemberDetails {
+  const RegisteredMemberDetails({
+    required this.card,
+    this.place = GeographicScope.nigeria,
+    this.canChangePhone = false,
+  });
+
+  final MemberCard card;
+  final GeographicScope place;
+
+  /// Until the member first signs in, their number, which is also their first
+  /// password, can be corrected.
+  final bool canChangePhone;
+
+  factory RegisteredMemberDetails.fromJson(Map<String, dynamic> json) => RegisteredMemberDetails(
+        card: MemberCard.fromJson(json),
+        place: json['scope'] is Map<String, dynamic>
+            ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
+            : GeographicScope.nigeria,
+        canChangePhone: json['can_change_phone'] == true,
+      );
+}
+
 /// Member registration, sign-in help and the member home (`/register/...`, `/me/...`).
 class MemberRepository {
   MemberRepository(this.client);
@@ -477,89 +638,82 @@ class MemberRepository {
     return MemberCard.fromJson(body['member'] as Map<String, dynamic>);
   }
 
-  Future<MemberCard> card() async =>
-      MemberCard.fromJson(await client.get('me/member/') as Map<String, dynamic>);
+  /// The signed-in member's own details, photo and PVC scan.
+  late final own = MemberProfile(client, 'me/member/');
 
-  Future<MemberCard> updateEmail(String email) async => MemberCard.fromJson(
-        await client.patch('me/member/', body: {'email': email}) as Map<String, dynamic>,
-      );
-
-  /// Empty means WhatsApp is on the member's phone number.
-  Future<MemberCard> updateWhatsappNumber(String number) async => MemberCard.fromJson(
-        await client.patch('me/member/', body: {'whatsapp_number': number.trim()})
-            as Map<String, dynamic>,
-      );
-
-  Future<MemberCard> updateOccupation(String occupation) async => MemberCard.fromJson(
-        await client.patch('me/member/', body: {'occupation': occupation}) as Map<String, dynamic>,
-      );
-
-  /// male or female. Like the date of birth, it can be added at any time, and
-  /// changed until the member's identity is checked.
-  Future<MemberCard> updateGender(String gender) async => MemberCard.fromJson(
-        await client.patch('me/member/', body: {'gender': gender}) as Map<String, dynamic>,
-      );
-
-  Future<MemberCard> updateDateOfBirth(DateTime date) async => MemberCard.fromJson(
-        await client.patch('me/member/', body: {'date_of_birth': _day(date)}) as Map<String, dynamic>,
-      );
-
-  /// Codes from [disabilityKinds] (none to take them back) and the words
-  /// for "other". The member may change them at any time.
-  Future<MemberCard> updateDisabilities(List<String> kinds, String other) async =>
-      MemberCard.fromJson(
-        await client.patch(
-          'me/member/',
-          body: {'disabilities': kinds, 'disability_other': other},
-        ) as Map<String, dynamic>,
-      );
-
-  Future<Uint8List> photo() => client.getBytes('me/member/photo/');
+  /// A member the signed-in person registered: their registration to complete.
+  MemberProfile registered(String membershipNumber) =>
+      MemberProfile(client, 'me/registered/$membershipNumber/');
 
   /// The card as a PDF, front and back. The server refuses it while
   /// [MemberCard.cardMissing] lists something.
   Future<Uint8List> cardPdf() => client.getBytes('me/member/card/');
 
-  /// Adds the selfie left out when joining. It can be replaced until the
-  /// member's identity is checked; after that a coordinator changes it.
-  Future<MemberCard> addPhoto(({Uint8List bytes, String name}) photo) async =>
-      MemberCard.fromJson(
-        await client.postMultipart(
-          'me/member/photo/',
-          fields: const {},
-          files: () async => [http.MultipartFile.fromBytes('photo', photo.bytes, filename: photo.name)],
+  /// Registers someone with their name and phone number, and their place when
+  /// known, on the word that they agreed to join. Anyone signed in may, as
+  /// often as they like; the member signs in with their number as the password.
+  Future<RegisteredMember> registerSomeone({
+    required String fullName,
+    required String phone,
+    GeographicScope? place,
+  }) async =>
+      RegisteredMember.fromJson(
+        await client.post(
+          'me/registered/',
+          body: {
+            'full_name': fullName.trim(),
+            'phone_number': phone.trim(),
+            'consent': true,
+            if (place != null) 'scope': scopeInput(place),
+          },
         ) as Map<String, dynamic>,
       );
 
-  /// Whether the member may make their one PVC scan, and how the last went.
-  Future<PvcScanState> pvcScan() async =>
-      PvcScanState.fromJson(await client.get('me/member/pvc-scan/') as Map<String, dynamic>);
-
-  /// Sends the details read off the PVC, which replace the typed ones: at
-  /// once, or after a coordinator's second check once the identity is checked.
-  Future<PvcScanResult> sendPvcScan(PvcScanDetails scan) async {
-    final dob = scan.dateOfBirth;
-    return PvcScanResult.fromJson(
-      await client.postMultipart(
-        'me/member/pvc-scan/',
-        fields: {
-          'full_name': scan.fullName,
-          'vin': scan.vin,
-          'delim': scan.delim,
-          if (scan.gender case final gender? when gender.isNotEmpty) 'gender': gender,
-          if (dob != null) 'date_of_birth': _day(dob),
-          if (scan.occupation.isNotEmpty) 'occupation': scan.occupation,
-        },
-        files: () async => [
-          http.MultipartFile.fromBytes('pvc_image', scan.photo.bytes, filename: scan.photo.name),
-        ],
-      ) as Map<String, dynamic>,
+  /// The members the signed-in person registered, newest first: a page of
+  /// them from [offset], the total, and whether more follow.
+  Future<({List<RegisteredMember> members, int count, bool more})> registeredMembers({
+    String search = '',
+    int offset = 0,
+  }) async {
+    final body = await client.get(
+      'me/registered/',
+      query: {
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+        if (offset > 0) 'offset': '$offset',
+      },
+    ) as Map<String, dynamic>;
+    return (
+      members: [
+        for (final item in body['results'] as List<dynamic>)
+          RegisteredMember.fromJson(item as Map<String, dynamic>),
+      ],
+      count: (body['count'] as num?)?.toInt() ?? 0,
+      more: body['next'] != null,
     );
   }
 
-  /// Takes back a scan still waiting for a coordinator, to scan again.
-  Future<PvcScanResult> withdrawPvcScan(String id) async => PvcScanResult.fromJson(
-        await client.post('me/member/pvc-scan/$id/withdraw/') as Map<String, dynamic>,
+  Future<RegisteredMemberDetails> registeredDetails(String membershipNumber) async =>
+      RegisteredMemberDetails.fromJson(
+        await client.get('me/registered/$membershipNumber/') as Map<String, dynamic>,
+      );
+
+  /// Corrects what was given when registering them: the name and place until
+  /// their PVC is on record, the phone number until they first sign in.
+  Future<RegisteredMemberDetails> correctRegistration(
+    String membershipNumber, {
+    String? fullName,
+    String? phone,
+    GeographicScope? place,
+  }) async =>
+      RegisteredMemberDetails.fromJson(
+        await client.patch(
+          'me/registered/$membershipNumber/',
+          body: {
+            if (fullName != null) 'full_name': fullName.trim(),
+            if (phone != null) 'phone_number': phone.trim(),
+            if (place != null) 'scope': scopeInput(place),
+          },
+        ) as Map<String, dynamic>,
       );
 
   Future<MyPollingUnit> pollingUnit() async =>

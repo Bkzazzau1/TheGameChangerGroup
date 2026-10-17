@@ -22,6 +22,7 @@ import 'member_registration_page.dart'
 import 'disability_picker.dart';
 import 'membership_card_view.dart';
 import 'pvc_scan_page.dart';
+import 'registered_members_page.dart';
 import 'selfie_check.dart';
 import 'wallet_page.dart';
 
@@ -79,11 +80,11 @@ class _MemberShellState extends State<MemberShell> {
   }
 
   Future<(MemberCard, Uint8List?)> _loadCard() async {
-    final card = await _members.card();
+    final card = await _members.own.card();
     Uint8List? photo;
     if (card.hasPhoto) {
       try {
-        photo = await _members.photo();
+        photo = await _members.own.photo();
       } on ApiException {
         // The card still shows without the photo.
       }
@@ -120,6 +121,7 @@ class _MemberShellState extends State<MemberShell> {
         actions: [
           IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
           const InboxButton(),
+          const RegisterMembersButton(),
           IconButton(
             tooltip: 'Change PIN',
             onPressed: () => showChangePin(context),
@@ -198,7 +200,7 @@ class _MyMembershipCardPageState extends State<MyMembershipCardPage> {
   }
 
   Future<(MemberCard, Uint8List?)> _load() async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = TgcgBackend.of(context)!.member.own;
     final card = await members.card();
     Uint8List? photo;
     if (card.hasPhoto) {
@@ -218,7 +220,9 @@ class _MyMembershipCardPageState extends State<MyMembershipCardPage> {
         body: SafeArea(
           child: _CardTab(
             card: _card!,
-            onChanged: () => setState(() => _card = _load()),
+            onChanged: () => setState(() {
+              _card = _load();
+            }),
             scanPvc: widget.scanPvc,
             takeSelfie: widget.takeSelfie,
             checkSelfie: widget.checkSelfie,
@@ -226,6 +230,286 @@ class _MyMembershipCardPageState extends State<MyMembershipCardPage> {
           ),
         ),
       );
+}
+
+/// Completing the registration of a member the signed-in person registered:
+/// the name, phone number and place they gave, the member's details, a photo
+/// and the PVC scan, until the member's identity is checked.
+class RegisteredMemberPage extends StatefulWidget {
+  const RegisteredMemberPage({
+    super.key,
+    required this.membershipNumber,
+    this.scanPvc = scanPvcWithDevice,
+    this.takeSelfie = takeSelfieWithDevice,
+    this.checkSelfie = checkSelfieOnDevice,
+  });
+
+  final String membershipNumber;
+  final ScanPvc scanPvc;
+  final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
+
+  @override
+  State<RegisteredMemberPage> createState() => _RegisteredMemberPageState();
+}
+
+class _RegisteredMemberPageState extends State<RegisteredMemberPage> {
+  late MemberRepository _members;
+  late MemberProfile _profile;
+  Future<(RegisteredMemberDetails, Uint8List?)>? _details;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_details != null) return;
+    _members = TgcgBackend.of(context)!.member;
+    _profile = _members.registered(widget.membershipNumber);
+    _details = _load();
+  }
+
+  Future<(RegisteredMemberDetails, Uint8List?)> _load() async {
+    final details = await _members.registeredDetails(widget.membershipNumber);
+    Uint8List? photo;
+    if (details.card.hasPhoto) {
+      try {
+        photo = await _profile.photo();
+      } on ApiException {
+        // The details still show without the photo.
+      }
+    }
+    return (details, photo);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: TgcgColors.canvas,
+        appBar: AppBar(title: const Text('Complete registration')),
+        body: SafeArea(
+          child: _RegisteredCard(
+            details: _details!,
+            members: _members,
+            profile: _profile,
+            onChanged: () => setState(() {
+              _details = _load();
+            }),
+            scanPvc: widget.scanPvc,
+            takeSelfie: widget.takeSelfie,
+            checkSelfie: widget.checkSelfie,
+          ),
+        ),
+      );
+}
+
+class _RegisteredCard extends StatelessWidget {
+  const _RegisteredCard({
+    required this.details,
+    required this.members,
+    required this.profile,
+    required this.onChanged,
+    required this.scanPvc,
+    required this.takeSelfie,
+    required this.checkSelfie,
+  });
+
+  final Future<(RegisteredMemberDetails, Uint8List?)> details;
+  final MemberRepository members;
+  final MemberProfile profile;
+  final VoidCallback onChanged;
+  final ScanPvc scanPvc;
+  final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
+
+  @override
+  Widget build(BuildContext context) => _Loaded(
+        future: details,
+        builder: (data) {
+          final (details, photo) = data;
+          final card = details.card;
+          final edits = _Edits(
+            profile: profile,
+            onChanged: onChanged,
+            takeSelfie: takeSelfie,
+            checkSelfie: checkSelfie,
+            forOther: true,
+          );
+          // Once their PVC is on record, the name and place come from it.
+          final fromCard = card.hasPvc;
+          final placed = details.place.level != GeographyLevel.country;
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: TgcgColors.primarySoft,
+                    backgroundImage: photo == null ? null : MemoryImage(photo),
+                    child: photo == null
+                        ? const Icon(Icons.person_outline_rounded, color: TgcgColors.primary)
+                        : null,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          card.fullName,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                        ),
+                        Text(card.membershipNumber, style: const TextStyle(color: TgcgColors.muted)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TgcgSectionCard(
+                title: 'Their details',
+                child: Column(
+                  children: [
+                    _Detail(
+                      'Name',
+                      card.fullName,
+                      action: fromCard
+                          ? null
+                          : TextButton(
+                              onPressed: () => _editName(context, card),
+                              child: const Text('Change'),
+                            ),
+                    ),
+                    _Detail(
+                      'Phone',
+                      localPhone(card.phoneNumber),
+                      action: details.canChangePhone
+                          ? TextButton(
+                              onPressed: () => _editPhone(context, card),
+                              child: const Text('Change'),
+                            )
+                          : null,
+                    ),
+                    _Detail(
+                      'Place',
+                      placed ? areaLabel(details.place) : 'Not added',
+                      action: fromCard
+                          ? null
+                          : TextButton(
+                              onPressed: () => _pickPlace(context, card),
+                              child: Text(placed ? 'Change' : 'Add'),
+                            ),
+                    ),
+                    ..._detailRows(context, card, edits),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              TgcgSectionCard(
+                title: 'Their photo and PVC',
+                child: Column(
+                  children: [
+                    _Detail(
+                      'Photo of them',
+                      card.hasPhoto ? 'Added' : 'Not added',
+                      action: edits._changeAction(
+                        card,
+                        card.hasPhoto,
+                        () => edits._addSelfie(context),
+                      ),
+                    ),
+                    _PvcScanRow(
+                      key: ObjectKey(card),
+                      card: card,
+                      profile: profile,
+                      scanPvc: scanPvc,
+                      onChanged: onChanged,
+                      forOther: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+  Future<void> _editName(BuildContext context, MemberCard card) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextPrompt(
+        title: 'Name',
+        label: 'Full name, as on their PVC',
+        action: 'Save',
+        initial: card.fullName,
+      ),
+    );
+    if (name == null || name.isEmpty || name == card.fullName) return;
+    await _correct(
+      messenger,
+      'full_name',
+      () => members.correctRegistration(card.membershipNumber, fullName: name),
+    );
+  }
+
+  /// The number is also their first password, so both change together.
+  Future<void> _editPhone(BuildContext context, MemberCard card) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextPrompt(
+        title: 'Phone number',
+        label: 'Their phone number',
+        action: 'Save',
+        initial: localPhone(card.phoneNumber),
+        keyboardType: TextInputType.phone,
+      ),
+    );
+    if (phone == null || phone.isEmpty) return;
+    final saved = await _correct(
+      messenger,
+      'phone_number',
+      () => members.correctRegistration(card.membershipNumber, phone: phone),
+    );
+    if (saved == null) return;
+    final number = localPhone(saved.card.phoneNumber);
+    messenger.showSnackBar(
+      SnackBar(content: Text('They now sign in with $number, and $number is the password.')),
+    );
+  }
+
+  Future<void> _pickPlace(BuildContext context, MemberCard card) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final place = await pickArea(
+      context,
+      levels: const [
+        GeographyLevel.state,
+        GeographyLevel.lga,
+        GeographyLevel.ward,
+        GeographyLevel.pollingUnit,
+      ],
+    );
+    if (place == null) return;
+    await _correct(
+      messenger,
+      'scope',
+      () => members.correctRegistration(card.membershipNumber, place: place),
+    );
+  }
+
+  Future<RegisteredMemberDetails?> _correct(
+    ScaffoldMessengerState messenger,
+    String field,
+    Future<RegisteredMemberDetails> Function() save,
+  ) async {
+    try {
+      final saved = await save();
+      onChanged();
+      return saved;
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.fieldError(field) ?? error.message)));
+      return null;
+    }
+  }
 }
 
 /// Shows a loading spinner, an error with a hint, or the loaded data.
@@ -281,6 +565,12 @@ class _CardTab extends StatelessWidget {
         builder: (data) {
           final (card, photo) = data;
           final waitingRole = TgcgSession.of(context).waitingRole;
+          final edits = _Edits(
+            profile: TgcgBackend.of(context)!.member.own,
+            onChanged: onChanged,
+            takeSelfie: takeSelfie,
+            checkSelfie: checkSelfie,
+          );
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -298,63 +588,7 @@ class _CardTab extends StatelessWidget {
                 child: Column(
                   children: [
                     _Detail('Phone', card.phoneNumber),
-                    _Detail(
-                      'Email',
-                      card.email.isEmpty ? 'Not added' : card.email,
-                      action: TextButton(
-                        onPressed: () => _editEmail(context, card),
-                        child: Text(card.email.isEmpty ? 'Add' : 'Change'),
-                      ),
-                    ),
-                    _Detail(
-                      'WhatsApp',
-                      card.whatsappNumber.isEmpty ? 'Same as phone' : card.whatsappNumber,
-                      action: TextButton(
-                        onPressed: () => _editWhatsapp(context, card),
-                        child: const Text('Change'),
-                      ),
-                    ),
-                    _Detail('PVC', card.vin ?? 'Not on record'),
-                    _Detail(
-                      'Gender',
-                      switch (card.gender) {
-                        'male' => 'Male',
-                        'female' => 'Female',
-                        _ => 'Not added',
-                      },
-                      action: _changeAction(
-                        card,
-                        card.gender.isNotEmpty,
-                        () => _pickGender(context, card),
-                      ),
-                    ),
-                    _Detail(
-                      'Date of birth',
-                      card.dateOfBirth == null ? 'Not added' : _date(card.dateOfBirth!),
-                      action: _changeAction(
-                        card,
-                        card.dateOfBirth != null,
-                        () => _pickBirthday(context, card),
-                      ),
-                    ),
-                    _Detail(
-                      'Occupation',
-                      card.occupation.isEmpty ? 'Not added' : card.occupation,
-                      action: TextButton(
-                        onPressed: () => _editOccupation(context, card),
-                        child: Text(card.occupation.isEmpty ? 'Add' : 'Change'),
-                      ),
-                    ),
-                    _Detail(
-                      'Disability',
-                      card.disabilities.isEmpty
-                          ? 'None given'
-                          : disabilityText(card.disabilities, card.disabilityOther),
-                      action: TextButton(
-                        onPressed: () => _pickDisabilities(context, card),
-                        child: Text(card.disabilities.isEmpty ? 'Add' : 'Change'),
-                      ),
-                    ),
+                    ..._detailRows(context, card, edits),
                     _Detail(
                       'Membership',
                       switch (card.membershipState) {
@@ -375,12 +609,17 @@ class _CardTab extends StatelessWidget {
                     _Detail(
                       'Photo of you',
                       card.hasPhoto ? 'Added' : 'Not added',
-                      action: _changeAction(card, card.hasPhoto, () => _addSelfie(context)),
+                      action: edits._changeAction(
+                        card,
+                        card.hasPhoto,
+                        () => edits._addSelfie(context),
+                      ),
                     ),
                     // A new card means a fresh look at the scan, e.g. after one applied.
                     _PvcScanRow(
                       key: ObjectKey(card),
                       card: card,
+                      profile: edits.profile,
                       scanPvc: scanPvc,
                       onChanged: onChanged,
                     ),
@@ -391,6 +630,90 @@ class _CardTab extends StatelessWidget {
           );
         },
       );
+}
+
+/// The details a member adds or changes after joining, as rows with their
+/// buttons: the member's own, or those of someone they registered.
+List<Widget> _detailRows(BuildContext context, MemberCard card, _Edits edits) => [
+      _Detail(
+        'Email',
+        card.email.isEmpty ? 'Not added' : card.email,
+        action: TextButton(
+          onPressed: () => edits._editEmail(context, card),
+          child: Text(card.email.isEmpty ? 'Add' : 'Change'),
+        ),
+      ),
+      _Detail(
+        'WhatsApp',
+        card.whatsappNumber.isEmpty ? 'Same as phone' : card.whatsappNumber,
+        action: TextButton(
+          onPressed: () => edits._editWhatsapp(context, card),
+          child: const Text('Change'),
+        ),
+      ),
+      _Detail('PVC', card.vin ?? 'Not on record'),
+      _Detail(
+        'Gender',
+        switch (card.gender) {
+          'male' => 'Male',
+          'female' => 'Female',
+          _ => 'Not added',
+        },
+        action: edits._changeAction(
+          card,
+          card.gender.isNotEmpty,
+          () => edits._pickGender(context, card),
+        ),
+      ),
+      _Detail(
+        'Date of birth',
+        card.dateOfBirth == null ? 'Not added' : _date(card.dateOfBirth!),
+        action: edits._changeAction(
+          card,
+          card.dateOfBirth != null,
+          () => edits._pickBirthday(context, card),
+        ),
+      ),
+      _Detail(
+        'Occupation',
+        card.occupation.isEmpty ? 'Not added' : card.occupation,
+        action: TextButton(
+          onPressed: () => edits._editOccupation(context, card),
+          child: Text(card.occupation.isEmpty ? 'Add' : 'Change'),
+        ),
+      ),
+      _Detail(
+        'Disability',
+        card.disabilities.isEmpty
+            ? 'None given'
+            : disabilityText(card.disabilities, card.disabilityOther),
+        action: TextButton(
+          onPressed: () => edits._pickDisabilities(context, card),
+          child: Text(card.disabilities.isEmpty ? 'Add' : 'Change'),
+        ),
+      ),
+    ];
+
+/// The edits on a member's details, through [profile]: the member's own, or
+/// those of a member the signed-in person registered ([forOther], which
+/// words them for someone else).
+class _Edits {
+  const _Edits({
+    required this.profile,
+    required this.onChanged,
+    required this.takeSelfie,
+    required this.checkSelfie,
+    this.forOther = false,
+  });
+
+  final MemberProfile profile;
+  final VoidCallback onChanged;
+  final TakeSelfie takeSelfie;
+  final CheckSelfie checkSelfie;
+  final bool forOther;
+
+  /// [yours] for the member's own details; [theirs] for someone they registered.
+  String _say(String yours, String theirs) => forOther ? theirs : yours;
 
   /// For the photos, gender and date of birth: add one that is missing, or
   /// change it until the identity is checked; after that a coordinator does.
@@ -400,12 +723,12 @@ class _CardTab extends StatelessWidget {
   }
 
   Future<void> _pickGender(BuildContext context, MemberCard card) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     final gender = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('Gender, as on your PVC'),
+        title: Text(_say('Gender, as on your PVC', 'Gender, as on their PVC')),
         children: [
           for (final (value, label) in const [('male', 'Male'), ('female', 'Female')])
             SimpleDialogOption(
@@ -425,7 +748,7 @@ class _CardTab extends StatelessWidget {
   }
 
   Future<void> _pickBirthday(BuildContext context, MemberCard card) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -433,7 +756,7 @@ class _CardTab extends StatelessWidget {
       initialDate: card.dateOfBirth ?? DateTime(now.year - 30),
       firstDate: DateTime(now.year - 110),
       lastDate: DateTime(now.year - 16, now.month, now.day),
-      helpText: 'Date of birth, as on your PVC',
+      helpText: _say('Date of birth, as on your PVC', 'Date of birth, as on their PVC'),
     );
     if (picked == null || picked == card.dateOfBirth) return;
     try {
@@ -448,7 +771,7 @@ class _CardTab extends StatelessWidget {
 
   /// The member's own, to give, change or take back at any time.
   Future<void> _pickDisabilities(BuildContext context, MemberCard card) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     final picked = await showDialog<(List<String>, String)>(
       context: context,
@@ -471,7 +794,7 @@ class _CardTab extends StatelessWidget {
   }
 
   Future<void> _editEmail(BuildContext context, MemberCard card) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     final email = await showDialog<String>(
       context: context,
@@ -493,13 +816,16 @@ class _CardTab extends StatelessWidget {
   }
 
   Future<void> _editWhatsapp(BuildContext context, MemberCard card) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     final number = await showDialog<String>(
       context: context,
       builder: (_) => _TextPrompt(
         title: 'WhatsApp number',
-        label: 'Leave empty if it is your phone number',
+        label: _say(
+          'Leave empty if it is your phone number',
+          'Leave empty if it is their phone number',
+        ),
         action: 'Save',
         initial: card.whatsappNumber,
         keyboardType: TextInputType.phone,
@@ -517,13 +843,13 @@ class _CardTab extends StatelessWidget {
   }
 
   Future<void> _editOccupation(BuildContext context, MemberCard card) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     final occupation = await showDialog<String>(
       context: context,
       builder: (_) => _TextPrompt(
         title: 'Occupation',
-        label: 'What you do for a living',
+        label: _say('What you do for a living', 'What they do for a living'),
         action: 'Save',
         initial: card.occupation,
       ),
@@ -542,7 +868,7 @@ class _CardTab extends StatelessWidget {
   /// A selfie through the phone's face check. If the check finds a problem,
   /// the member may take it again or keep it: a coordinator reviews it anyway.
   Future<void> _addSelfie(BuildContext context) async {
-    final members = TgcgBackend.of(context)!.member;
+    final members = profile;
     final messenger = ScaffoldMessenger.of(context);
     try {
       while (true) {
@@ -554,7 +880,7 @@ class _CardTab extends StatelessWidget {
           final again = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Check your photo'),
+              title: Text(_say('Check your photo', 'Check the photo')),
               content: Text(problem),
               actions: [
                 TextButton(
@@ -574,7 +900,9 @@ class _CardTab extends StatelessWidget {
         final name = file.name.isEmpty ? 'selfie.jpg' : file.name;
         await members.addPhoto((bytes: await file.readAsBytes(), name: name));
         onChanged();
-        messenger.showSnackBar(const SnackBar(content: Text('Your photo was saved.')));
+        messenger.showSnackBar(
+          SnackBar(content: Text(_say('Your photo was saved.', 'The photo was saved.'))),
+        );
         return;
       }
     } on ApiException catch (error) {
@@ -956,17 +1284,22 @@ class _OfferDialogState extends State<_OfferDialog> {
 
 /// The member's one PVC scan: the card's details replace the ones they typed
 /// when joining. A card scanned or uploaded when joining is on record already.
+/// Through [profile], the person who registered a member scans theirs.
 class _PvcScanRow extends StatefulWidget {
   const _PvcScanRow({
     super.key,
     required this.card,
+    required this.profile,
     required this.scanPvc,
     required this.onChanged,
+    this.forOther = false,
   });
 
   final MemberCard card;
+  final MemberProfile profile;
   final ScanPvc scanPvc;
   final VoidCallback onChanged;
+  final bool forOther;
 
   @override
   State<_PvcScanRow> createState() => _PvcScanRowState();
@@ -976,15 +1309,17 @@ class _PvcScanRowState extends State<_PvcScanRow> {
   late MemberRepository _members;
   Future<PvcScanState>? _state;
 
+  String get _label => widget.forOther ? 'Their PVC' : 'Your PVC';
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _members = TgcgBackend.of(context)!.member;
-    _state ??= _members.pvcScan();
+    _state ??= widget.profile.pvcScan();
   }
 
   void _reload() => setState(() {
-        _state = _members.pvcScan();
+        _state = widget.profile.pvcScan();
       });
 
   Future<void> _scan() async {
@@ -1022,7 +1357,14 @@ class _PvcScanRowState extends State<_PvcScanRow> {
       }
       final checked = scan;
       final result = await navigator.push<PvcScanResult>(
-        MaterialPageRoute(builder: (_) => PvcScanPage(scan: checked, card: widget.card)),
+        MaterialPageRoute(
+          builder: (_) => PvcScanPage(
+            scan: checked,
+            card: widget.card,
+            profile: widget.profile,
+            forOther: widget.forOther,
+          ),
+        ),
       );
       if (result == null) return;
       messenger.showSnackBar(
@@ -1030,7 +1372,9 @@ class _PvcScanRowState extends State<_PvcScanRow> {
           content: Text(
             result.isPending
                 ? 'Sent. A coordinator will check the new details against your card.'
-                : 'Your details now match your PVC.',
+                : widget.forOther
+                    ? 'Their details now match their PVC.'
+                    : 'Your details now match your PVC.',
           ),
         ),
       );
@@ -1046,7 +1390,7 @@ class _PvcScanRowState extends State<_PvcScanRow> {
   Future<void> _withdraw(PvcScanResult latest) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await _members.withdrawPvcScan(latest.id);
+      await widget.profile.withdrawPvcScan(latest.id);
       if (mounted) _reload();
       messenger.showSnackBar(const SnackBar(content: Text('Scan taken back. You can scan again.')));
     } on ApiException catch (error) {
@@ -1061,25 +1405,25 @@ class _PvcScanRowState extends State<_PvcScanRow> {
           final state = snapshot.data;
           final latest = state?.latest;
           if (state == null) {
-            return _Detail('Your PVC', snapshot.hasError ? 'Could not load' : '…');
+            return _Detail(_label, snapshot.hasError ? 'Could not load' : '…');
           }
           if (latest != null && latest.isPending) {
             return _Detail(
-              'Your PVC',
+              _label,
               'Waiting for a coordinator',
               action: TextButton(onPressed: () => _withdraw(latest), child: const Text('Withdraw')),
             );
           }
           if (state.canScan) {
             return _Detail(
-              'Your PVC',
+              _label,
               latest?.status == 'rejected'
                   ? 'Not accepted: ${latest!.decisionReason}'
                   : 'Not scanned',
               action: TextButton(onPressed: _scan, child: const Text('Scan')),
             );
           }
-          return const _Detail('Your PVC', 'On record');
+          return _Detail(_label, 'On record');
         },
       );
 }

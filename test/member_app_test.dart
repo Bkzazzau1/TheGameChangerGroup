@@ -911,6 +911,8 @@ void main() {
     expect(find.text('TGCG-000123'), findsOneWidget);
     expect(find.byKey(const ValueKey('membership-qr')), findsOneWidget);
     expect(find.text('PVC on record'), findsOneWidget);
+    // Any member may register others.
+    expect(find.byTooltip('Register members'), findsOneWidget);
 
     // My polling unit, with directions from INEC's location.
     await tester.tap(find.text('My unit'));

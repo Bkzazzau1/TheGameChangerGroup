@@ -140,6 +140,22 @@ Agents on the Ground, the Situation Room, Field Monitoring, Result Capture,
 Collation, the Forum and the Meeting Room. A member's wallet opens from their
 card (the member app) or the agent's home.
 
+Anyone signed in registers members with **Register members** in the top bar
+of every app (`lib/tgcg/member/registered_members_page.dart`).
+
+- **What's needed:** a name, a phone number, and the person's agreement; the
+  place is optional. There is no limit.
+- **Signing in:** the new member signs in with their phone number (11
+  digits, 08031234567) as the password.
+- **Their list:** each person sees the members they registered.
+- **Completing it:** until a member's identity is checked, the person who
+  registered them completes the registration (`RegisteredMemberPage`):
+  - the name and place, until the PVC is on record;
+  - the phone number, until the member first signs in;
+  - the member's details, a photo and the PVC scan, which use the same rows
+    and dialogs as the member's own card (`MemberProfile` in
+    `member_repository.dart`).
+
 Projects (`lib/tgcg/projects/`) are scheduled periods of field work, such as
 an election. Everyone with a role sees a strip at the top of the app while
 one runs in their areas. Someone taking part accepts an invitation once;

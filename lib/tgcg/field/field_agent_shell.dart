@@ -6,6 +6,7 @@ import '../account/change_pin_dialog.dart';
 import '../discussion/discussion_room_page.dart';
 import '../evidence/evidence_upload.dart';
 import '../location/gps_service.dart';
+import '../member/registered_members_page.dart';
 import '../messaging/inbox_page.dart';
 import '../projects/project_mode.dart';
 import '../results/result_capture_page.dart';
@@ -142,6 +143,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
           ),
           actions: [
             const InboxButton(),
+            const RegisterMembersButton(),
             IconButton(
               tooltip: 'Change PIN',
               onPressed: () => showChangePin(context),

@@ -30,6 +30,7 @@ import 'results/result_capture_page.dart';
 import 'security/security_response_portal_page.dart';
 import 'session.dart';
 import 'mapping/unit_mapping_page.dart';
+import 'member/registered_members_page.dart';
 import 'messaging/inbox_page.dart';
 import 'messaging/messages_page.dart';
 import 'tracking/agents_on_ground_page.dart';
@@ -95,6 +96,7 @@ class _TgcgShellState extends State<TgcgShell> {
                     const _CompactSync(),
                     const SizedBox(width: 2),
                     const InboxButton(),
+                    const RegisterMembersButton(),
                     if (allowed.contains(TgcgModule.alertCenter))
                       IconButton(
                         tooltip: 'Alert Centre',
@@ -495,7 +497,7 @@ class _CommandBar extends StatelessWidget {
               ),
             ),
           ],
-          if (session.isServerSession) const InboxButton(),
+          if (session.isServerSession) ...const [InboxButton(), RegisterMembersButton()],
           const SizedBox(width: 4),
           Tooltip(
             message: '${session.roleTitle} • ${session.scope.label}',
