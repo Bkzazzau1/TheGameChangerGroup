@@ -133,11 +133,13 @@ The connection code lives in `lib/tgcg/api/`:
 - `messaging_repository.dart` previews and sends messages, lists sent ones
   with their delivery, keeps saved lists, reads the inbox and registers the
   phone for app notifications.
+- `security_repository.dart` lists the security officers nearest an incident,
+  sends it to one or takes it back, and carries the officer's answers.
 
 Signed in to a server, these screens work on server records: the Overview,
 Projects, Messages, Role Management, Member Review, Wallets, Unit Mapping,
-Agents on the Ground, the Situation Room, Field Monitoring, Result Capture,
-Collation, the Forum and the Meeting Room. A member's wallet opens from their
+Agents on the Ground, the Situation Room, Security Response, Field
+Monitoring, Result Capture, Collation, the Forum and the Meeting Room. A member's wallet opens from their
 card (the member app) or the agent's home.
 
 Anyone signed in registers members with **Register members** in the top bar
@@ -190,6 +192,17 @@ flutter build apk --release --build-number=N \
 Without them the app builds and runs without notifications, and messages
 still reach the inbox. The first Windows desktop build downloads the Firebase
 C++ SDK that `firebase_core` needs there.
+
+Security officers (`lib/tgcg/security/`) are members whose role holds the
+power to respond to security escalations, which the National Administrator
+gives through roles; they sign in on the same page as everyone else. In the
+Situation Room, an incident's **Send to security** lists the officers
+nearest to it, by where they are while they share their location for a
+project or else by the area of their role, and sends it to the one picked;
+the officer is told by app notification and SMS. Their **Security Response**
+page shows the incident, directions to it and the reporter's phone, and they
+accept or decline, then mark on the way, arrived and resolved. The Situation
+Room sees each step on the incident, and can take it back.
 Incident actions (acknowledge, assign, escalate, resolve, close, reopen),
 field report reviews and result decisions (verify, dispute, reject) go to the
 server, which checks each one. Collation shows the server's unofficial totals

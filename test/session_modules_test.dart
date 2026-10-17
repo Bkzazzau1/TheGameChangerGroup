@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tgcg_emcop/tgcg/domain/permissions.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 
 void main() {
@@ -13,8 +14,9 @@ void main() {
     // LGA and ward coordinators who verify identities (13 October 2026). Role
     // Assignment for zonal and state coordinators and Technical Support waits for
     // cascading appointments. Since 15 October 2026 the Situation Room is national,
-    // so no coordinator has it, nor Security Response, which needs it. Projects
-    // (17 October 2026) for whoever watches live operations or assigns people.
+    // so no coordinator has it. Projects (17 October 2026) for whoever watches live
+    // operations or assigns people. Security Response (17 October 2026) is for
+    // security officers, whose roles hold respondToSecurity; no fixed role does.
     final grid = <TgcgRole, Set<TgcgModule>>{
       TgcgRole.nationalCollationOfficer: modules(
         'overview projects liveOperations agentTracking alertCenter situationRoom evidenceCapture '
@@ -22,7 +24,7 @@ void main() {
       ),
       TgcgRole.situationRoomDirector: modules(
         'overview projects liveOperations agentTracking aiAnalytics alertCenter situationRoom '
-        'securityResponse mediaIntelligence fieldMonitoring evidenceCapture resultCapture '
+        'mediaIntelligence fieldMonitoring evidenceCapture resultCapture '
         'aiVerification collation communications bulkCommunications discussionRoom meetingRoom '
         'reports',
       ),
@@ -76,6 +78,12 @@ void main() {
 
     test('national administrator sees every application module', () {
       expect(allowedModules(TgcgRole.nationalAdministrator), containsAll(TgcgModule.values));
+    });
+
+    test('a security officer sees Security Response, and it works on server records', () {
+      final officer = allowedModulesFor((c) => c == TgcgCapability.respondToSecurity);
+      expect(officer, {TgcgModule.overview, TgcgModule.securityResponse});
+      expect(liveModules, contains(TgcgModule.securityResponse));
     });
 
     test('only the national administrator opens geography master data and member records', () {

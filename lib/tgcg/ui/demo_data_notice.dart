@@ -85,8 +85,6 @@ class TgcgDemoDataPage extends StatelessWidget {
       'Charts, forecasts and analysis on this page include sample data. Incident, report and result figures come from the server.',
     TgcgModule.alertCenter =>
       'Alerts and activity shown here include sample records, not live server alerts.',
-    TgcgModule.securityResponse =>
-      'Agency contacts, dispatches and response activity include sample or local records, not live emergency services.',
     TgcgModule.mediaIntelligence =>
       'Media reports and intelligence shown here use sample or local records, not a live media feed.',
     TgcgModule.communications =>
@@ -109,6 +107,7 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.unitMapping ||
     TgcgModule.agentTracking ||
     TgcgModule.situationRoom ||
+    TgcgModule.securityResponse ||
     TgcgModule.fieldMonitoring ||
     TgcgModule.resultCapture ||
     TgcgModule.collation ||

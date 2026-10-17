@@ -27,7 +27,7 @@ import 'offline/offline_persistence.dart';
 import 'operations/live_operations_page.dart';
 import 'reports/reports_page.dart';
 import 'results/result_capture_page.dart';
-import 'security/security_response_portal_page.dart';
+import 'security/security_officer_page.dart';
 import 'session.dart';
 import 'mapping/unit_mapping_page.dart';
 import 'member/registered_members_page.dart';
@@ -178,7 +178,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.fieldMonitoring => const FieldMonitoringPage(),
         TgcgModule.evidenceCapture => const EvidenceCapturePage(),
         TgcgModule.situationRoom => const SituationRoomPage(),
-        TgcgModule.securityResponse => const SecurityResponsePortalPage(),
+        TgcgModule.securityResponse => const SecurityOfficerPage(),
         TgcgModule.resultCapture => const ResultCapturePage(),
         TgcgModule.collation => const CollationPage(),
         TgcgModule.mediaIntelligence => const MediaIntelligencePage(),
@@ -600,7 +600,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.fieldMonitoring => 'Field Monitoring',
       TgcgModule.evidenceCapture => 'Evidence Capture',
       TgcgModule.situationRoom => 'Situation Room',
-      TgcgModule.securityResponse => 'Security & Emergency Response',
+      TgcgModule.securityResponse => 'Security Response',
       TgcgModule.resultCapture => 'Result Capture',
       TgcgModule.collation => 'Collation',
       TgcgModule.mediaIntelligence => 'Media Intelligence',

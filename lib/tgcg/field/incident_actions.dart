@@ -325,6 +325,7 @@ class _HistoryLine extends StatelessWidget {
       'assigned' => 'Assigned',
       'evidenceAdded' => 'Evidence added',
       'liveVideo' => 'Live video',
+      'security' => 'Security officer',
       _ when to != null && entry.fromStatus == IncidentStatus.resolved &&
               to == IncidentStatus.investigating =>
         'Reopened',

@@ -50,6 +50,7 @@ const liveModules = {
   TgcgModule.unitMapping,
   TgcgModule.agentTracking,
   TgcgModule.situationRoom,
+  TgcgModule.securityResponse,
   TgcgModule.fieldMonitoring,
   TgcgModule.resultCapture,
   TgcgModule.collation,
@@ -438,7 +439,8 @@ Set<TgcgModule> allowedModulesFor(
   if (can(TgcgCapability.viewSituationRoom)) {
     modules.add(TgcgModule.situationRoom);
   }
-  if (can(TgcgCapability.viewSituationRoom) && can(TgcgCapability.assignIncident)) {
+  // Security officers: the incidents the Situation Room sends them.
+  if (can(TgcgCapability.respondToSecurity)) {
     modules.add(TgcgModule.securityResponse);
   }
   if (any(const [

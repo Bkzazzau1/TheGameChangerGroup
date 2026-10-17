@@ -15,6 +15,7 @@ import 'messaging_repository.dart';
 import 'projects_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
+import 'security_repository.dart';
 import 'tracking_repository.dart';
 import 'wallet_repository.dart';
 
@@ -35,7 +36,8 @@ class BackendServices {
         forum = ForumRepository(client),
         wallets = WalletRepository(client),
         projects = ProjectsRepository(client),
-        messaging = MessagingRepository(client);
+        messaging = MessagingRepository(client),
+        security = SecurityRepository(client);
 
   factory BackendServices.connect(
     String baseUrl, {
@@ -90,6 +92,9 @@ class BackendServices {
 
   /// Bulk messages, saved lists, the inbox and phones for app notifications.
   final MessagingRepository messaging;
+
+  /// Incidents the Situation Room sends to security officers, and their answers.
+  final SecurityRepository security;
 }
 
 /// Makes [BackendServices] available below it. The app always provides

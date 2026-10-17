@@ -8,6 +8,7 @@ import '../evidence/evidence_viewer.dart';
 import '../evidence/voice_note.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
+import '../security/incident_security_panel.dart';
 import '../session.dart';
 import '../sync/server_records.dart';
 import '../ui/server_feed.dart';
@@ -1040,6 +1041,7 @@ class _IncidentInspector extends StatelessWidget {
             _ResponseTimeline(incident: current),
           const SizedBox(height: 14),
           IncidentCommandPanel(incident: current),
+          if (history) IncidentSecurityPanel(incident: current),
         ],
       ),
     );

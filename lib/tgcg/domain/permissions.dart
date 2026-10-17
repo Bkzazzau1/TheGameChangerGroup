@@ -89,6 +89,8 @@ enum TgcgCapability {
   sendSms,
   sendWhatsApp,
   sendPushNotifications,
+  // Security officers answer the incidents the Situation Room sends them.
+  respondToSecurity,
   appointNationalAdministrator,
   approveAdministratorRemoval,
   // Scheduling projects: National Administrators only.

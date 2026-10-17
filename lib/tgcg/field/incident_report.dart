@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart' show formatMoment;
+import '../security/incident_security_panel.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
@@ -160,6 +161,7 @@ class IncidentReportCard extends StatelessWidget {
           const SizedBox(height: 14),
           IncidentCommandPanel(incident: item),
           if (store.isLive && !store.isOnDevice(item.id)) ...[
+            IncidentSecurityPanel(incident: item),
             const SizedBox(height: 14),
             IncidentHistoryPanel(key: ValueKey(item.id), incident: item),
           ],
