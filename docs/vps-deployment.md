@@ -124,6 +124,24 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
+### Zamfara chapter import stopped at the dry-run gate (18 October 2026)
+
+This was a data-only import attempt using the existing command: no deployment, migration or web build. The pre-import baseline contained zero imported Zamfara members. Backups succeeded before and after the attempt. The strict gate failed and no import was committed; no retry was performed. The private VPS CSV copy was shredded and its removal confirmed. No source rows, row labels, personal details or held-reason text are retained in these notes.
+
+The dry-run plan contained 222 importable rows and 18 held rows, totalling 240. Six extra holds for already-registered numbers were allowed by the brief, but only 11 of the 12 required baseline holds matched and one hold reason was unexpected. The accepted rows used 29 roles, including two prospective new roles; the brief requires 32 roles. These mismatches stopped the run before commit.
+
+Prospective registration placement was 129 polling units, 89 wards and four LGAs, with zero VINs. The plan contained 209 LGA, ten state and three senatorial-district appointments, with 15 prospective coordinator delegation grants. These are dry-run figures only: no memberships, accounts, roles, appointments or grants were created by this attempt.
+
+Post-attempt read-only checks found zero imported Zamfara members, zero verified members, zero accounts, no member-level counts (`{}`), zero appointments with no appointment-level counts (`{}`), no deputy districts (`[]`) and zero grants. The import source has zero audit events. Global roles (84), assignments (2,137) and grants (89) were unchanged; broadcasts and deliveries remain zero. Registration still reports `phone_code_required=false`, API health passed, and the active web path and JavaScript checksum were unchanged.
+
+| Import evidence | Result |
+| --- | --- |
+| Dry run | 222 importable, 18 held; 29 roles, two new; strict gate failed. |
+| Commit | Not run; zero import changes committed. |
+| Private CSV cleanup | VPS copy shredded; removal confirmed. |
+| Post-attempt read-only checks | All Zamfara import/member/account/appointment/grant counts and source audit events were zero; global role/assignment/grant totals and the active web release were unchanged. API healthy; phone codes remain disabled. |
+| Backups | Pre-attempt and post-attempt backups succeeded; final backup returned `Result=success`, `ExecMainStatus=0`. |
+
 ### Enhanced member analysis, search and VIN comparison (18 October 2026)
 
 Backend `5f93c030608e86a8a4df0e285ce6ae951ac91b51` was deployed with the existing helper, and the pinned production build of frontend `b19327258a8191bc45abea569dc5919e129d79b8` was published at `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53`. Both source commits are pushed. The preceding morning web release remains retained. All 18 final public checks passed, and backups succeeded before deployment and after publication.
