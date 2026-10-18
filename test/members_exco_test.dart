@@ -669,18 +669,15 @@ void main() {
     expect(find.text('Stale holder'), findsNothing);
   });
 
-  testWidgets('unplaced members in the zone breakdown open the exact national group', (tester) async {
+  testWidgets('unplaced members in the zone breakdown open the exact national group', (
+    tester,
+  ) async {
     final figures = _analysis(national: true);
     figures['by'] = 'geopoliticalZone';
     figures['parts'] = [
       {'code': 'NW', 'name': 'North West', 'members': 1100, 'exco': 110},
     ];
-    figures['coverage'] = {
-      'areas': 1,
-      'with_members': 1,
-      'with_exco': 1,
-      'unplaced_members': 100,
-    };
+    figures['coverage'] = {'areas': 1, 'with_members': 1, 'with_exco': 1, 'unplaced_members': 100};
     final server = _Server()
       ..answer = (path, query) => switch (path) {
         'GET members/analysis/' => _json(figures),
@@ -699,5 +696,8 @@ void main() {
     expect(formatCount(999), '999');
     expect(share(1, 3), '33%');
     expect(share(5, 0), '0%');
+    expect(share(1, 1000), '<1%');
+    expect(share(999, 1000), '>99%');
+    expect(share(1000, 1000), '100%');
   });
 }

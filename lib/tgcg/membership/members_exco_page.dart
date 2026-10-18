@@ -21,8 +21,14 @@ String formatCount(int value) {
   return value < 0 ? '-$grouped' : '$grouped';
 }
 
-/// "42%" of [total]; "0%" when there is nothing to divide.
-String share(int part, int total) => total == 0 ? '0%' : '${(part * 100 / total).round()}%';
+/// Rounded shares, keeping nonzero and incomplete totals visible at the extremes.
+String share(int part, int total) {
+  if (total == 0) return '0%';
+  final percentage = part * 100 / total;
+  if (percentage > 0 && percentage < 1) return '<1%';
+  if (percentage > 99 && percentage < 100) return '>99%';
+  return '${percentage.round()}%';
+}
 
 String levelLabel(GeographyLevel level) => switch (level) {
   GeographyLevel.country => 'Nigeria',
