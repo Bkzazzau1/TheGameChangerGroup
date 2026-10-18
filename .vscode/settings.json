@@ -1,3 +1,7 @@
 {
-    "cmake.sourceDirectory": "C:/Users/Mr. Bash/TheGameChangerGroup/windows"
+    "cmake.sourceDirectory": "C:/Users/Mr. Bash/TheGameChangerGroup/windows",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.import.gradle.enabled": false,
+    "python.defaultInterpreterPath": "C:/Users/Mr. Bash/tgcg_backend/.venv/Scripts/python.exe",
+    "python.analysis.extraPaths": ["C:/Users/Mr. Bash/tgcg_backend"]
 }
