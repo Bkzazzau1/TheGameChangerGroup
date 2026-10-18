@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -138,6 +139,8 @@ class DutyTracker extends ChangeNotifier {
             foregroundNotificationConfig: ForegroundNotificationConfig(
               notificationTitle: 'TGCG on duty',
               notificationText: notice,
+              notificationIcon: const AndroidResource(name: 'ic_stat_tgcg'),
+              color: const Color(0xFF0A2463),
               enableWakeLock: true,
               setOngoing: true,
             ),

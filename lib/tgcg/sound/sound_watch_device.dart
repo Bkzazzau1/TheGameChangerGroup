@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show Color;
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:record/record.dart';
@@ -192,6 +193,11 @@ class _DeviceSoundWatch implements SoundWatch {
       serviceTypes: const [ForegroundServiceTypes.microphone],
       notificationTitle: 'Sound alerts on',
       notificationText: 'Listening for gunshots, screaming, a loud crowd or breaking glass.',
+      // The status-bar icon named in AndroidManifest.xml.
+      notificationIcon: const NotificationIcon(
+        metaDataName: 'ng.tgcg.notification_icon',
+        backgroundColor: Color(0xFF0A2463),
+      ),
       callback: soundAlertButtons,
     );
     return started is ServiceRequestSuccess;

@@ -97,6 +97,11 @@ The server decides the role and area. Tokens are kept in secure storage, the
 session is restored on the next launch, and an expired session signs the user
 out.
 
+The phone app's launcher icon (with Android's adaptive and round shapes),
+its splash screen and the white status-bar icon for notifications all come
+from the TGCG seal (`assets/brand/tgcg_logo.png`); `tool/make_icons.py`
+remakes them, and the iPhone icons, after the logo changes.
+
 There is no presentation or demo mode. Release APKs are built with:
 
 ```bash

@@ -30,7 +30,8 @@
     <application
         android:label="TGCG-EMCOP"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -63,6 +64,18 @@
         <receiver
             android:name="com.pravera.flutter_foreground_task.service.RebootReceiver"
             tools:node="remove"/>
+        <!-- The status-bar icon (white TG in a ring) for messages and for the
+             duty and sound-alert notifications; Android draws a full-colour
+             launcher icon there as a white blob. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_tgcg" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/tgcg_navy" />
+        <meta-data
+            android:name="ng.tgcg.notification_icon"
+            android:resource="@drawable/ic_stat_tgcg" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
