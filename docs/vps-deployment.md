@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 18 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `f17f613cb8b6e5af3a02a8ed405efa541ea51604`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `5f93c030608e86a8a4df0e285ce6ae951ac91b51`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,12 +32,12 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261018-081722-f6aa7cc4ea6d` (release directory timestamps use UTC).
-- Frontend build source: `5c2c4ce33623f0bdbc81722e63d75a3eafdd2dbc` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261017-145729-c71f74e0a6dc`.
+- Published release: `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53` (release directory timestamps use UTC).
+- Frontend build source: `b19327258a8191bc45abea569dc5919e129d79b8` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261018-081722-f6aa7cc4ea6d`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `f6aa7cc4ea6d9f34631619b0b84de33b24e4e9c293cf905dc7bfe3a1cf2fdebc`.
-- Build: 856 files, 59,097,883 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
+- Main JavaScript SHA256: `1e2fc9caad5321c15ffbf115be6dc6d9950e1efb6704a2a95f0f81288ebcb689`.
+- Build: 856 files, 59,134,358 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -123,6 +123,37 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Enhanced member analysis, search and VIN comparison (18 October 2026)
+
+Backend `5f93c030608e86a8a4df0e285ce6ae951ac91b51` was deployed with the existing helper, and the pinned production build of frontend `b19327258a8191bc45abea569dc5919e129d79b8` was published at `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53`. Both source commits are pushed. The preceding morning web release remains retained. All 18 final public checks passed, and backups succeeded before deployment and after publication.
+
+National member analysis adds adjacent previous 7-day and 30-day registration windows, verification sources (automatic, chapter and person), app-account presence and recorded sign-in recency, and missing profile and registration fields. Sign-in counts describe recorded logins, not app activity. Scoped drill-down filters share the summary predicates and use the current time for each request, fixing the earlier cached appointment-expiry cutoff. Geographic coverage includes members lacking the selected child level, including a matching `missingZone` drill-down when Nigeria is broken down by zone; zone-only members are placed for that breakdown even when they have no state.
+
+Member search accepts names, membership numbers, positions and places, with phone lookup limited to areas where the caller may see personal details. Opening a member profile fetches fresh details and retains the existing private-data permission checks for the photo, WhatsApp number, birth date and disability details. WhatsApp, verification date and polling-unit list-selection status are read-only staff fields. Existing identity-completeness requirements remain; a legacy empty VIN counts as missing consistently in the profile, filters and analysis.
+
+Card comparison allows up to two character substitutions, insertions or deletions in the VIN while still requiring the member's name on the card. Three to six differences remain pending for review with a count-only diagnostic. This is TGCG's card-comparison policy, not authoritative INEC validation. Stored comparisons remain cached against their existing basis; this deployment does not run `--recompare`, bulk verification or any production card-photo reads. Release checks use read-only aggregate queries and create no production test data. No APK is included.
+
+No new migrations, dependencies, environment settings, provider credentials or timers were required. The helper reported `No migrations to apply`, with zero pending migrations. API/database health passed, the private environment remains `600:tgcg:tgcg`, and all four existing TGCG timers remain active.
+
+The pre-deployment aggregate baseline was 2,350 members and 2,353 users; postchecks counted 2,351 and 2,354. Totals increased during deployment; the checks created none. Roles (84), assignments (2,137) and delegation grants (89) were unchanged; projects, broadcasts, deliveries, message lists and security dispatches remain zero. The helper ran its routine geography synchronization; deployment checks were read-only and created no production test data. Available messaging channels remain `[]`, registration reports `phone_code_required=false`, and Termii/Firebase/LiveKit credentials remain absent. Read-only configuration flags matched the baseline.
+
+Read-only national analysis counted 2,123 exco people holding 2,137 appointments, matching an independent appointment query. All 20 drill-down counts matched their summaries. Nigeria's state breakdown contained 37 areas, 28 with members, three with exco and zero unplaced members; its zone breakdown contained six areas, all six with members, one with exco and zero unplaced members. Account counts were zero without an account, 2,276 with no recorded sign-in, 75 last signed in within seven days, the same 75 within 30 days, and zero older sign-ins. Verified identities totalled 2,206: 61 automatic, 2,123 chapter and 22 person; 75 profiles were fully verified.
+
+Profile and registration quality counts were: missing name 0, VIN 2,077, card photo 2,186, selfie 2,156, gender 2,129, birth date 2,151, state 0, LGA 22, ward 262 and polling unit 834; 31 polling units were chosen from a list. These are aggregate counts only.
+
+The initial public checks found web-access failures because the release root inherited mode 700 under umask 077. Its mode was corrected to 755 and the publisher helper was corrected to set that mode. All 18 checks passed on the final rerun. Main JavaScript returned 200 with `no-store` and the exact build checksum; index, bootstrap and poster returned 200. Anonymous registered-member, security, analysis, exco and `missingZone` filter requests returned 401 with app-origin CORS and successful preflights. Hidden configuration and media paths returned 404; the exact blocked SMS-code endpoints returned 503. Registration options retained `phone_code_required=false`.
+
+| Release evidence | Result |
+| --- | --- |
+| Local backend validation | 563 passed, 27 skipped on isolated SQLite; 26 PostgreSQL-specific skips and one unavailable-Tesseract skip. All 16 focused analysis/exco cases passed; Ruff, Django system check, migration check and diff check passed. Dotenv loading was disabled and the Google key cleared for these synthetic tests. |
+| Isolated PostgreSQL suite | All 590 passed on pinned backend `5f93c030608e86a8a4df0e285ce6ae951ac91b51`, zero failures and skips (302.63 seconds); Ruff passed. The isolated database was dropped and its absence confirmed. |
+| Flutter validation and production web build | All 308 Flutter tests passed; analysis clean (66.4 seconds). The pinned production build succeeded (79.4 seconds) with `TGCG_API_URL=https://api.tgcg.online`. |
+| Web artifact and privacy checks | Published 856 files, 59,134,358 bytes; all manifest files verified and zero privacy findings. Main JavaScript SHA256 `1e2fc9caad5321c15ffbf115be6dc6d9950e1efb6704a2a95f0f81288ebcb689`; archive SHA256 `85b2ec9108855f59cf7191c622909c26ee193a8627ef86b7cd32ac1bb4c7193c`. |
+| Production deployment and services | Backend `5f93c030608e86a8a4df0e285ce6ae951ac91b51` deployed through the helper; no migrations to apply and zero pending. API/database healthy, environment `600:tgcg:tgcg`, all four existing TGCG timers active. Nginx configuration tests passed at deployment and publication. |
+| Public and National Administrator checks | All 18 final public checks passed, including the exact served JavaScript checksum. All 20 read-only aggregate drill-down counts matched. No member/executive test login, test registrations, messages or card reads. |
+| Aggregate preservation | Member/User totals increased by one each during deployment; checks created none. Roles, assignments and grants were unchanged; projects, broadcasts, deliveries, lists and dispatches remain zero, as detailed above. |
+| Backups | Backups succeeded before deployment and after publication; final backup returned `Result=success`, `ExecMainStatus=0`. |
 
 ### Security response and Members & Exco (18 October 2026)
 
