@@ -124,6 +124,26 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
+### Zamfara chapter import, second attempt (18 October 2026)
+
+The user supplied a corrected brief for the same unchanged CSV. It supplied the full expected hold text and allowed the role total to fall when already-registered people were held back. This remained a data-only job using the existing importer: no deployment, migration or web build. Backups succeeded before and after the attempt.
+
+The actual dry run passed the corrected gate: **222 to import, 18 held back**, placed at **129 polling units, 89 wards and four LGAs**, with **zero VINs**. The plan used **29 roles, two of them new**, with **15 coordinator delegation grants**, all confirmed after commit. All 12 baseline holds matched, there were zero unexpected holds, and six additional rows were held because they were already registered. Importable and held counts totalled 240.
+
+The six already-registered rows were reviewed read-only before the commit was released. Their requested row-level details belong in the user's reply only and are excluded from these notes. No already-registered person's membership, identity, role or appointment was changed by this import.
+
+The single-transaction commit succeeded. Independent read-only checks verified **222 imported members, all 222 verified, with 222 linked active accounts**, placed at 129 polling units, 89 wards and four LGAs. There are **222 appointments**: 209 at LGA level, ten at state level and three at senatorial-district level, including three deputy appointments across two districts (two and one). There are **15 delegation grants** and **222 import-source audit events**.
+
+Global totals are now 86 roles, 2,359 assignments and 104 grants; broadcasts and deliveries remain zero. Registration retains `phone_code_required=false`, the environment remains `600:tgcg:tgcg`, the Nginx SMS-code blocks remain present, and API health passed. The active web path and JavaScript checksum were unchanged. The private VPS CSV was successfully shredded and its removal independently confirmed; the job returned `Result=success`, `ExecMainStatus=0` and stopped cleanly. The final post-attempt backup also succeeded with `Result=success`, `ExecMainStatus=0`.
+
+| Import evidence | Result |
+| --- | --- |
+| Dry run | Passed: 222 importable, 18 held; 29 roles, two new; 12/12 baseline holds matched, zero unexpected, six already registered. |
+| Commit | `Imported 222 members with their roles (29 roles); 15 coordinators may appoint in their areas.` |
+| Read-only postchecks | 222 members, 222 verified, 222 accounts, all active; 129 polling-unit/89 ward/4 LGA placements; 222 appointments (209 LGA/10 state/3 district), three deputy appointments across two districts (two and one), 15 grants and 222 source audit events. |
+| Private CSV cleanup | Shredding succeeded; removal independently confirmed; job succeeded and stopped cleanly. |
+| Backups | Pre-attempt and post-attempt backups succeeded; final backup returned `Result=success`, `ExecMainStatus=0`. |
+
 ### Zamfara chapter import stopped at the dry-run gate (18 October 2026)
 
 This was a data-only import attempt using the existing command: no deployment, migration or web build. The pre-import baseline contained zero imported Zamfara members. Backups succeeded before and after the attempt. The strict gate failed and no import was committed; no retry was performed. The private VPS CSV copy was shredded and its removal confirmed. No source rows, row labels, personal details or held-reason text are retained in these notes.
