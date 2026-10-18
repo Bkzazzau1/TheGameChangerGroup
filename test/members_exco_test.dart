@@ -93,6 +93,7 @@ Map<String, dynamic> _analysis({required bool national}) => {
     ],
   },
   'by': national ? 'state' : 'lga',
+  'breakdowns': national ? ['state', 'geopoliticalZone'] : ['lga'],
   'parts': national
       ? [
           {
@@ -215,8 +216,15 @@ void main() {
     expect(find.text("From chapters' lists"), findsOneWidget);
     expect(find.text('Positions held most'), findsOneWidget);
 
+    // Nigeria by zone as well as by state.
+    await tester.tap(find.text('Zones'));
+    await tester.pumpAndSettle();
+    expect(server.requests.last, 'GET members/analysis/?level=country&by=geopoliticalZone');
+    expect(find.text('Nigeria, zone by zone.'), findsOneWidget);
+    await tester.tap(find.text('States').first);
+    await tester.pumpAndSettle();
+
     // States, most members first; open Kaduna.
-    expect(find.text('States'), findsOneWidget);
     expect(find.text('140 exco posts · 50% verified · 40% women · +300 in 30 days'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('area-KD')));
     await tester.pumpAndSettle();
@@ -233,6 +241,7 @@ void main() {
       'GET members/exco/?level=state&code=KD&at=state%2CsenatorialDistrict',
     );
     expect(find.text('Kaduna exco'), findsOneWidget);
+    expect(find.text('State exco (26)'), findsOneWidget);
     expect(find.text('State Women Leader'), findsOneWidget);
     // One has everything on record; the other was verified on the chapter's word.
     expect(find.text("Verified on the chapter's list"), findsOneWidget);
@@ -241,7 +250,14 @@ void main() {
     await tester.tap(find.text('Not fully verified').first);
     await tester.pumpAndSettle();
     expect(server.requests.last, contains('show=notFullyVerified'));
-    await tester.tap(find.text('Everyone below'));
+    // Each level has its own exco: the LGAs', the wards', the units'.
+    await tester.tap(find.text('LGA exco (60)'));
+    await tester.pumpAndSettle();
+    expect(server.requests.last, contains('at=lga'));
+    expect(find.text('LGA exco in Kaduna'), findsOneWidget);
+    expect(find.text('Ward exco (40)'), findsOneWidget);
+    expect(find.text('Polling unit exco (20)'), findsOneWidget);
+    await tester.tap(find.text('Everyone (146)'));
     await tester.pumpAndSettle();
     expect(server.requests.last, isNot(contains('at=')));
     expect(find.text('KADUNA STATE'), findsOneWidget);

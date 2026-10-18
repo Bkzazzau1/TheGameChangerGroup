@@ -225,6 +225,7 @@ class MemberAnalysis {
     required this.members,
     required this.exco,
     this.by,
+    this.breakdowns = const [],
     this.parts = const [],
     this.withMembers = 0,
     this.withExco = 0,
@@ -236,6 +237,9 @@ class MemberAnalysis {
 
   /// The level of [parts]: states for Nigeria, LGAs for a state; none for a unit.
   final GeographyLevel? by;
+
+  /// The levels the area can be broken down into: Nigeria by state or zone.
+  final List<GeographyLevel> breakdowns;
   final List<AreaFigures> parts;
   final int withMembers;
   final int withExco;
@@ -248,6 +252,10 @@ class MemberAnalysis {
       members: MembersFigures.fromJson(json['members'] as Map<String, dynamic>),
       exco: ExcoFigures.fromJson(json['exco'] as Map<String, dynamic>),
       by: by,
+      breakdowns: [
+        for (final level in (json['breakdowns'] as List?) ?? const [])
+          ?GeographyLevel.values.asNameMap()['$level'],
+      ],
       parts: [
         if (by != null)
           for (final part in (json['parts'] as List<dynamic>? ?? const []))

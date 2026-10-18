@@ -391,10 +391,14 @@ class MemberAdminRepository {
     StaffMember.fromJson,
   );
 
-  /// Members and exco in [area], which must lie wholly within this account's reach.
-  Future<MemberAnalysis> analysis(AreaRef area) async => MemberAnalysis.fromJson(
-    await client.get('members/analysis/', query: area.query) as Map<String, dynamic>,
-  );
+  /// Members and exco in [area], which must lie wholly within this account's
+  /// reach, with its smaller areas at level [by] (one of the analysis's
+  /// breakdowns; the usual one by default).
+  Future<MemberAnalysis> analysis(AreaRef area, {GeographyLevel? by}) async =>
+      MemberAnalysis.fromJson(
+        await client.get('members/analysis/', query: {...area.query, 'by': ?by?.name})
+            as Map<String, dynamic>,
+      );
 
   /// Exco posts in [area] from the top down; [at] keeps only posts at those levels.
   Future<ApiPage<ExcoPost>> exco(

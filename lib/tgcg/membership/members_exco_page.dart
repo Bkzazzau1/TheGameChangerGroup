@@ -36,6 +36,7 @@ String levelLabel(GeographyLevel level) => switch (level) {
 /// "States", "LGAs"...; in a sentence, "states", "LGAs".
 String levelsLabel(GeographyLevel level, {bool inSentence = false}) {
   final label = switch (level) {
+    GeographyLevel.geopoliticalZone => 'Zones',
     GeographyLevel.state => 'States',
     GeographyLevel.lga => 'LGAs',
     GeographyLevel.ward => 'Wards',
@@ -76,11 +77,15 @@ const _profileLabels = {
   'signedIn': 'Signed in to the app',
 };
 
-/// The exco posts at an area itself: a state's include its districts'.
-List<GeographyLevel> _ownLevels(GeographyLevel level) => switch (level) {
+/// The exco posts at one level: a state's include its senatorial districts'.
+List<GeographyLevel> _postLevels(GeographyLevel level) => switch (level) {
   GeographyLevel.state => const [GeographyLevel.state, GeographyLevel.senatorialDistrict],
   _ => [level],
 };
+
+/// "National exco", "LGA exco"...
+String _excoLabel(GeographyLevel level) =>
+    level == GeographyLevel.country ? 'National exco' : '${levelLabel(level)} exco';
 
 /// Members and exco, area by area: Nigeria, each state, its LGAs, wards and
 /// polling units. Every figure and list comes from the server.
@@ -99,6 +104,9 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
   Future<MemberAnalysis>? _analysis;
   int _tab = 0;
 
+  /// How the area is broken down (Nigeria by state or by zone); null: as usual.
+  GeographyLevel? _by;
+
   AreaRef get _here => _trail.last;
 
   @override
@@ -107,17 +115,25 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
     _analysis ??= _load();
   }
 
-  Future<MemberAnalysis>? _load() => TgcgBackend.of(context)?.members.analysis(_here);
+  Future<MemberAnalysis>? _load() =>
+      TgcgBackend.of(context)?.members.analysis(_here, by: _by);
 
   void _reload() => setState(() => _analysis = _load());
 
   void _open(AreaRef area) => setState(() {
     _trail.add(area);
+    _by = null;
     _analysis = _load();
   });
 
   void _backTo(int index) => setState(() {
     _trail.removeRange(index + 1, _trail.length);
+    _by = null;
+    _analysis = _load();
+  });
+
+  void _breakDown(GeographyLevel by) => setState(() {
+    _by = by;
     _analysis = _load();
   });
 
@@ -138,7 +154,9 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
               eyebrow: 'MEMBERSHIP',
               title: 'Members & Exco',
               subtitle: _here.level == GeographyLevel.country
-                  ? 'Nigeria, state by state.'
+                  ? (_by == GeographyLevel.geopoliticalZone
+                      ? 'Nigeria, zone by zone.'
+                      : 'Nigeria, state by state.')
                   : '${_here.name} ${levelLabel(_here.level)}.',
               trailing: IconButton(
                 tooltip: 'Load again',
@@ -174,6 +192,7 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
                   tab: _tab,
                   onTab: (tab) => setState(() => _tab = tab),
                   onOpen: _open,
+                  onBreakDown: _breakDown,
                 );
               },
             ),
@@ -220,6 +239,7 @@ class _Analysis extends StatelessWidget {
     required this.tab,
     required this.onTab,
     required this.onOpen,
+    required this.onBreakDown,
   });
 
   final AreaRef area;
@@ -227,6 +247,7 @@ class _Analysis extends StatelessWidget {
   final int tab;
   final ValueChanged<int> onTab;
   final ValueChanged<AreaRef> onOpen;
+  final ValueChanged<GeographyLevel> onBreakDown;
 
   @override
   Widget build(BuildContext context) {
@@ -360,8 +381,8 @@ class _Analysis extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         switch (tabs[current]) {
-          'Areas' => _AreasList(analysis: analysis, onOpen: onOpen),
-          'Exco' => _ExcoList(area: area, roles: exco.roles),
+          'Areas' => _AreasList(analysis: analysis, onOpen: onOpen, onBreakDown: onBreakDown),
+          'Exco' => _ExcoList(area: area, roles: exco.roles, byLevel: exco.byLevel),
           _ => _MembersList(area: area),
         },
       ],
@@ -631,10 +652,11 @@ class _ExcoCard extends StatelessWidget {
 enum _AreaOrder { members, exco, name }
 
 class _AreasList extends StatefulWidget {
-  const _AreasList({required this.analysis, required this.onOpen});
+  const _AreasList({required this.analysis, required this.onOpen, required this.onBreakDown});
 
   final MemberAnalysis analysis;
   final ValueChanged<AreaRef> onOpen;
+  final ValueChanged<GeographyLevel> onBreakDown;
 
   @override
   State<_AreasList> createState() => _AreasListState();
@@ -682,6 +704,16 @@ class _AreasListState extends State<_AreasList> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              if (analysis.breakdowns.length > 1)
+                SegmentedButton<GeographyLevel>(
+                  segments: [
+                    for (final level in analysis.breakdowns)
+                      ButtonSegment(value: level, label: Text(levelsLabel(level))),
+                  ],
+                  selected: {by},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selected) => widget.onBreakDown(selected.single),
+                ),
               SizedBox(
                 width: 240,
                 child: TextField(
@@ -779,16 +811,19 @@ class _AreaRow extends StatelessWidget {
 // --- exco ---------------------------------------------------------------------------
 
 const _excoFilters = [
-  (null, 'Everyone'),
+  (null, 'All'),
   ('notFullyVerified', 'Not fully verified'),
   ('neverSignedIn', 'Never signed in'),
 ];
 
 class _ExcoList extends StatefulWidget {
-  const _ExcoList({required this.area, required this.roles});
+  const _ExcoList({required this.area, required this.roles, required this.byLevel});
 
   final AreaRef area;
   final List<(String, String, int)> roles;
+
+  /// Posts at each level in the area.
+  final Map<String, int> byLevel;
 
   @override
   State<_ExcoList> createState() => _ExcoListState();
@@ -797,7 +832,8 @@ class _ExcoList extends StatefulWidget {
 class _ExcoListState extends State<_ExcoList> {
   final _search = TextEditingController();
   final _posts = <ExcoPost>[];
-  late bool _ownOnly = widget.area.level != GeographyLevel.country;
+  /// The level whose exco is listed; null for everyone in the area.
+  late GeographyLevel? _level = widget.area.level;
   String? _show;
   String? _role;
   int _count = 0;
@@ -830,7 +866,7 @@ class _ExcoListState extends State<_ExcoList> {
     try {
       final page = await backend.members.exco(
         widget.area,
-        at: _ownOnly ? _ownLevels(widget.area.level) : const [],
+        at: _level == null ? const [] : _postLevels(_level!),
         role: _role,
         show: _show,
         search: _search.text,
@@ -854,6 +890,23 @@ class _ExcoListState extends State<_ExcoList> {
     _debounce = Timer(const Duration(milliseconds: 400), _load);
   }
 
+  /// Each level's own exco, from the area's own down, with its posts; then
+  /// everyone in the area.
+  List<(GeographyLevel?, int)> get _levels {
+    final here = widget.area.level;
+    final counts = widget.byLevel;
+    int posts(GeographyLevel level) =>
+        _postLevels(level).fold(0, (sum, at) => sum + (counts[at.name] ?? 0));
+    return [
+      for (final level in GeographyLevel.values)
+        if (level.index >= here.index &&
+            (level != GeographyLevel.senatorialDistrict || here == level) &&
+            (level == here || posts(level) > 0))
+          (level, posts(level)),
+      (null, counts.values.fold(0, (sum, n) => sum + n)),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final area = widget.area;
@@ -861,7 +914,7 @@ class _ExcoListState extends State<_ExcoList> {
     String? lastArea;
     for (final post in _posts) {
       final group = '${post.area.level.name}:${post.areaName}';
-      if (!_ownOnly && group != lastArea) {
+      if (_level != area.level && group != lastArea) {
         lastArea = group;
         rows.add(
           Padding(
@@ -882,7 +935,11 @@ class _ExcoListState extends State<_ExcoList> {
     }
     return TgcgSectionCard(
       padding: const EdgeInsets.all(16),
-      title: _ownOnly ? '${area.name} exco' : 'Exco in ${area.name}',
+      title: _level == area.level
+          ? (area.level == GeographyLevel.country ? 'National exco' : '${area.name} exco')
+          : _level == null
+              ? 'Exco in ${area.name}'
+              : '${_excoLabel(_level!)} in ${area.name}',
       subtitle: _loading && _posts.isEmpty ? null : '${formatCount(_count)} posts',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -892,22 +949,6 @@ class _ExcoListState extends State<_ExcoList> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (area.level != GeographyLevel.country)
-                SegmentedButton<bool>(
-                  segments: [
-                    ButtonSegment(
-                      value: true,
-                      label: Text('${levelLabel(area.level)} exco'),
-                    ),
-                    const ButtonSegment(value: false, label: Text('Everyone below')),
-                  ],
-                  selected: {_ownOnly},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (selected) {
-                    _ownOnly = selected.single;
-                    unawaited(_load());
-                  },
-                ),
               SizedBox(
                 width: 220,
                 child: TextField(
@@ -933,6 +974,23 @@ class _ExcoListState extends State<_ExcoList> {
                     for (final (code, name, count) in widget.roles)
                       DropdownMenuItem(value: code, child: Text('$name ($count)')),
                   ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (level, count) in _levels)
+                ChoiceChip(
+                  key: ValueKey('exco-level-${level?.name ?? 'all'}'),
+                  label: Text('${level == null ? 'Everyone' : _excoLabel(level)} ($count)'),
+                  selected: _level == level,
+                  onSelected: (_) {
+                    _level = level;
+                    unawaited(_load());
+                  },
                 ),
             ],
           ),

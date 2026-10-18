@@ -197,13 +197,15 @@ still reach the inbox. The first Windows desktop build downloads the Firebase
 C++ SDK that `firebase_core` needs there.
 
 Members & Exco (`lib/tgcg/membership/members_exco_page.dart`) is the
-National Administrator's view of the membership, from Nigeria down to a
-state, its LGAs, wards and polling units. For each area it shows who the
+National Administrator's view of the membership, from Nigeria (by state or
+by zone) down to a state, its LGAs, wards and polling units. For each area it shows who the
 members are (new members week by week, age, gender, how they joined, identity
 and what their profiles hold), its exco (people and posts by level and
 position, and how many are fully verified or have signed in), and each
-smaller area with its members and exco. Its tabs list the area's own exco or
-everyone below it, and its members, including those not fully verified,
+smaller area with its members and exco. Exco are everyone holding an
+appointment, and each level has its own: its tabs list the area's own exco,
+the exco of each level below it (LGA, ward, polling unit...) or everyone, and
+its members, including those not fully verified,
 never signed in, with or without a post. The dashboard shows the members and
 exco of each account's own area.
 
