@@ -18,6 +18,8 @@ http.Response _json(Object body, [int status = 200]) =>
 class _Server {
   final searches = <Map<String, String>>[];
   final requests = <String>[];
+  final detailOverrides = <String, Map<String, dynamic>>{};
+  bool denyDetails = false;
 
   BackendServices connect() => BackendServices.connect(
     'https://api.tgcg.test',
@@ -26,6 +28,13 @@ class _Server {
       final path = request.url.path.replaceFirst('/api/v1/', '');
       final query = request.url.queryParameters;
       requests.add('${request.method} $path');
+      for (final person in _people) {
+        final number = person['membership_number'] as String;
+        if (path == 'members/$number/') {
+          if (denyDetails) return _json({'detail': 'Access denied.'}, 403);
+          return _json({...person, ...?detailOverrides[number]});
+        }
+      }
       return switch (path) {
         'register/places/states/' => _json([
           {'code': 'KD', 'name': 'Kaduna'},
@@ -109,8 +118,12 @@ final _people = [
   ),
 ];
 
-Map<String, dynamic> _page(List<Map<String, dynamic>> items) =>
-    {'count': items.length, 'next': null, 'previous': null, 'results': items};
+Map<String, dynamic> _page(List<Map<String, dynamic>> items) => {
+  'count': items.length,
+  'next': null,
+  'previous': null,
+  'results': items,
+};
 
 Map<String, dynamic> _analysis() => {
   'scope': {'level': 'country', 'country': 'Nigeria'},
@@ -132,7 +145,12 @@ Map<String, dynamic> _analysis() => {
   'coverage': {'areas': 1, 'with_members': 1, 'with_exco': 1},
 };
 
-Future<void> _pump(WidgetTester tester, _Server server, Widget page, {Size size = const Size(1200, 2600)}) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _Server server,
+  Widget page, {
+  Size size = const Size(1200, 2600),
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -199,16 +217,20 @@ void main() {
     expect(inProfile('Kaduna North LGA'), findsOneWidget);
     expect(inProfile("From a chapter's list"), findsOneWidget);
     expect(inProfile('Never'), findsOneWidget);
-    expect(find.descendant(of: find.byType(Dialog), matching: find.text('+2348030000101')),
-        findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(Dialog), matching: find.text('+2348030000101')),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('member-TGCG-000102')));
     await tester.pumpAndSettle();
     expect(inProfile('None'), findsOneWidget);
-    expect(find.descendant(of: find.byType(Dialog), matching: find.textContaining('Last on')),
-        findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(Dialog), matching: find.textContaining('Last on')),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
@@ -225,6 +247,83 @@ void main() {
     expect(find.text('No members match'), findsOneWidget);
     await _pick(tester, const ValueKey('filter-status'), 'Exco');
     expect(find.widgetWithText(OutlinedButton, 'Clear all'), findsOneWidget);
+  });
+
+  testWidgets('member details refresh the record and show its registered location', (tester) async {
+    final server = _Server();
+    server.detailOverrides['TGCG-000101'] = {
+      'full_name': 'Updated Member',
+      'whatsapp_number': '+2348031111222',
+      'verified_at': '2026-10-18T08:00:00Z',
+      'updated_at': '2026-10-18T09:00:00Z',
+      'polling_unit_from_list': true,
+      'disabilities': ['hearing'],
+      'scope': {
+        ..._scope(lga: 'Kaduna North'),
+        'level': 'pollingUnit',
+        'wardId': '18-01-01',
+        'wardName': 'Ward One',
+        'pollingUnitId': '18-01-01-001',
+        'pollingUnitName': 'School Gate',
+      },
+    };
+    await _pump(tester, server, const MemberSearchPage(), size: const Size(380, 2400));
+    await tester.tap(find.byKey(const ValueKey('member-TGCG-000101')));
+    await tester.pumpAndSettle();
+    Finder inProfile(String text) =>
+        find.descendant(of: find.byType(Dialog), matching: find.text(text));
+    expect(server.requests, contains('GET members/TGCG-000101/'));
+    expect(inProfile('Updated Member'), findsOneWidget);
+    expect(inProfile('Hauwa Musa'), findsNothing);
+    expect(inProfile('+2348031111222'), findsOneWidget);
+    expect(inProfile('School Gate · 18-01-01-001'), findsOneWidget);
+    expect(inProfile('Chosen from the list'), findsOneWidget);
+    expect(inProfile('Verified on'), findsOneWidget);
+    expect(inProfile('Last updated'), findsOneWidget);
+    expect(inProfile('ACCESSIBILITY'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member detail honors private visibility even if a payload includes old values', (
+    tester,
+  ) async {
+    final server = _Server();
+    server.detailOverrides['TGCG-000101'] = {
+      'sensitive_visible': false,
+      'phone_number': '+2348031111999',
+      'whatsapp_number': '+2348031111888',
+      'email': 'private@example.test',
+      'disabilities': ['hearing'],
+    };
+    await _pump(tester, server, const MemberSearchPage());
+    await tester.tap(find.byKey(const ValueKey('member-TGCG-000101')));
+    await tester.pumpAndSettle();
+    Finder inProfile(String text) =>
+        find.descendant(of: find.byType(Dialog), matching: find.text(text));
+    expect(inProfile('Hidden for your role'), findsOneWidget);
+    for (final privateValue in ['+2348031111999', '+2348031111888', 'private@example.test']) {
+      expect(inProfile(privateValue), findsNothing);
+    }
+    expect(inProfile('ACCESSIBILITY'), findsNothing);
+    expect(inProfile('Born'), findsNothing);
+  });
+
+  testWidgets('member detail cannot fall back to a cached row after access is denied', (
+    tester,
+  ) async {
+    final server = _Server()..denyDetails = true;
+    await _pump(tester, server, const MemberSearchPage());
+    await tester.tap(find.byKey(const ValueKey('member-TGCG-000101')));
+    await tester.pumpAndSettle();
+    expect(server.requests, contains('GET members/TGCG-000101/'));
+    expect(
+      find.descendant(of: find.byType(Dialog), matching: find.text('Hauwa Musa')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: find.byType(Dialog), matching: find.textContaining('Access denied')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('on Members & Exco, searching replaces the figures until it is cleared', (

@@ -214,6 +214,12 @@ its members, including those not fully verified,
 never signed in, with or without a post. The dashboard shows the members and
 exco of each account's own area.
 
+The analysis also compares registration periods, membership standing,
+verification sources, account sign-in and missing profile/location fields.
+Figures open the matching member lists; member details reload the current
+record and retain private-data restrictions. See [member analysis](docs/member-analysis.md)
+for definitions and scope rules.
+
 Member search (`lib/tgcg/membership/member_search.dart`) is the
 administrator's way to find anyone: a search bar at the top of Members & Exco,
 and a Find members field in the top bar. It takes a name, membership number,

@@ -96,7 +96,7 @@ String gapLabel(String gap) => switch (gap) {
 String verifiedHowLabel(String? how) => switch (how) {
   'automatic' => 'checked by the system',
   'chapter' => "on the chapter's list",
-  'person' => 'by a coordinator',
+  'person' => 'by a reviewer',
   _ => '',
 };
 
@@ -106,6 +106,8 @@ class MembersFigures {
     required this.total,
     this.new7Days = 0,
     this.new30Days = 0,
+    this.previous7Days,
+    this.previous30Days,
     this.fullyVerified = 0,
     this.withRole = 0,
     this.withDisability = 0,
@@ -115,12 +117,17 @@ class MembersFigures {
     this.channel = const {},
     this.age = const {},
     this.profile = const {},
+    this.verificationSources = const {},
+    this.accounts = const {},
+    this.quality = const {},
     this.weekly = const [],
   });
 
   final int total;
   final int new7Days;
   final int new30Days;
+  final int? previous7Days;
+  final int? previous30Days;
   final int fullyVerified;
   final int withRole;
   final int withDisability;
@@ -144,6 +151,15 @@ class MembersFigures {
   /// phoneConfirmed, appAccount, signedIn.
   final Map<String, int> profile;
 
+  /// How verified identities were checked: automatic, chapter or person.
+  final Map<String, int> verificationSources;
+
+  /// Account presence and when a member last signed in; sign-in is not app activity.
+  final Map<String, int> accounts;
+
+  /// Missing profile and registration fields, and polling units chosen from lists.
+  final Map<String, int> quality;
+
   /// New members in each of the last 12 weeks, by the Monday that starts it.
   final List<(DateTime, int)> weekly;
 
@@ -151,6 +167,8 @@ class MembersFigures {
     total: _int(json['total']),
     new7Days: _int(json['new_7_days']),
     new30Days: _int(json['new_30_days']),
+    previous7Days: json['previous_7_days'] == null ? null : _int(json['previous_7_days']),
+    previous30Days: json['previous_30_days'] == null ? null : _int(json['previous_30_days']),
     fullyVerified: _int(json['fully_verified']),
     withRole: _int(json['with_role']),
     withDisability: _int(json['with_disability']),
@@ -160,6 +178,9 @@ class MembersFigures {
     channel: _counts(json['channel']),
     age: _counts(json['age']),
     profile: _counts(json['profile']),
+    verificationSources: _counts(json['verification_sources']),
+    accounts: _counts(json['accounts']),
+    quality: _counts(json['quality']),
     weekly: [
       for (final week in (json['weekly'] as List<dynamic>? ?? const []))
         (DateTime.parse((week as Map<String, dynamic>)['week'] as String), _int(week['count'])),
@@ -258,6 +279,7 @@ class MemberAnalysis {
     this.parts = const [],
     this.withMembers = 0,
     this.withExco = 0,
+    this.unplacedMembers = 0,
   });
 
   final GeographicScope scope;
@@ -272,6 +294,7 @@ class MemberAnalysis {
   final List<AreaFigures> parts;
   final int withMembers;
   final int withExco;
+  final int unplacedMembers;
 
   factory MemberAnalysis.fromJson(Map<String, dynamic> json) {
     final by = GeographyLevel.values.asNameMap()[json['by']];
@@ -305,6 +328,7 @@ class MemberAnalysis {
       ],
       withMembers: _int(coverage['with_members']),
       withExco: _int(coverage['with_exco']),
+      unplacedMembers: _int(coverage['unplaced_members']),
     );
   }
 }

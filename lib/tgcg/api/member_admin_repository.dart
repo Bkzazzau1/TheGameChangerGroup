@@ -22,6 +22,7 @@ class StaffMember {
     required this.membershipState,
     required this.scope,
     this.phoneNumber,
+    this.whatsappNumber,
     this.email,
     this.vin,
     this.photoUrl,
@@ -29,6 +30,9 @@ class StaffMember {
     this.hasPvc = false,
     this.roles = const [],
     this.createdAt,
+    this.updatedAt,
+    this.verifiedAt,
+    this.pollingUnitFromList = false,
     this.gender = '',
     this.dateOfBirth,
     this.occupation = '',
@@ -48,9 +52,8 @@ class StaffMember {
   final String fullName;
 
   /// Quick USSD membership can exist before the caller adds their name.
-  String get displayName => fullName.trim().isEmpty
-      ? 'Name not added yet ($membershipNumber)'
-      : fullName;
+  String get displayName =>
+      fullName.trim().isEmpty ? 'Name not added yet ($membershipNumber)' : fullName;
 
   /// unverified, pendingReview, verified or rejected.
   final String verificationStatus;
@@ -59,6 +62,7 @@ class StaffMember {
   final String membershipState;
   final GeographicScope scope;
   final String? phoneNumber;
+  final String? whatsappNumber;
   final String? email;
 
   /// Masked: only the last four characters.
@@ -72,6 +76,9 @@ class StaffMember {
   /// Current appointments: role names.
   final List<String> roles;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? verifiedAt;
+  final bool pollingUnitFromList;
 
   /// male, female or empty when not given.
   final String gender;
@@ -119,6 +126,7 @@ class StaffMember {
         ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
         : GeographicScope.nigeria,
     phoneNumber: json['phone_number'] as String?,
+    whatsappNumber: json['whatsapp_number'] as String?,
     email: json['email'] as String?,
     vin: json['vin'] as String?,
     photoUrl: json['photo_url'] as String?,
@@ -129,6 +137,9 @@ class StaffMember {
         ((role as Map<String, dynamic>)['role_name'] as String?) ?? '',
     ],
     createdAt: _date(json['created_at']),
+    updatedAt: _date(json['updated_at']),
+    verifiedAt: _date(json['verified_at']),
+    pollingUnitFromList: json['polling_unit_from_list'] as bool? ?? false,
     gender: json['gender'] as String? ?? '',
     dateOfBirth: DateTime.tryParse('${json['date_of_birth'] ?? ''}'),
     occupation: json['occupation'] as String? ?? '',
@@ -453,9 +464,10 @@ class MemberAdminRepository {
     required GeographyLevel by,
   }) async => MemberCounts.fromJson(
     await client.get(
-      'members/counts/',
-      query: {'level': level.name, if (code != null) 'code': code, 'by': by.name},
-    ) as Map<String, dynamic>,
+          'members/counts/',
+          query: {'level': level.name, if (code != null) 'code': code, 'by': by.name},
+        )
+        as Map<String, dynamic>,
   );
 
   Future<StaffMember> member(String number) async =>
@@ -528,14 +540,13 @@ class MemberAdminRepository {
       client.getBytes('polling-unit-changes/$id/card/');
 
   /// Checked members' PVC scans for a second check, in the caller's areas.
-  Future<ApiPage<PvcUpdate>> pvcUpdates({String? status, int offset = 0}) async =>
-      ApiPage.fromJson(
-        await client.get(
-          'pvc-updates/',
-          query: {if (status != null) 'status': status, if (offset > 0) 'offset': '$offset'},
-        ),
-        PvcUpdate.fromJson,
-      );
+  Future<ApiPage<PvcUpdate>> pvcUpdates({String? status, int offset = 0}) async => ApiPage.fromJson(
+    await client.get(
+      'pvc-updates/',
+      query: {if (status != null) 'status': status, if (offset > 0) 'offset': '$offset'},
+    ),
+    PvcUpdate.fromJson,
+  );
 
   /// The card shows these details and belongs to the member: they replace theirs.
   Future<PvcUpdate> approvePvcUpdate(String id, {String reason = ''}) async => PvcUpdate.fromJson(

@@ -74,9 +74,23 @@ const _profileLabels = {
   'selfie': 'Selfie',
   'gender': 'Gender',
   'dateOfBirth': 'Date of birth',
-  'phoneConfirmed': 'Phone confirmed by SMS',
+  'phoneConfirmed': 'Phone confirmed',
   'signedIn': 'Signed in to the app',
 };
+
+class _MemberSelection {
+  const _MemberSelection(this.label, {this.show, this.verification, this.standing});
+
+  final String label;
+  final String? show;
+  final String? verification;
+  final String? standing;
+  bool get isEveryone => show == null && verification == null && standing == null;
+  String get key => show ?? (standing == null ? verification ?? 'all' : 'standing-$standing');
+  String get signature => '$show|$verification|$standing';
+}
+
+const _everyone = _MemberSelection('Everyone');
 
 /// The exco posts at one level: a state's include its senatorial districts'.
 List<GeographyLevel> _postLevels(GeographyLevel level) => switch (level) {
@@ -104,6 +118,9 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
   late final _trail = <AreaRef>[widget.start ?? AreaRef.nigeria];
   Future<MemberAnalysis>? _analysis;
   int _tab = 0;
+  _MemberSelection _memberSelection = _everyone;
+  int _excoOpening = 0;
+  final _listAnchor = GlobalKey();
 
   /// How the area is broken down (Nigeria by state or by zone); null: as usual.
   GeographyLevel? _by;
@@ -119,20 +136,23 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
     _analysis ??= _load();
   }
 
-  Future<MemberAnalysis>? _load() =>
-      TgcgBackend.of(context)?.members.analysis(_here, by: _by);
+  Future<MemberAnalysis>? _load() => TgcgBackend.of(context)?.members.analysis(_here, by: _by);
 
   void _reload() => setState(() => _analysis = _load());
 
   void _open(AreaRef area) => setState(() {
     _trail.add(area);
     _by = null;
+    _memberSelection = _everyone;
+    _excoOpening = 0;
     _analysis = _load();
   });
 
   void _backTo(int index) => setState(() {
     _trail.removeRange(index + 1, _trail.length);
     _by = null;
+    _memberSelection = _everyone;
+    _excoOpening = 0;
     _analysis = _load();
   });
 
@@ -141,11 +161,18 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
     _analysis = _load();
   });
 
+  void _showList() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    final target = _listAnchor.currentContext;
+    if (!mounted || target == null) return;
+    unawaited(Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 250)));
+  });
+
   @override
   Widget build(BuildContext context) {
     if (TgcgBackend.of(context) == null) {
       return const ConnectToServerNotice(
-        message: 'Members and exco come from the server. Sign in with a server account to see them.',
+        message:
+            'Members and exco come from the server. Sign in with a server account to see them.',
       );
     }
     return LayoutBuilder(
@@ -159,8 +186,8 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
               title: 'Members & Exco',
               subtitle: _here.level == GeographyLevel.country
                   ? (_by == GeographyLevel.geopoliticalZone
-                      ? 'Nigeria, zone by zone.'
-                      : 'Nigeria, state by state.')
+                        ? 'Nigeria, zone by zone.'
+                        : 'Nigeria, state by state.')
                   : '${_here.name} ${levelLabel(_here.level)}.',
               trailing: IconButton(
                 tooltip: 'Load again',
@@ -200,6 +227,23 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
                     onTab: (tab) => setState(() => _tab = tab),
                     onOpen: _open,
                     onBreakDown: _breakDown,
+                    memberSelection: _memberSelection,
+                    onMembers: (selection) {
+                      setState(() {
+                        _memberSelection = selection;
+                        _tab = analysis.by == null ? 1 : 2;
+                      });
+                      _showList();
+                    },
+                    excoOpening: _excoOpening,
+                    onExco: () {
+                      setState(() {
+                        _excoOpening++;
+                        _tab = analysis.by == null ? 0 : 1;
+                      });
+                      _showList();
+                    },
+                    listAnchor: _listAnchor,
                   );
                 },
               ),
@@ -248,6 +292,11 @@ class _Analysis extends StatelessWidget {
     required this.onTab,
     required this.onOpen,
     required this.onBreakDown,
+    required this.memberSelection,
+    required this.onMembers,
+    required this.excoOpening,
+    required this.onExco,
+    required this.listAnchor,
   });
 
   final AreaRef area;
@@ -256,6 +305,11 @@ class _Analysis extends StatelessWidget {
   final ValueChanged<int> onTab;
   final ValueChanged<AreaRef> onOpen;
   final ValueChanged<GeographyLevel> onBreakDown;
+  final _MemberSelection memberSelection;
+  final ValueChanged<_MemberSelection> onMembers;
+  final int excoOpening;
+  final VoidCallback onExco;
+  final Key listAnchor;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +333,7 @@ class _Analysis extends StatelessWidget {
                   '+${formatCount(members.new7Days)} in 7',
               Icons.groups_2_outlined,
               TgcgMetricTone.info,
+              () => onMembers(_everyone),
             ),
             (
               'Exco',
@@ -291,6 +346,7 @@ class _Analysis extends StatelessWidget {
               ].join(' · '),
               Icons.account_tree_outlined,
               TgcgMetricTone.ai,
+              onExco,
             ),
             (
               'Identity verified',
@@ -298,6 +354,8 @@ class _Analysis extends StatelessWidget {
               '${share(verified, total)} · ${formatCount(members.fullyVerified)} fully verified',
               Icons.verified_user_outlined,
               TgcgMetricTone.success,
+              () =>
+                  onMembers(const _MemberSelection('Identity verified', verification: 'verified')),
             ),
             (
               'Women',
@@ -305,13 +363,15 @@ class _Analysis extends StatelessWidget {
               '${share(members.gender['female'] ?? 0, total)} of members',
               Icons.woman_outlined,
               TgcgMetricTone.neutral,
+              null,
             ),
             (
-              'With their PVC',
+              'VIN on record',
               formatCount(members.profile['vin'] ?? 0),
               '${share(members.profile['vin'] ?? 0, total)} gave a VIN',
               Icons.badge_outlined,
               TgcgMetricTone.neutral,
+              null,
             ),
             (
               'Awaiting review',
@@ -319,13 +379,16 @@ class _Analysis extends StatelessWidget {
               '${formatCount(members.verification['unverified'] ?? 0)} not checked yet',
               Icons.pending_actions_outlined,
               TgcgMetricTone.warning,
+              () => onMembers(
+                const _MemberSelection('Awaiting review', verification: 'pendingReview'),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 16),
         _Cards(
           cards: [
-            _WeeklyCard(weekly: members.weekly),
+            _WeeklyCard(figures: members),
             _BarsCard(
               title: 'Age',
               total: total,
@@ -357,12 +420,125 @@ class _Analysis extends StatelessWidget {
               total: total,
               rows: [
                 ('Fully verified', members.fullyVerified),
-                for (final status in const ['verified', 'pendingReview', 'unverified', 'rejected'])
+                ('Verified profile incomplete', (verified - members.fullyVerified).clamp(0, total)),
+                for (final status in const ['pendingReview', 'unverified', 'rejected'])
                   (verificationLabel(status), members.verification[status] ?? 0),
               ],
-              footnote: 'Fully verified: verified, with VIN, card photo, selfie, gender and date '
-                  'of birth.',
+              selections: {
+                'Fully verified': const _MemberSelection('Fully verified', show: 'fullyVerified'),
+                'Verified profile incomplete': const _MemberSelection(
+                  'Verified profile incomplete',
+                  show: 'notFullyVerified',
+                  verification: 'verified',
+                ),
+                for (final status in const ['pendingReview', 'unverified', 'rejected'])
+                  verificationLabel(status): _MemberSelection(
+                    verificationLabel(status),
+                    verification: status,
+                  ),
+              },
+              onSelect: onMembers,
             ),
+            if (members.standing.isNotEmpty)
+              _BarsCard(
+                title: 'Membership standing',
+                total: total,
+                rows: [
+                  for (final status in const ['active', 'suspended', 'deactivated'])
+                    (membershipStateLabel(status), members.standing[status] ?? 0),
+                ],
+                selections: {
+                  for (final status in const ['active', 'suspended', 'deactivated'])
+                    membershipStateLabel(status): _MemberSelection(
+                      membershipStateLabel(status),
+                      standing: status,
+                    ),
+                },
+                onSelect: onMembers,
+              ),
+            if (members.verificationSources.isNotEmpty)
+              _BarsCard(
+                title: 'Verified by',
+                total: verified,
+                rows: [
+                  for (final (source, label) in const [
+                    ('automatic', 'System'),
+                    ('chapter', 'Chapter'),
+                    ('person', 'Reviewer'),
+                  ])
+                    (label, members.verificationSources[source] ?? 0),
+                ],
+                selections: const {
+                  'System': _MemberSelection('Verified by system', show: 'verifiedAutomatic'),
+                  'Chapter': _MemberSelection('Verified by chapter', show: 'verifiedChapter'),
+                  'Reviewer': _MemberSelection('Verified by reviewer', show: 'verifiedPerson'),
+                },
+                onSelect: onMembers,
+              ),
+            if (members.accounts.isNotEmpty)
+              _BarsCard(
+                title: 'App accounts',
+                total: total,
+                rows: [
+                  ('No app account', members.accounts['without_account'] ?? 0),
+                  ('Account never signed in', members.accounts['never_signed_in'] ?? 0),
+                  ('Signed in within 30 days', members.accounts['last_sign_in_30_days'] ?? 0),
+                  ('Last sign-in over 30 days ago', members.accounts['last_sign_in_older'] ?? 0),
+                ],
+                selections: const {
+                  'No app account': _MemberSelection('No app account', show: 'noAppAccount'),
+                  'Account never signed in': _MemberSelection(
+                    'Account never signed in',
+                    show: 'accountNeverSignedIn',
+                  ),
+                  'Signed in within 30 days': _MemberSelection(
+                    'Signed in within 30 days',
+                    show: 'signedIn30Days',
+                  ),
+                  'Last sign-in over 30 days ago': _MemberSelection(
+                    'Last sign-in over 30 days ago',
+                    show: 'lastSignInOlder',
+                  ),
+                },
+                onSelect: onMembers,
+                extra: TextButton(
+                  key: const ValueKey('member-metric-signedIn7Days'),
+                  onPressed: () => onMembers(
+                    const _MemberSelection('Signed in within 7 days', show: 'signedIn7Days'),
+                  ),
+                  child: Text(
+                    '${formatCount(members.accounts['last_sign_in_7_days'] ?? 0)} signed in within 7 days',
+                  ),
+                ),
+              ),
+            if (members.quality.isNotEmpty) ...[
+              _BarsCard(
+                title: 'Missing profile details',
+                total: total,
+                rows: [
+                  for (final (field, label, _) in _profileGaps)
+                    (label, members.quality[field] ?? 0),
+                ],
+                selections: {
+                  for (final (_, label, show) in _profileGaps)
+                    label: _MemberSelection(label, show: show),
+                },
+                onSelect: onMembers,
+              ),
+              _BarsCard(
+                title: 'Registration placement',
+                total: total,
+                rows: [
+                  for (final (field, label, _) in _placementGaps)
+                    (label, members.quality[field] ?? 0),
+                ],
+                selections: {
+                  for (final (_, label, show) in _placementGaps)
+                    label: _MemberSelection(label, show: show),
+                },
+                onSelect: onMembers,
+              ),
+            ],
             _BarsCard(
               title: 'What their profiles hold',
               total: total,
@@ -388,17 +564,47 @@ class _Analysis extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        switch (tabs[current]) {
-          'Areas' => _AreasList(analysis: analysis, onOpen: onOpen, onBreakDown: onBreakDown),
-          'Exco' => _ExcoList(area: area, roles: exco.roles, byLevel: exco.byLevel),
-          _ => _MembersList(area: area),
-        },
+        SizedBox(
+          key: listAnchor,
+          child: switch (tabs[current]) {
+            'Areas' => _AreasList(
+              analysis: analysis,
+              onOpen: onOpen,
+              onBreakDown: onBreakDown,
+              onMembers: onMembers,
+            ),
+            'Exco' => _ExcoList(
+              key: ValueKey(excoOpening),
+              area: area,
+              roles: exco.roles,
+              byLevel: exco.byLevel,
+              initialAll: excoOpening > 0,
+            ),
+            _ => _MembersList(area: area, selection: memberSelection, onSelect: onMembers),
+          },
+        ),
       ],
     );
   }
 }
 
-typedef _Tile = (String, String, String, IconData, TgcgMetricTone);
+const _profileGaps = [
+  ('missing_name', 'No name', 'missingName'),
+  ('missing_vin', 'No VIN', 'missingVin'),
+  ('missing_card_photo', 'No card photo', 'missingCardPhoto'),
+  ('missing_selfie', 'No selfie', 'missingSelfie'),
+  ('missing_gender', 'No gender', 'missingGender'),
+  ('missing_birth_date', 'No date of birth', 'missingBirthDate'),
+];
+const _placementGaps = [
+  ('missing_state', 'No state', 'missingState'),
+  ('missing_lga', 'No LGA', 'missingLga'),
+  ('missing_ward', 'No ward', 'missingWard'),
+  ('missing_polling_unit', 'No polling unit', 'missingPollingUnit'),
+  ('polling_unit_from_list', 'Polling unit picked from list', 'pollingUnitFromList'),
+];
+
+typedef _Tile = (String, String, String, IconData, TgcgMetricTone, VoidCallback?);
 
 class _Tiles extends StatelessWidget {
   const _Tiles({required this.tiles});
@@ -411,22 +617,26 @@ class _Tiles extends StatelessWidget {
       final columns = constraints.maxWidth >= 1180
           ? 3
           : constraints.maxWidth >= 500
-              ? 2
-              : 1;
+          ? 2
+          : 1;
       const gap = 12.0;
       final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
       return Wrap(
         spacing: gap,
         runSpacing: gap,
         children: [
-          for (final (label, value, detail, icon, tone) in tiles)
-            TgcgMetricCard(
-              width: width,
-              label: label,
-              value: value,
-              detail: detail,
-              icon: icon,
-              tone: tone,
+          for (final (label, value, detail, icon, tone, onTap) in tiles)
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(16),
+              child: TgcgMetricCard(
+                width: width,
+                label: label,
+                value: value,
+                detail: detail,
+                icon: icon,
+                tone: tone,
+              ),
             ),
         ],
       );
@@ -446,8 +656,8 @@ class _Cards extends StatelessWidget {
       final columns = constraints.maxWidth >= 1100
           ? 3
           : constraints.maxWidth >= 700
-              ? 2
-              : 1;
+          ? 2
+          : 1;
       const gap = 12.0;
       final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
       return Wrap(
@@ -464,57 +674,86 @@ const _valueStyle = TextStyle(color: TgcgColors.muted, fontSize: 11);
 
 /// One bar: [value] out of [total], in a single hue on a pale track.
 class ShareBar extends StatelessWidget {
-  const ShareBar({super.key, required this.label, required this.value, required this.total});
+  const ShareBar({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.total,
+    this.onTap,
+  });
 
   final String label;
   final int value;
   final int total;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 9),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text(label, style: _labelStyle)),
-            Text('${formatCount(value)} · ${share(value, total)}', style: _valueStyle),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: SizedBox(
-            height: 8,
-            child: Stack(
-              children: [
-                const Positioned.fill(child: ColoredBox(color: TgcgColors.primarySoft)),
-                FractionallySizedBox(
-                  widthFactor: total == 0 ? 0 : (value / total).clamp(0, 1).toDouble(),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: TgcgColors.primaryMid,
-                      borderRadius: BorderRadius.circular(4),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(8),
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(label, style: _labelStyle)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '${formatCount(value)} · ${share(value, total)}',
+                  textAlign: TextAlign.end,
+                  style: _valueStyle,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 8,
+              child: Stack(
+                children: [
+                  const Positioned.fill(child: ColoredBox(color: TgcgColors.primarySoft)),
+                  FractionallySizedBox(
+                    widthFactor: total == 0 ? 0 : (value / total).clamp(0, 1).toDouble(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: TgcgColors.primaryMid,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
 
 class _BarsCard extends StatelessWidget {
-  const _BarsCard({required this.title, required this.total, required this.rows, this.footnote});
+  const _BarsCard({
+    required this.title,
+    required this.total,
+    required this.rows,
+    this.footnote,
+    this.selections = const {},
+    this.onSelect,
+    this.extra,
+  });
 
   final String title;
   final int total;
   final List<(String, int)> rows;
   final String? footnote;
+  final Map<String, _MemberSelection> selections;
+  final ValueChanged<_MemberSelection>? onSelect;
+  final Widget? extra;
 
   @override
   Widget build(BuildContext context) => TgcgSectionCard(
@@ -523,7 +762,19 @@ class _BarsCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final (label, value) in rows) ShareBar(label: label, value: value, total: total),
+        for (final (label, value) in rows)
+          ShareBar(
+            key: selections[label] == null
+                ? null
+                : ValueKey('member-metric-${selections[label]!.key}'),
+            label: label,
+            value: value,
+            total: total,
+            onTap: selections[label] == null || onSelect == null
+                ? null
+                : () => onSelect!(selections[label]!),
+          ),
+        if (extra != null) extra!,
         if (footnote != null)
           Text(footnote!, style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5)),
       ],
@@ -533,9 +784,10 @@ class _BarsCard extends StatelessWidget {
 
 /// New members week by week: one column per week, the latest on the right.
 class _WeeklyCard extends StatelessWidget {
-  const _WeeklyCard({required this.weekly});
+  const _WeeklyCard({required this.figures});
 
-  final List<(DateTime, int)> weekly;
+  final MembersFigures figures;
+  List<(DateTime, int)> get weekly => figures.weekly;
 
   @override
   Widget build(BuildContext context) {
@@ -548,6 +800,15 @@ class _WeeklyCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          for (final (days, current, previous) in [
+            (7, figures.new7Days, figures.previous7Days),
+            (30, figures.new30Days, figures.previous30Days),
+          ]) ...[
+            Text('Last $days days: ${formatCount(current)}', style: _labelStyle),
+            if (previous != null)
+              Text(_growthComparison(current, previous, days), style: _valueStyle),
+            const SizedBox(height: 8),
+          ],
           SizedBox(
             height: 120,
             child: Row(
@@ -563,7 +824,10 @@ class _WeeklyCard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             if (count == most && most > 0)
-                              Text(formatCount(count), style: _valueStyle),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(formatCount(count), style: _valueStyle),
+                              ),
                             const SizedBox(height: 2),
                             Container(
                               height: most == 0 ? 2 : 2 + 78 * count / most,
@@ -586,15 +850,30 @@ class _WeeklyCard extends StatelessWidget {
           if (weekly.isNotEmpty)
             Row(
               children: [
-                Text(formatDay(weekly.first.$1), style: _valueStyle),
-                const Spacer(),
-                Text('This week: ${formatCount(weekly.last.$2)}', style: _valueStyle),
+                Expanded(child: Text(formatDay(weekly.first.$1), style: _valueStyle)),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'This week: ${formatCount(weekly.last.$2)}',
+                    textAlign: TextAlign.end,
+                    style: _valueStyle,
+                  ),
+                ),
               ],
             ),
         ],
       ),
     );
   }
+}
+
+String _growthComparison(int current, int previous, int days) {
+  final change = current - previous;
+  final signed = '${change >= 0 ? '+' : ''}${formatCount(change)}';
+  final percent = previous == 0
+      ? ''
+      : ' (${change >= 0 ? '+' : ''}${(change * 100 / previous).toStringAsFixed(1)}%)';
+  return 'Previous $days days: ${formatCount(previous)} · $signed$percent';
 }
 
 class _ExcoCard extends StatelessWidget {
@@ -613,9 +892,10 @@ class _ExcoCard extends StatelessWidget {
     return TgcgSectionCard(
       padding: const EdgeInsets.all(16),
       title: 'Exco',
-      subtitle: '${formatCount(exco.people)} people in ${formatCount(exco.appointments)} posts'
+      subtitle:
+          '${formatCount(exco.people)} people in ${formatCount(exco.appointments)} posts'
           '${area.level == GeographyLevel.country ? '' : ' · ${formatCount(exco.here)} at the '
-              '${levelLabel(area.level).toLowerCase()} itself'}',
+                    '${levelLabel(area.level).toLowerCase()} itself'}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -659,12 +939,20 @@ class _ExcoCard extends StatelessWidget {
 
 enum _AreaOrder { members, exco, name }
 
+enum _AreaFilter { all, noMembers, noExco }
+
 class _AreasList extends StatefulWidget {
-  const _AreasList({required this.analysis, required this.onOpen, required this.onBreakDown});
+  const _AreasList({
+    required this.analysis,
+    required this.onOpen,
+    required this.onBreakDown,
+    required this.onMembers,
+  });
 
   final MemberAnalysis analysis;
   final ValueChanged<AreaRef> onOpen;
   final ValueChanged<GeographyLevel> onBreakDown;
+  final ValueChanged<_MemberSelection> onMembers;
 
   @override
   State<_AreasList> createState() => _AreasListState();
@@ -672,6 +960,7 @@ class _AreasList extends StatefulWidget {
 
 class _AreasListState extends State<_AreasList> {
   _AreaOrder _order = _AreaOrder.members;
+  _AreaFilter _show = _AreaFilter.all;
   final _filter = TextEditingController();
 
   @override
@@ -684,29 +973,57 @@ class _AreasListState extends State<_AreasList> {
   Widget build(BuildContext context) {
     final analysis = widget.analysis;
     final needle = _filter.text.trim().toLowerCase();
-    final parts = [
-      for (final part in analysis.parts)
-        if (needle.isEmpty || part.area.name.toLowerCase().contains(needle)) part,
-    ]..sort(
-        (a, b) => switch (_order) {
-          _AreaOrder.members => b.members.compareTo(a.members),
-          _AreaOrder.exco => b.exco.compareTo(a.exco),
-          _AreaOrder.name => a.area.name.compareTo(b.area.name),
-        },
-      );
+    final parts =
+        [
+          for (final part in analysis.parts)
+            if ((needle.isEmpty || part.area.name.toLowerCase().contains(needle)) &&
+                switch (_show) {
+                  _AreaFilter.all => true,
+                  _AreaFilter.noMembers => part.members == 0,
+                  _AreaFilter.noExco => part.exco == 0,
+                })
+              part,
+        ]..sort(
+          (a, b) => switch (_order) {
+            _AreaOrder.members => b.members.compareTo(a.members),
+            _AreaOrder.exco => b.exco.compareTo(a.exco),
+            _AreaOrder.name => a.area.name.compareTo(b.area.name),
+          },
+        );
     final most = analysis.parts.fold<int>(
       0,
       (top, part) => part.members > top ? part.members : top,
     );
     final by = analysis.by!;
+    final unplacedFilter = switch (by) {
+      GeographyLevel.geopoliticalZone => 'missingZone',
+      GeographyLevel.state => 'missingState',
+      GeographyLevel.lga => 'missingLga',
+      GeographyLevel.ward => 'missingWard',
+      GeographyLevel.pollingUnit => 'missingPollingUnit',
+      _ => null,
+    };
     return TgcgSectionCard(
       padding: const EdgeInsets.all(16),
       title: levelsLabel(by),
-      subtitle: '${analysis.withMembers} of ${analysis.parts.length} have members, '
+      subtitle:
+          '${analysis.withMembers} of ${analysis.parts.length} have members, '
           '${analysis.withExco} have exco.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (analysis.parts.isNotEmpty)
+            ShareBar(
+              key: const ValueKey('member-metric-unplaced'),
+              label: 'Unplaced members',
+              value: analysis.unplacedMembers,
+              total: analysis.members.total,
+              onTap: unplacedFilter == null
+                  ? null
+                  : () => widget.onMembers(
+                      _MemberSelection('Unplaced members', show: unplacedFilter),
+                    ),
+            ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -744,11 +1061,26 @@ class _AreasListState extends State<_AreasList> {
                   selected: _order == order,
                   onSelected: (_) => setState(() => _order = order),
                 ),
+              for (final (show, label) in const [
+                (_AreaFilter.all, 'All areas'),
+                (_AreaFilter.noMembers, 'No members'),
+                (_AreaFilter.noExco, 'No exco'),
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _show == show,
+                  onSelected: (_) => setState(() => _show = show),
+                ),
             ],
           ),
           const SizedBox(height: 10),
           for (final part in parts)
             _AreaRow(part: part, most: most, onOpen: () => widget.onOpen(part.area)),
+          if (parts.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('No areas match.', style: _valueStyle),
+            ),
         ],
       ),
     );
@@ -825,13 +1157,20 @@ const _excoFilters = [
 ];
 
 class _ExcoList extends StatefulWidget {
-  const _ExcoList({required this.area, required this.roles, required this.byLevel});
+  const _ExcoList({
+    super.key,
+    required this.area,
+    required this.roles,
+    required this.byLevel,
+    this.initialAll = false,
+  });
 
   final AreaRef area;
   final List<(String, String, int)> roles;
 
   /// Posts at each level in the area.
   final Map<String, int> byLevel;
+  final bool initialAll;
 
   @override
   State<_ExcoList> createState() => _ExcoListState();
@@ -840,8 +1179,9 @@ class _ExcoList extends StatefulWidget {
 class _ExcoListState extends State<_ExcoList> {
   final _search = TextEditingController();
   final _posts = <ExcoPost>[];
+
   /// The level whose exco is listed; null for everyone in the area.
-  late GeographyLevel? _level = widget.area.level;
+  late GeographyLevel? _level = widget.initialAll ? null : widget.area.level;
   String? _show;
   String? _role;
   int _count = 0;
@@ -849,6 +1189,7 @@ class _ExcoListState extends State<_ExcoList> {
   bool _loading = false;
   Object? _error;
   Timer? _debounce;
+  int _generation = 0;
 
   @override
   void didChangeDependencies() {
@@ -866,6 +1207,7 @@ class _ExcoListState extends State<_ExcoList> {
   Future<void> _load({bool more = false}) async {
     final backend = TgcgBackend.of(context);
     if (backend == null) return;
+    final generation = ++_generation;
     setState(() {
       _loading = true;
       _error = null;
@@ -880,16 +1222,16 @@ class _ExcoListState extends State<_ExcoList> {
         search: _search.text,
         offset: more ? _posts.length : 0,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _posts.addAll(page.items);
         _count = page.count;
         _more = page.hasMore;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted && generation == _generation) setState(() => _error = error);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) setState(() => _loading = false);
     }
   }
 
@@ -946,8 +1288,8 @@ class _ExcoListState extends State<_ExcoList> {
       title: _level == area.level
           ? (area.level == GeographyLevel.country ? 'National exco' : '${area.name} exco')
           : _level == null
-              ? 'Exco in ${area.name}'
-              : '${_excoLabel(_level!)} in ${area.name}',
+          ? 'Exco in ${area.name}'
+          : '${_excoLabel(_level!)} in ${area.name}',
       subtitle: _loading && _posts.isEmpty ? null : '${formatCount(_count)} posts',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -970,18 +1312,29 @@ class _ExcoListState extends State<_ExcoList> {
                 ),
               ),
               if (widget.roles.isNotEmpty)
-                DropdownButton<String?>(
-                  value: _role,
-                  hint: const Text('All positions'),
-                  onChanged: (role) {
-                    _role = role;
-                    unawaited(_load());
-                  },
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All positions')),
-                    for (final (code, name, count) in widget.roles)
-                      DropdownMenuItem(value: code, child: Text('$name ($count)')),
-                  ],
+                SizedBox(
+                  width: 300,
+                  child: DropdownButton<String?>(
+                    isExpanded: true,
+                    value: _role,
+                    hint: const Text('All positions'),
+                    onChanged: (role) {
+                      _role = role;
+                      unawaited(_load());
+                    },
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('All positions')),
+                      for (final (code, name, count) in widget.roles)
+                        DropdownMenuItem(
+                          value: code,
+                          child: Text(
+                            '$name ($count)',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -1057,13 +1410,13 @@ List<Widget> standingChips({
       label: verified && gaps.isEmpty
           ? 'Fully verified'
           : verified
-              ? 'Verified${how.isEmpty ? '' : ' $how'}'
-              : verificationLabel(verificationStatus),
+          ? 'Verified${how.isEmpty ? '' : ' $how'}'
+          : verificationLabel(verificationStatus),
       color: verified
           ? (gaps.isEmpty ? TgcgColors.success : TgcgColors.info)
           : verificationStatus == 'rejected'
-              ? TgcgColors.danger
-              : TgcgColors.warning,
+          ? TgcgColors.danger
+          : TgcgColors.warning,
       compact: true,
     ),
     if (membershipState != 'active')
@@ -1148,18 +1501,20 @@ class _ExcoRow extends StatelessWidget {
 // --- members ------------------------------------------------------------------------
 
 const _memberFilters = [
-  (null, null, 'Everyone'),
-  ('notFullyVerified', null, 'Not fully verified'),
-  (null, 'pendingReview', 'Awaiting review'),
-  ('withRole', null, 'Exco'),
-  ('withoutRole', null, 'Not exco'),
-  ('neverSignedIn', null, 'Never signed in'),
+  _everyone,
+  _MemberSelection('Not fully verified', show: 'notFullyVerified'),
+  _MemberSelection('Awaiting review', verification: 'pendingReview'),
+  _MemberSelection('Exco', show: 'withRole'),
+  _MemberSelection('Not exco', show: 'withoutRole'),
+  _MemberSelection('Never signed in', show: 'neverSignedIn'),
 ];
 
 class _MembersList extends StatefulWidget {
-  const _MembersList({required this.area});
+  const _MembersList({required this.area, required this.selection, required this.onSelect});
 
   final AreaRef area;
+  final _MemberSelection selection;
+  final ValueChanged<_MemberSelection> onSelect;
 
   @override
   State<_MembersList> createState() => _MembersListState();
@@ -1168,17 +1523,26 @@ class _MembersList extends StatefulWidget {
 class _MembersListState extends State<_MembersList> {
   final _search = TextEditingController();
   final _members = <StaffMember>[];
-  int _filter = 0;
   int _count = 0;
   bool _more = false;
   bool _loading = false;
   Object? _error;
   Timer? _debounce;
+  int _generation = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loading && _members.isEmpty && _error == null) unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(covariant _MembersList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selection.signature != widget.selection.signature) {
+      _debounce?.cancel();
+      unawaited(_load());
+    }
   }
 
   @override
@@ -1191,7 +1555,8 @@ class _MembersListState extends State<_MembersList> {
   Future<void> _load({bool more = false}) async {
     final backend = TgcgBackend.of(context);
     if (backend == null) return;
-    final (show, verification, _) = _memberFilters[_filter];
+    final generation = ++_generation;
+    final selection = widget.selection;
     setState(() {
       _loading = true;
       _error = null;
@@ -1200,21 +1565,22 @@ class _MembersListState extends State<_MembersList> {
     try {
       final ApiPage<StaffMember> page = await backend.members.members(
         search: _search.text,
-        show: show,
-        verificationStatus: verification,
+        show: selection.show,
+        verificationStatus: selection.verification,
+        membershipState: selection.standing,
         area: widget.area,
         offset: more ? _members.length : 0,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _members.addAll(page.items);
         _count = page.count;
         _more = page.hasMore;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted && generation == _generation) setState(() => _error = error);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) setState(() => _loading = false);
     }
   }
 
@@ -1231,6 +1597,18 @@ class _MembersListState extends State<_MembersList> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!widget.selection.isEveryone)
+          Row(
+            key: const ValueKey('selected-member-filter'),
+            children: [
+              Expanded(child: Text(widget.selection.label, style: _labelStyle)),
+              TextButton(
+                key: const ValueKey('clear-member-filter'),
+                onPressed: () => widget.onSelect(_everyone),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
         SizedBox(
           width: 320,
           child: TextField(
@@ -1248,14 +1626,11 @@ class _MembersListState extends State<_MembersList> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final (index, (_, _, label)) in _memberFilters.indexed)
+            for (final selection in _memberFilters)
               ChoiceChip(
-                label: Text(label),
-                selected: _filter == index,
-                onSelected: (_) {
-                  _filter = index;
-                  unawaited(_load());
-                },
+                label: Text(selection.label),
+                selected: widget.selection.signature == selection.signature,
+                onSelected: (_) => widget.onSelect(selection),
               ),
           ],
         ),

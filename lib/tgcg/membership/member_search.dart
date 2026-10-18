@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../access/access_widgets.dart' show failureMessage, formatDay, formatMoment;
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
+import '../api/member_repository.dart' show disabilityText;
 import '../api/reference_repository.dart' show RegistrationPlace;
 import '../session.dart';
 import '../ui/tgcg_design.dart';
@@ -33,12 +34,8 @@ String channelLabel(String channel) => switch (channel) {
   _ => 'Other',
 };
 
-String placeOf(GeographicScope scope) => [
-  ?scope.pollingUnitName,
-  ?scope.wardName,
-  ?scope.lgaName,
-  ?scope.stateName,
-].join(', ');
+String placeOf(GeographicScope scope) =>
+    [?scope.pollingUnitName, ?scope.wardName, ?scope.lgaName, ?scope.stateName].join(', ');
 
 /// "LGA Women Leader · Kaduna North LGA".
 String postLabel(MemberPost post) {
@@ -46,8 +43,8 @@ String postLabel(MemberPost post) {
   final where = post.areaName.isEmpty
       ? ''
       : level == null || level == GeographyLevel.country
-          ? post.areaName
-          : '${post.areaName} ${levelLabel(level)}';
+      ? post.areaName
+      : '${post.areaName} ${levelLabel(level)}';
   return where.isEmpty ? post.roleName : '${post.roleName} · $where';
 }
 
@@ -63,7 +60,13 @@ Color _standingColor(String verification, bool complete, String membershipState)
 
 /// The member's initials on a disc coloured by their standing.
 class MemberAvatar extends StatelessWidget {
-  const MemberAvatar({super.key, required this.name, required this.color, this.size = 44, this.photo});
+  const MemberAvatar({
+    super.key,
+    required this.name,
+    required this.color,
+    this.size = 44,
+    this.photo,
+  });
 
   final String name;
   final Color color;
@@ -202,8 +205,8 @@ class _MemberSearchState extends State<MemberSearch> {
   AreaRef? get _area => _lga != null
       ? AreaRef(GeographyLevel.lga, _lga!.code, _lga!.name)
       : _state != null
-          ? AreaRef(GeographyLevel.state, _state!.code, _state!.name)
-          : null;
+      ? AreaRef(GeographyLevel.state, _state!.code, _state!.name)
+      : null;
 
   Future<void> _load({bool more = false}) async {
     final backend = TgcgBackend.of(context);
@@ -308,7 +311,9 @@ class _MemberSearchState extends State<MemberSearch> {
                       _lga = null;
                       _lgas = place == null
                           ? null
-                          : TgcgBackend.of(context)!.reference.registrationPlaces(state: place.code);
+                          : TgcgBackend.of(
+                              context,
+                            )!.reference.registrationPlaces(state: place.code);
                       _changed();
                     },
                   ),
@@ -409,10 +414,7 @@ class _MemberSearchState extends State<MemberSearch> {
           if (_loading) const LinearProgressIndicator(minHeight: 2),
           if (_more && !_loading)
             Center(
-              child: TextButton(
-                onPressed: () => _load(more: true),
-                child: const Text('Show more'),
-              ),
+              child: TextButton(onPressed: () => _load(more: true), child: const Text('Show more')),
             ),
         ],
       ],
@@ -578,8 +580,8 @@ class _ResultGrid extends StatelessWidget {
       final columns = constraints.maxWidth >= 1100
           ? 3
           : constraints.maxWidth >= 680
-              ? 2
-              : 1;
+          ? 2
+          : 1;
       const gap = 12.0;
       final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
       return Wrap(
@@ -587,7 +589,10 @@ class _ResultGrid extends StatelessWidget {
         runSpacing: gap,
         children: [
           for (final member in members)
-            SizedBox(width: width, child: MemberCard(member: member)),
+            SizedBox(
+              width: width,
+              child: MemberCard(member: member),
+            ),
         ],
       );
     },
@@ -726,14 +731,13 @@ class _PostChip extends StatelessWidget {
 Future<void> showMemberDetails(BuildContext context, String number, {StaffMember? member}) =>
     showDialog<void>(
       context: context,
-      builder: (_) => _MemberProfile(number: number, member: member),
+      builder: (_) => _MemberProfile(number: number),
     );
 
 class _MemberProfile extends StatefulWidget {
-  const _MemberProfile({required this.number, this.member});
+  const _MemberProfile({required this.number});
 
   final String number;
-  final StaffMember? member;
 
   @override
   State<_MemberProfile> createState() => _MemberProfileState();
@@ -747,9 +751,7 @@ class _MemberProfileState extends State<_MemberProfile> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final backend = TgcgBackend.of(context)!;
-    _member ??= widget.member != null
-        ? Future.value(widget.member)
-        : backend.members.member(widget.number);
+    _member ??= backend.members.member(widget.number);
   }
 
   Future<Uint8List>? _photoOf(StaffMember member) {
@@ -802,7 +804,16 @@ class _ProfileBody extends StatelessWidget {
       member.gaps.isEmpty,
       member.membershipState,
     );
-    final place = placeOf(member.scope);
+    final scope = member.scope;
+    String place(String? name, String? code) => [
+      if (name != null && name.isNotEmpty) name,
+      if (code != null && code.isNotEmpty && code != name) code,
+    ].join(' · ');
+    String assigned(String? name, String? code) {
+      final value = place(name, code);
+      return value.isEmpty ? 'Not assigned' : value;
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
       child: Column(
@@ -874,20 +885,61 @@ class _ProfileBody extends StatelessWidget {
           _Section(
             title: 'Contact',
             children: [
-              _Line('Phone', member.phoneNumber ?? 'Hidden for your role', selectable: true),
-              if ((member.email ?? '').isNotEmpty) _Line('Email', member.email!, selectable: true),
+              _Line(
+                'Phone',
+                member.sensitiveVisible
+                    ? member.phoneNumber ?? 'Not provided'
+                    : 'Hidden for your role',
+                selectable: member.sensitiveVisible,
+              ),
+              if (member.sensitiveVisible && (member.whatsappNumber ?? '').isNotEmpty)
+                _Line('WhatsApp', member.whatsappNumber!, selectable: true),
+              if (member.sensitiveVisible && (member.email ?? '').isNotEmpty)
+                _Line('Email', member.email!, selectable: true),
             ],
           ),
           _Section(
             title: 'Registration',
             children: [
-              _Line('Registered in', place.isEmpty ? 'Nigeria' : place),
               if (member.createdAt != null) _Line('Joined', formatDay(member.createdAt!)),
+              if (member.updatedAt != null) _Line('Last updated', formatMoment(member.updatedAt!)),
               _Line('How they joined', channelLabel(member.registrationChannel)),
-              _Line('Voter card', member.hasPvc ? 'VIN ${member.vin ?? 'on record'}' : 'No VIN'),
+              _Line('Membership', switch (member.membershipState) {
+                'suspended' => 'Suspended',
+                'deactivated' => 'Deactivated',
+                _ => 'Active',
+              }),
+            ],
+          ),
+          _Section(
+            title: 'Registered location',
+            children: [
+              if (scope.zoneId != null) _Line('Zone', place(scope.zoneName, scope.zoneId)),
+              _Line('State', assigned(scope.stateName, scope.stateId)),
+              if (scope.senatorialDistrictId != null)
+                _Line('District', place(scope.senatorialDistrictName, scope.senatorialDistrictId)),
+              _Line('LGA', assigned(scope.lgaName, scope.lgaId)),
+              _Line('Ward', assigned(scope.wardName, scope.wardId)),
+              _Line('Polling unit', assigned(scope.pollingUnitName, scope.pollingUnitId)),
+              if (member.pollingUnitFromList) _Line('Unit selection', 'Chosen from the list'),
+            ],
+          ),
+          _Section(
+            title: 'Identity & profile',
+            children: [
+              _Line('Identity', verificationLabel(member.verificationStatus)),
+              if (member.verifiedAt != null) _Line('Verified on', formatMoment(member.verifiedAt!)),
+              _Line(
+                'Voter card',
+                member.hasPvc
+                    ? member.sensitiveVisible && member.vin != null
+                          ? 'VIN ${member.vin}'
+                          : 'VIN on record'
+                    : 'No VIN',
+              ),
               if (member.gender.isNotEmpty)
                 _Line('Gender', member.gender == 'female' ? 'Woman' : 'Man'),
-              if (member.dateOfBirth != null)
+              if (member.sensitiveVisible && member.dateOfBirth != null)
                 _Line(
                   'Born',
                   '${formatDay(member.dateOfBirth!)}${age == null ? '' : ' ($age years)'}',
@@ -895,18 +947,26 @@ class _ProfileBody extends StatelessWidget {
               if (member.occupation.isNotEmpty) _Line('Occupation', member.occupation),
             ],
           ),
+          if (member.sensitiveVisible && member.disabilities.isNotEmpty)
+            _Section(
+              title: 'Accessibility',
+              children: [
+                _Line('Disability', disabilityText(member.disabilities, member.disabilityOther)),
+              ],
+            ),
           _Section(
             title: 'App',
             children: [
+              _Line('App account', member.hasAppAccount ? 'Linked' : 'None'),
               _Line(
                 'Signed in',
                 member.lastSignIn != null
                     ? 'Last on ${formatMoment(member.lastSignIn!)}'
                     : member.hasAppAccount
-                        ? 'Never'
-                        : 'No app account',
+                    ? 'Never'
+                    : 'No app account',
               ),
-              _Line('Phone confirmed by SMS', member.phoneVerified ? 'Yes' : 'No'),
+              _Line('Phone confirmed', member.phoneVerified ? 'Yes' : 'No'),
             ],
           ),
           const SizedBox(height: 8),
@@ -960,19 +1020,29 @@ class _Line extends StatelessWidget {
     const valueStyle = TextStyle(color: TgcgColors.ink, fontSize: 13, fontWeight: FontWeight.w600);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(label, style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5)),
-          ),
-          Expanded(
-            child: selectable
-                ? SelectableText(value, style: valueStyle)
-                : Text(value, style: valueStyle),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final labelWidget = Text(
+            label,
+            style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
+          );
+          final valueWidget = selectable
+              ? SelectableText(value, style: valueStyle)
+              : Text(value, style: valueStyle);
+          if (constraints.maxWidth < 340) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [labelWidget, const SizedBox(height: 2), valueWidget],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 150, child: labelWidget),
+              Expanded(child: valueWidget),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1004,9 +1074,9 @@ class MemberSearchButton extends StatelessWidget {
 
   final bool wide;
 
-  void _open(BuildContext context, [String query = '']) => Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => MemberSearchPage(query: query)),
-  );
+  void _open(BuildContext context, [String query = '']) => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => MemberSearchPage(query: query)));
 
   @override
   Widget build(BuildContext context) {
