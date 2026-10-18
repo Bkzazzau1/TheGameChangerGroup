@@ -8,6 +8,7 @@ import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'member_search.dart';
 
 /// "12,345".
 String formatCount(int value) {
@@ -107,6 +108,9 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
   /// How the area is broken down (Nigeria by state or by zone); null: as usual.
   GeographyLevel? _by;
 
+  /// A member search is showing its results in place of the figures.
+  bool _searching = false;
+
   AreaRef get _here => _trail.last;
 
   @override
@@ -164,38 +168,42 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
                 icon: const Icon(Icons.refresh_rounded),
               ),
             ),
-            const SizedBox(height: 12),
-            _Trail(trail: _trail, onTap: _backTo),
-            const SizedBox(height: 16),
-            FutureBuilder<MemberAnalysis>(
-              future: _analysis,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return TgcgEmptyState(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'The figures could not be loaded',
-                    message: failureMessage(snapshot.error!),
-                    action: OutlinedButton(onPressed: _reload, child: const Text('Try again')),
+            const SizedBox(height: 14),
+            MemberSearch(onActiveChanged: (active) => setState(() => _searching = active)),
+            if (!_searching) ...[
+              const SizedBox(height: 12),
+              _Trail(trail: _trail, onTap: _backTo),
+              const SizedBox(height: 16),
+              FutureBuilder<MemberAnalysis>(
+                future: _analysis,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return TgcgEmptyState(
+                      icon: Icons.cloud_off_outlined,
+                      title: 'The figures could not be loaded',
+                      message: failureMessage(snapshot.error!),
+                      action: OutlinedButton(onPressed: _reload, child: const Text('Try again')),
+                    );
+                  }
+                  final analysis = snapshot.data;
+                  if (analysis == null || snapshot.connectionState != ConnectionState.done) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    );
+                  }
+                  return _Analysis(
+                    key: ValueKey('${_here.level.name}:${_here.code}'),
+                    area: _here,
+                    analysis: analysis,
+                    tab: _tab,
+                    onTab: (tab) => setState(() => _tab = tab),
+                    onOpen: _open,
+                    onBreakDown: _breakDown,
                   );
-                }
-                final analysis = snapshot.data;
-                if (analysis == null || snapshot.connectionState != ConnectionState.done) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: LinearProgressIndicator(minHeight: 2),
-                  );
-                }
-                return _Analysis(
-                  key: ValueKey('${_here.level.name}:${_here.code}'),
-                  area: _here,
-                  analysis: analysis,
-                  tab: _tab,
-                  onTab: (tab) => setState(() => _tab = tab),
-                  onOpen: _open,
-                  onBreakDown: _breakDown,
-                );
-              },
-            ),
+                },
+              ),
+            ],
           ],
         );
       },
@@ -1278,13 +1286,6 @@ int? ageOn(DateTime? born, DateTime today) {
   return age;
 }
 
-String _placeOf(GeographicScope scope) => [
-  ?scope.pollingUnitName,
-  ?scope.wardName,
-  ?scope.lgaName,
-  ?scope.stateName,
-].join(', ');
-
 class _MemberRow extends StatelessWidget {
   const _MemberRow({required this.member});
 
@@ -1308,7 +1309,7 @@ class _MemberRow extends StatelessWidget {
                 ?member.phoneNumber,
                 if (member.gender.isNotEmpty) member.gender == 'female' ? 'Woman' : 'Man',
                 if (age != null) '$age years',
-                if (_placeOf(member.scope).isNotEmpty) _placeOf(member.scope),
+                if (placeOf(member.scope).isNotEmpty) placeOf(member.scope),
               ].join(' · '),
               style: _valueStyle,
             ),
@@ -1338,108 +1339,4 @@ class _MemberRow extends StatelessWidget {
       ),
     );
   }
-}
-
-// --- one member ---------------------------------------------------------------------
-
-/// Everything on record about a member that this account may see.
-Future<void> showMemberDetails(BuildContext context, String number, {StaffMember? member}) =>
-    showDialog<void>(
-      context: context,
-      builder: (_) => _MemberDetails(number: number, member: member),
-    );
-
-class _MemberDetails extends StatefulWidget {
-  const _MemberDetails({required this.number, this.member});
-
-  final String number;
-  final StaffMember? member;
-
-  @override
-  State<_MemberDetails> createState() => _MemberDetailsState();
-}
-
-class _MemberDetailsState extends State<_MemberDetails> {
-  Future<StaffMember>? _member;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _member ??= widget.member != null
-        ? Future.value(widget.member)
-        : TgcgBackend.of(context)!.members.member(widget.number);
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    scrollable: true,
-    title: Text(widget.member?.displayName ?? widget.number),
-    content: SizedBox(
-      width: 440,
-      child: FutureBuilder<StaffMember>(
-        future: _member,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text(
-              failureMessage(snapshot.error!),
-              style: const TextStyle(color: TgcgColors.danger),
-            );
-          }
-          final member = snapshot.data;
-          if (member == null) return const LinearProgressIndicator(minHeight: 2);
-          final age = ageOn(member.dateOfBirth, DateTime.now());
-          final rows = <(String, String)>[
-            ('Membership number', member.membershipNumber),
-            if (member.phoneNumber != null) ('Phone', member.phoneNumber!),
-            if (member.gender.isNotEmpty) ('Gender', member.gender == 'female' ? 'Woman' : 'Man'),
-            if (member.dateOfBirth != null)
-              ('Born', '${formatDay(member.dateOfBirth!)}${age == null ? '' : ' ($age years)'}'),
-            if (member.occupation.isNotEmpty) ('Occupation', member.occupation),
-            ('Registered in', _placeOf(member.scope).isEmpty ? 'Nigeria' : _placeOf(member.scope)),
-            if (member.createdAt != null) ('Joined', formatDay(member.createdAt!)),
-            ('How they joined', _channelLabel(member.registrationChannel)),
-            ('Exco posts', member.roles.isEmpty ? 'None' : member.roles.join(', ')),
-            ('Phone confirmed', member.phoneVerified ? 'Yes' : 'No'),
-            (
-              'App',
-              member.signedIn
-                  ? 'Has signed in'
-                  : member.hasAppAccount
-                      ? 'Never signed in'
-                      : 'No account',
-            ),
-          ];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: standingChips(
-                  verificationStatus: member.verificationStatus,
-                  verifiedHow: member.verifiedHow,
-                  gaps: member.gaps,
-                  signedIn: member.signedIn,
-                  membershipState: member.membershipState,
-                ),
-              ),
-              const SizedBox(height: 12),
-              for (final (label, value) in rows)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(width: 130, child: Text(label, style: _valueStyle)),
-                      Expanded(child: Text(value, style: _labelStyle)),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    ),
-    actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
-  );
 }

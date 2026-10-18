@@ -53,6 +53,35 @@ Map<String, int> _counts(Object? value) => {
 
 List<String> _strings(Object? value) => [for (final item in (value as List?) ?? const []) '$item'];
 
+/// A post someone holds: the position and the place it covers.
+class MemberPost {
+  const MemberPost({
+    required this.role,
+    required this.roleName,
+    this.state = 'active',
+    this.areaLevel,
+    this.areaName = '',
+  });
+
+  final String role;
+  final String roleName;
+
+  /// active, suspended, scheduled or expired.
+  final String state;
+  final GeographyLevel? areaLevel;
+
+  /// "Zaria", or several places joined with commas.
+  final String areaName;
+
+  factory MemberPost.fromJson(Map<String, dynamic> json) => MemberPost(
+    role: json['role'] as String? ?? '',
+    roleName: json['role_name'] as String? ?? '',
+    state: json['state'] as String? ?? 'active',
+    areaLevel: GeographyLevel.values.asNameMap()[json['area_level']],
+    areaName: json['area_name'] as String? ?? '',
+  );
+}
+
 /// "No VIN", "No selfie"... for what a profile lacks.
 String gapLabel(String gap) => switch (gap) {
   'vin' => 'No VIN',

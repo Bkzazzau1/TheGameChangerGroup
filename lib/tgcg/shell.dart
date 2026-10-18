@@ -20,6 +20,7 @@ import 'media/media_intelligence_page.dart';
 import 'meeting/meeting_room_page.dart';
 import 'member/member_shell.dart';
 import 'membership/member_review_page.dart';
+import 'membership/member_search.dart';
 import 'membership/members_exco_page.dart';
 import 'membership/pvc_enrollment_page.dart';
 import 'monitoring/system_monitoring_page.dart';
@@ -95,6 +96,7 @@ class _TgcgShellState extends State<TgcgShell> {
                   actions: [
                     const _CompactSync(),
                     const SizedBox(width: 2),
+                    const MemberSearchButton(),
                     const InboxButton(),
                     const RegisterMembersButton(),
                     if (allowed.contains(TgcgModule.alertCenter))
@@ -497,7 +499,8 @@ class _CommandBar extends StatelessWidget {
               ),
             ),
           ],
-          if (session.isServerSession) ...const [InboxButton(), RegisterMembersButton()],
+          if (session.isServerSession)
+            ...const [MemberSearchButton(wide: true), InboxButton(), RegisterMembersButton()],
           const SizedBox(width: 4),
           Tooltip(
             message: '${session.roleTitle} • ${session.scope.label}',

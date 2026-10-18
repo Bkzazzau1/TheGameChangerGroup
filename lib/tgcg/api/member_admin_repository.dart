@@ -39,7 +39,9 @@ class StaffMember {
     this.hasAppAccount = false,
     this.gaps = const [],
     this.signedIn = false,
+    this.lastSignIn,
     this.verifiedHow,
+    this.posts = const [],
   });
 
   final String membershipNumber;
@@ -94,6 +96,12 @@ class StaffMember {
   /// Has signed in to the app at least once.
   final bool signedIn;
 
+  /// When they last signed in to the app.
+  final DateTime? lastSignIn;
+
+  /// The posts they hold, each with the place it covers.
+  final List<MemberPost> posts;
+
   /// automatic, chapter or person; null unless verified.
   final String? verifiedHow;
 
@@ -131,7 +139,12 @@ class StaffMember {
     hasAppAccount: json['has_app_account'] as bool? ?? false,
     gaps: [for (final gap in (json['gaps'] as List?) ?? const []) '$gap'],
     signedIn: json['signed_in'] as bool? ?? false,
+    lastSignIn: _date(json['last_sign_in']),
     verifiedHow: json['verified_how'] as String?,
+    posts: [
+      for (final role in (json['roles'] as List<dynamic>? ?? const []))
+        MemberPost.fromJson(role as Map<String, dynamic>),
+    ],
   );
 }
 
@@ -364,14 +377,20 @@ class MemberAdminRepository {
   final ApiClient client;
 
   /// [show]: fullyVerified, notFullyVerified, neverSignedIn, withRole or
-  /// withoutRole. [area]: only members registered in that area.
+  /// withoutRole. [area]: only members registered in that area. [query]:
+  /// words found in names, membership numbers, places and current posts, or
+  /// a phone number. [role]: only those holding that post now. [ordering]:
+  /// full_name or -created_at.
   Future<ApiPage<StaffMember>> members({
     String search = '',
+    String query = '',
     String? verificationStatus,
     String? membershipState,
     String? phone,
     String? pollingUnit,
     String? show,
+    String? role,
+    String? ordering,
     AreaRef? area,
     int offset = 0,
   }) async => ApiPage.fromJson(
@@ -379,6 +398,9 @@ class MemberAdminRepository {
       'members/',
       query: {
         if (search.trim().isNotEmpty) 'search': search.trim(),
+        if (query.trim().isNotEmpty) 'q': query.trim(),
+        'role': ?role,
+        'ordering': ?ordering,
         if (verificationStatus != null) 'verification_status': verificationStatus,
         if (membershipState != null) 'membership_state': membershipState,
         if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),

@@ -214,6 +214,15 @@ its members, including those not fully verified,
 never signed in, with or without a post. The dashboard shows the members and
 exco of each account's own area.
 
+Member search (`lib/tgcg/membership/member_search.dart`) is the
+administrator's way to find anyone: a search bar at the top of Members & Exco,
+and a Find members field in the top bar. It takes a name, membership number,
+phone number, position or place ("women leader zaria"), narrowed by state,
+LGA, position and status (exco or not, fully verified or not, awaiting
+review, suspended, never signed in). Each result shows the person's posts and
+where they stand, and opens a profile with their positions, contact,
+registration and use of the app.
+
 Security officers (`lib/tgcg/security/`) are members whose role holds the
 power to respond to security escalations, which the National Administrator
 gives through roles; they sign in on the same page as everyone else. In the

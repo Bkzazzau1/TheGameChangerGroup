@@ -274,7 +274,7 @@ void main() {
     await tester.tap(find.text('Sani Umar'));
     await tester.pumpAndSettle();
     Finder inDialog(String text) =>
-        find.descendant(of: find.byType(AlertDialog), matching: find.text(text));
+        find.descendant(of: find.byType(Dialog), matching: find.text(text));
     expect(inDialog('+2348051234567'), findsOneWidget);
     expect(inDialog('Joined in the app'), findsOneWidget);
     expect(inDialog('Never signed in'), findsWidgets);
