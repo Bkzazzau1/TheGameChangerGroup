@@ -157,12 +157,19 @@ class ApiClient {
 
   Future<dynamic> delete(String path, {Object? body}) => _send('DELETE', path, body: body);
 
-  /// The raw body of an authenticated GET, such as a photo.
-  Future<Uint8List> getBytes(String path) async {
+  /// The raw body of an authenticated GET, such as a photo. [requestTimeout]
+  /// overrides the deadline for the server's answer, for files it builds first.
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, String>? query,
+    Duration? requestTimeout,
+  }) async {
     Future<http.Response> send() async {
-      final request = http.Request('GET', uri(path));
+      final request = http.Request('GET', uri(path, query));
       await _authorize(request, true);
-      return http.Response.fromStream(await _http.send(request).timeout(timeout));
+      return http.Response.fromStream(
+        await _http.send(request).timeout(requestTimeout ?? timeout),
+      );
     }
 
     var response = await _guard(send);

@@ -433,6 +433,15 @@ class MemberAdminRepository {
             as Map<String, dynamic>,
       );
 
+  /// Everyone in [area] as one printable list (PDF): grouped by place, exco
+  /// first, with full name, membership number, polling unit and posts. The
+  /// server builds it first, so a large area may take a minute.
+  Future<Uint8List> listPdf(AreaRef area) => client.getBytes(
+    'members/list-pdf/',
+    query: area.query,
+    requestTimeout: const Duration(minutes: 3),
+  );
+
   /// Exco posts in [area] from the top down; [at] keeps only posts at those levels.
   Future<ApiPage<ExcoPost>> exco(
     AreaRef area, {

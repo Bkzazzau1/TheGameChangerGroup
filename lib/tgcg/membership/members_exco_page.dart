@@ -6,6 +6,7 @@ import '../access/access_widgets.dart' show ConnectToServerNotice, failureMessag
 import '../api/access_repository.dart' show ApiPage;
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
+import '../media/save_download.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'member_search.dart';
@@ -111,10 +112,13 @@ String _excoLabel(GeographyLevel level) =>
 /// Members and exco, area by area: Nigeria, each state, its LGAs, wards and
 /// polling units. Every figure and list comes from the server.
 class MembersExcoPage extends StatefulWidget {
-  const MembersExcoPage({super.key, this.start});
+  const MembersExcoPage({super.key, this.start, this.save = saveDownload});
 
   /// Where to open; Nigeria by default.
   final AreaRef? start;
+
+  /// Hands the printable list to the person (download, or a phone's share sheet).
+  final SaveDownload save;
 
   @override
   State<MembersExcoPage> createState() => _MembersExcoPageState();
@@ -195,10 +199,17 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
                         ? 'Nigeria, zone by zone.'
                         : 'Nigeria, state by state.')
                   : '${_here.name} ${levelLabel(_here.level)}.',
-              trailing: IconButton(
-                tooltip: 'Load again',
-                onPressed: _reload,
-                icon: const Icon(Icons.refresh_rounded),
+              trailing: Wrap(
+                spacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _ListPdfButton(area: _here, save: widget.save),
+                  IconButton(
+                    tooltip: 'Load again',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 14),
@@ -259,6 +270,58 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
       },
     );
   }
+}
+
+/// "tgcg-members-and-exco-kaduna-state-2026-10-19.pdf".
+String listPdfName(AreaRef area, DateTime day) {
+  final where = area.level == GeographyLevel.country
+      ? 'nigeria'
+      : '${area.name} ${levelLabel(area.level)}'.toLowerCase();
+  final slug = where.replaceAll(RegExp('[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+  String two(int value) => value.toString().padLeft(2, '0');
+  return 'tgcg-members-and-exco-$slug-${day.year}-${two(day.month)}-${two(day.day)}.pdf';
+}
+
+/// Downloads everyone in the area as one printable list: the server builds the
+/// PDF (grouped by place, exco first) and records who downloaded it.
+class _ListPdfButton extends StatefulWidget {
+  const _ListPdfButton({required this.area, required this.save});
+
+  final AreaRef area;
+  final SaveDownload save;
+
+  @override
+  State<_ListPdfButton> createState() => _ListPdfButtonState();
+}
+
+class _ListPdfButtonState extends State<_ListPdfButton> {
+  var _busy = false;
+
+  Future<void> _download() async {
+    final backend = TgcgBackend.of(context);
+    if (backend == null || _busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final area = widget.area;
+    setState(() => _busy = true);
+    try {
+      final pdf = await backend.members.listPdf(area);
+      final saved = await widget.save(pdf, listPdfName(area, DateTime.now()), 'application/pdf');
+      if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Saved in $saved')));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(failureMessage(error))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: _busy ? null : _download,
+    icon: _busy
+        ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+        : const Icon(Icons.picture_as_pdf_outlined),
+    label: Text(_busy ? 'Preparing the list' : 'Download list (PDF)'),
+  );
 }
 
 class _Trail extends StatelessWidget {

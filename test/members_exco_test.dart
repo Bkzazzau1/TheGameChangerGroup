@@ -691,6 +691,72 @@ void main() {
     expect(_lastMemberQuery(server).containsKey('zone__code'), isFalse);
   });
 
+  testWidgets('the open area downloads as one printable list', (tester) async {
+    final pdf = utf8.encode('%PDF-1.4 made-up list');
+    var allowed = true;
+    final server = _Server()
+      ..answer = (path, query) => switch (path) {
+        'GET members/analysis/' => _json(_analysis(national: false)),
+        'GET members/exco/' || 'GET members/' => _json(_page([])),
+        'GET members/list-pdf/' =>
+          allowed
+              ? http.Response.bytes(pdf, 200, headers: {'content-type': 'application/pdf'})
+              : _json({'detail': 'This area is outside your access.'}, 403),
+        _ => null,
+      };
+    final saved = <(List<int>, String, String)>[];
+    tester.view.physicalSize = const Size(1300, 5200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      TgcgBackend(
+        services: server.connect(),
+        child: MaterialApp(
+          home: Scaffold(
+            body: MembersExcoPage(
+              start: const AreaRef(GeographyLevel.state, 'KD', 'Kaduna'),
+              save: (bytes, name, mimeType) async {
+                saved.add((bytes, name, mimeType));
+                return 'Downloads/$name';
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _tapVisible(tester, find.text('Download list (PDF)'));
+    expect(
+      server.requests.where((request) => request.startsWith('GET members/list-pdf/')),
+      ['GET members/list-pdf/?level=state&code=KD'],
+    );
+    final now = DateTime.now();
+    final day =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    expect(saved.single.$1, pdf);
+    expect(saved.single.$2, 'tgcg-members-and-exco-kaduna-state-$day.pdf');
+    expect(saved.single.$3, 'application/pdf');
+    expect(find.text('Saved in Downloads/tgcg-members-and-exco-kaduna-state-$day.pdf'), findsOneWidget);
+
+    // The server decides who may download: its refusal is shown, nothing is saved.
+    allowed = false;
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Download list (PDF)'));
+    expect(saved, hasLength(1));
+    expect(find.text('This area is outside your access.'), findsOneWidget);
+  });
+
+  test('the printable list is named after its area and day', () {
+    final day = DateTime(2026, 10, 9);
+    expect(listPdfName(AreaRef.nigeria, day), 'tgcg-members-and-exco-nigeria-2026-10-09.pdf');
+    expect(
+      listPdfName(const AreaRef(GeographyLevel.lga, 'KD-KADUNA-NORTH', 'Kaduna North'), day),
+      'tgcg-members-and-exco-kaduna-north-lga-2026-10-09.pdf',
+    );
+  });
+
   test('numbers are grouped and shares rounded', () {
     expect(formatCount(160873), '160,873');
     expect(formatCount(999), '999');
