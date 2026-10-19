@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest release verified on 18 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest release verified on 19 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 18 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `5f93c030608e86a8a4df0e285ce6ae951ac91b51`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `312277a4e1db07463a80ccb7b27c2a8da15a9608`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -123,6 +123,56 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Members-only importer and Jigawa agents import (19 October 2026)
+
+Backend `312277a4e1db07463a80ccb7b27c2a8da15a9608`, including `02a80ee`, was deployed with the existing helper. All **593 backend tests passed on an isolated PostgreSQL database**, with zero failures and zero skips (312.52 seconds); Ruff passed. The isolated test database was removed and its absence confirmed. Three private harness checks also passed (17.45 seconds), and their separate test database was removed. Migration checks passed before and after the helper, which reported `No migrations to apply`; no migration ran and none remain pending. API/database health passed, the VPS backend checkout remains clean at that commit, and the private environment remains `600:tgcg:tgcg`.
+
+The new `import_members` command imports listed people as members only, calling `register_imported` with `verified=False`. Their identities remain unverified, with no identity-check records or review-queue entries created by the import. It creates no roles, appointments or agent accreditations, stores no NINs and sends no SMS. The chapter's statement of consent is recorded; the phone number as written is the initial password. Existing members are held back and left unchanged.
+
+This is a backend-only release. No web or APK was built or published. The live web build remains pinned frontend `b19327258a8191bc45abea569dc5919e129d79b8`, with main JavaScript SHA256 `1e2fc9caad5321c15ffbf115be6dc6d9950e1efb6704a2a95f0f81288ebcb689`; its metadata above is unchanged.
+
+The private VPS file passed its checksum, schema and **8,134-row** checks, owned by `tgcg` with mode 600. The dry run passed the exact approved gate, with zero already-registered holds and zero unexpected reasons:
+
+```text
+6562 to import, 1572 held back. Placed at 4905 polling units, 1599 wards and 58 LGAs.
+Dry run: nothing was saved. Add --commit to import.
+```
+
+| Held reason | Rows |
+| --- | ---: |
+| held by the list: no phone number on the list | 748 |
+| phone number shared with another row | 240 |
+| not a valid Nigerian mobile number | 193 |
+| the same person listed again (imported once) | 98 |
+| held by the list: several names share one phone number on the list | 97 |
+| the same person has another place on another row | 79 |
+| held by the list: the same name listed at several units with different phone numbers | 44 |
+| held by the list: no valid phone number on the list | 36 |
+| held by the list: names and phone numbers on the list cannot be paired | 34 |
+| no name | 3 |
+| **Total** | **1,572** |
+
+Production-cost password hashes were prepared in memory before database writes (3,024 seconds), preserving the existing password policy and source importer. The **single-transaction commit completed in 166 seconds**:
+
+```text
+Imported 6562 members, with no post; their identity is not checked yet.
+```
+
+Independent read-only checks confirmed **6,562 source members, 6,562 linked accounts, all 6,562 accounts active, and 6,562 consent audit events**. Every imported identity is unverified; verified-by and verified-at counts are zero. Appointments, delegation grants, accreditations, identity checks and review rows are all zero. Member placements are 4,905 at polling-unit level, 1,599 at ward level and 58 at LGA level; these count members, and all 19 LGA counts matched the approved brief. Already-registered review was unnecessary because its hold count was zero. No individual row diagnostics are included here.
+
+Global roles (86), assignments (2,359), grants (104), broadcasts (0) and deliveries (0) were unchanged. API health returned `status=ok`, `database=ok`; registration retains `phone_code_required=false`, and the Nginx SMS-code blocks, active web path and JavaScript checksum were unchanged. No existing member was changed, no production card photos were read, no bulk identity recheck was run and no messages were sent.
+
+The private CSV was successfully shredded and its absence independently confirmed. The job returned `Result=success`, `ExecMainStatus=0` and stopped cleanly. Aggregate evidence is retained privately in `/opt/tgcg/deployment/jigawa-members-import-20261019/summary.json`. Backups succeeded before deployment, again immediately before import and after the import. The final backup returned `Result=success`, `ExecMainStatus=0`, finishing at 06:09:39 UTC on 19 October 2026.
+
+| Import evidence | Result |
+| --- | --- |
+| Private file validation | Checksum, schema and 8,134 rows matched; VPS copy owned by `tgcg`, mode 600 |
+| Dry run | Exact approved gate passed: 6,562 importable, 1,572 held; zero registered holds and unexpected reasons |
+| Commit | One transaction succeeded: 6,562 members, with no appointments or identity verification |
+| Read-only postchecks | 6,562 members and linked active accounts, all unverified; consent audits and placements matched; zero appointments, grants, accreditations, identity checks and review rows |
+| Private CSV cleanup | Shredding succeeded; absence independently confirmed; job succeeded and stopped cleanly |
+| Backups | Pre-deployment, fresh pre-import and post-import backups succeeded; final `Result=success`, `ExecMainStatus=0` |
 
 ### Zamfara chapter import, second attempt (18 October 2026)
 
