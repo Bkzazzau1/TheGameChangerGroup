@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 19 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `312277a4e1db07463a80ccb7b27c2a8da15a9608`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `2c35f0dbd7a6685c302ad1402fe55451554418b3`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,12 +32,12 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53` (release directory timestamps use UTC).
-- Frontend build source: `b19327258a8191bc45abea569dc5919e129d79b8` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261018-081722-f6aa7cc4ea6d`.
+- Published release: `/var/www/tgcg/releases/web-20261019-143256-956119733647` (release directory timestamps use UTC).
+- Frontend build source: `1f155cc63648eef3b26e2170e87b51280e6a06b1` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `1e2fc9caad5321c15ffbf115be6dc6d9950e1efb6704a2a95f0f81288ebcb689`.
-- Build: 856 files, 59,134,358 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
+- Main JavaScript SHA256: `95611973364781fc41edc0cfe9c39e649a8e9a7dedfdd2943f36f409891eee5a`.
+- Build: 856 files, 59,136,554 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -124,13 +124,60 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
+### Printable member lists and Adamawa chapter import (19 October 2026)
+
+Backend `2c35f0dbd7a6685c302ad1402fe55451554418b3` was deployed, followed by the pinned production web build from frontend `1f155cc63648eef3b26e2170e87b51280e6a06b1`. No migrations were applied and none remain pending. Dependencies, runtime settings and timers were unchanged. No APK was built or published.
+
+Members & Exco can download an area's members and exco together as one printable PDF, grouped by place with exco first. Phone numbers are omitted, and FCC access supports multiple authorized areas. All **310 Flutter tests passed**, analysis reported no issues (50.1 seconds), and the production web build succeeded (47.5 seconds) with the required API define. Artifact and decoded-manifest privacy checks passed; all 817 source assets and every archive file matched their recorded sizes and hashes.
+
+All **600 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips (320.66 seconds); Ruff passed. A collection-counter bug in the private test wrapper was reconciled using an independent collection of 600 tests and matching source hashes. The successful full suite was not rerun. Both isolated test databases were removed.
+
+The new web release is `/var/www/tgcg/releases/web-20261019-143256-956119733647`; the previous `b193272` build at `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53` remains retained. The new bundle contains **856 files and 59,136,554 uncompressed bytes**, with main JavaScript SHA256 `95611973364781fc41edc0cfe9c39e649a8e9a7dedfdd2943f36f409891eee5a`. All **19 public checks passed**, including the served checksum, app-origin CORS/preflights and the new anonymous PDF request returning 401.
+
+One authorized National Administrator PDF check used a one-member ward and returned **HTTP 200**, **`application/pdf`**, **181,752 bytes**. The response was streamed to `/dev/null`; no PDF file was retained. Exactly **one** expected `members.list_downloaded` audit event was recorded.
+
+The private Adamawa VPS CSV matched its checksum and **42-row** contract, owned by `tgcg` with mode 600. The dry run passed the full approved baseline gate, with **20 already-registered holds and zero unexpected reasons**:
+
+```text
+22 to import, 20 held back. Placed at 17 polling units, 3 wards and 1 LGAs; 0 with a VIN.
+1 placed at state level.
+13 roles, 6 of them new.
+Dry run: nothing was saved. Add --commit to import.
+```
+
+The requested read-only review of all 20 already-registered rows completed before the commit was released. Individual row labels, roles and diagnostic lines are excluded from these notes. The existing 20 members, their roles and their appointments were left unchanged.
+
+The single-transaction commit succeeded:
+
+```text
+Imported 22 members with their roles (13 roles); 9 coordinators may appoint in their areas.
+```
+
+Independent and exact-brief postchecks confirmed **22 source members, all 22 verified, with 22 linked active accounts and 22 chapter consent/import audit events**. Member registration placements are **17 polling-unit, three ward, one LGA and one state**. There are **22 active appointments covering 34 areas**: 19 LGA, 13 state and two senatorial-district areas. The two deputy areas are one each in `SD/004/AD` and `SD/005/AD`. Seven FCCs cover **19 distinct LGAs, each exactly once**.
+
+All **nine delegation grants are active**, permit appointments at LGA, ward and polling-unit levels, and cover **21 areas** (19 LGA and two senatorial district); none permits redelegation. The import recorded **176 ordinary chapter identity-check records**, eight per member, without image reads (`read=False`). It supplied zero VINs, card photos or selfies. No production OCR or card-photo reads were performed.
+
+Global totals are **92 roles, 2,381 assignments and 113 grants**; broadcasts, deliveries, lists, projects and security dispatches remain zero. API/database health passed. Registration retains `phone_code_required=false`, the Nginx SMS-code blocks still return 503, and the environment remains `600:tgcg:tgcg`.
+
+The job returned `Result=success`, `ExecMainStatus=0` and stopped cleanly. The private CSV was shredded, and its absence was independently confirmed. Backups succeeded before deployment, again immediately before the import and after the completed release/import. The final backup returned `Result=success`, `ExecMainStatus=0`, finishing at **14:39:44 UTC on 19 October 2026**.
+
+| Release and import evidence | Result |
+| --- | --- |
+| Backend validation | 600 PostgreSQL tests passed, zero failures/skips; wrapper count reconciled independently; Ruff passed; both isolated databases removed |
+| Deployment and web validation | Backend `2c35f0d`, no migrations applied/pending; 310 Flutter tests passed, analysis clean; all 19 public checks passed |
+| Authorized PDF check | 200, `application/pdf`, 181,752 bytes, one expected download audit; streamed to `/dev/null`, no file retained |
+| Adamawa dry run | 22 importable, 20 already registered, zero unexpected holds; 13 roles, six new; full 42-row baseline matched |
+| Commit and independent postchecks | 22 verified members and linked active accounts, 22 chapter audits, 22 active appointments/34 areas, nine active grants/21 areas; all brief checks matched |
+| Existing records and private input | Existing 20 members, roles and appointments unchanged; private CSV shredded and absence independently confirmed; job succeeded |
+| Backups | Pre-deployment, fresh pre-import and final post-import backups succeeded; final `Result=success`, `ExecMainStatus=0`, finished 14:39:44 UTC |
+
 ### Members-only importer and Jigawa agents import (19 October 2026)
 
 Backend `312277a4e1db07463a80ccb7b27c2a8da15a9608`, including `02a80ee`, was deployed with the existing helper. All **593 backend tests passed on an isolated PostgreSQL database**, with zero failures and zero skips (312.52 seconds); Ruff passed. The isolated test database was removed and its absence confirmed. Three private harness checks also passed (17.45 seconds), and their separate test database was removed. Migration checks passed before and after the helper, which reported `No migrations to apply`; no migration ran and none remain pending. API/database health passed, the VPS backend checkout remains clean at that commit, and the private environment remains `600:tgcg:tgcg`.
 
 The new `import_members` command imports listed people as members only, calling `register_imported` with `verified=False`. Their identities remain unverified, with no identity-check records or review-queue entries created by the import. It creates no roles, appointments or agent accreditations, stores no NINs and sends no SMS. The chapter's statement of consent is recorded; the phone number as written is the initial password. Existing members are held back and left unchanged.
 
-This is a backend-only release. No web or APK was built or published. The live web build remains pinned frontend `b19327258a8191bc45abea569dc5919e129d79b8`, with main JavaScript SHA256 `1e2fc9caad5321c15ffbf115be6dc6d9950e1efb6704a2a95f0f81288ebcb689`; its metadata above is unchanged.
+This was a backend-only release. No web or APK was built or published for it. At that point the live web build remained pinned frontend `b19327258a8191bc45abea569dc5919e129d79b8`, with main JavaScript SHA256 `1e2fc9caad5321c15ffbf115be6dc6d9950e1efb6704a2a95f0f81288ebcb689`; the web bundle was unchanged by that release.
 
 The private VPS file passed its checksum, schema and **8,134-row** checks, owned by `tgcg` with mode 600. The dry run passed the exact approved gate, with zero already-registered holds and zero unexpected reasons:
 
