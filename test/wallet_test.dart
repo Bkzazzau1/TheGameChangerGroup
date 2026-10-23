@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -118,7 +119,7 @@ Map<String, dynamic> _payment({String status = 'pending', bool canDecide = false
 class _Server {
   final requests = <String>[];
   final bodies = <String, String>{};
-  http.Response? Function(String key) answer = (_) => null;
+  FutureOr<http.Response?> Function(String key) answer = (_) => null;
 
   BackendServices connect() => BackendServices.connect(
     'https://api.tgcg.test',
@@ -127,7 +128,7 @@ class _Server {
       final key = '${request.method} ${request.url.path.replaceFirst('/api/v1/', '')}';
       requests.add('$key ${request.url.query}');
       bodies[key] = utf8.decode(await body.toBytes());
-      final response = answer(key) ?? _json({'detail': 'Not found.'}, 404);
+      final response = await answer(key) ?? _json({'detail': 'Not found.'}, 404);
       return http.StreamedResponse(
         Stream.value(response.bodyBytes),
         response.statusCode,
@@ -163,7 +164,86 @@ Future<void> _pump(WidgetTester tester, _Server server, Widget page, {Set<String
   await tester.pumpAndSettle();
 }
 
+Future<({_Server server, Completer<http.Response> pending, Finder submit})> _pendingWalletDialog(
+  WidgetTester tester,
+  String operation,
+) async {
+  final pending = Completer<http.Response>();
+  final server = _Server();
+  server.answer = (key) => switch (key) {
+    'GET me/wallet/' => _json(_wallet(account: _gtbank, credits: 3)),
+    'GET me/wallet/withdrawals/' => _json(_page([])),
+    'GET wallets/credit-rates/' => _json({'current': _rate(), 'history': []}),
+    'POST me/wallet/convert/' ||
+    'POST me/wallet/withdrawals/' ||
+    'POST wallets/credit-rates/' => pending.future,
+    _ => null,
+  };
+  if (operation == 'rates') {
+    await _pump(tester, server, const WalletPaymentsPage(), can: {'manageCreditRates'});
+    await tester.tap(find.text('Change rates'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Reason'), 'Synthetic rate correction');
+  } else {
+    await _pump(tester, server, const MyWalletPage());
+    final label = operation == 'convert' ? 'Convert to naira' : 'Withdraw';
+    await tester.ensureVisible(find.text(label));
+    await tester.tap(find.text(label));
+    await tester.pumpAndSettle();
+  }
+  await tester.pump();
+  final label = switch (operation) {
+    'convert' => 'Convert',
+    'withdraw' => 'Send for approval',
+    _ => 'Save rates',
+  };
+  return (server: server, pending: pending, submit: find.widgetWithText(FilledButton, label));
+}
+
 void main() {
+  for (final operation in ['convert', 'withdraw', 'rates']) {
+    testWidgets('$operation submits once and a dismissed response leaves the page open', (
+      tester,
+    ) async {
+      final state = await _pendingWalletDialog(tester, operation);
+      final submit = tester.widget<FilledButton>(state.submit).onPressed!;
+      submit();
+      submit(); // The previous frame's callback must not submit a second time.
+      await tester.pump();
+      expect(state.server.requests.where((request) => request.startsWith('POST ')), hasLength(1));
+      final dialog = tester.element(find.byType(AlertDialog));
+      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      expect(dialog.mounted, isTrue); // The dismissal animation has not finished.
+      expect(ModalRoute.of(dialog)?.isCurrent, isFalse);
+      state.pending.complete(
+        _json(switch (operation) {
+          'convert' => _wallet(account: _gtbank, balance: '5300.50'),
+          'withdraw' => _withdrawal(),
+          _ => _rate(),
+        }),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(operation == 'rates' ? WalletPaymentsPage : MyWalletPage), findsOneWidget);
+    });
+
+    testWidgets('$operation ignores a server error after its dialog is disposed', (tester) async {
+      final state = await _pendingWalletDialog(tester, operation);
+      await tester.tap(state.submit);
+      await tester.pump();
+      final dialog = tester.element(find.byType(AlertDialog));
+      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      await tester.pumpAndSettle();
+      expect(dialog.mounted, isFalse);
+      state.pending.complete(_json({'detail': 'Synthetic request failed.'}, 400));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(operation == 'rates' ? WalletPaymentsPage : MyWalletPage), findsOneWidget);
+    });
+  }
   test('amounts show in naira with thousands grouped', () {
     expect(formatNaira('5000.50'), '₦5,000.50');
     expect(formatNaira('1000000.00'), '₦1,000,000.00');

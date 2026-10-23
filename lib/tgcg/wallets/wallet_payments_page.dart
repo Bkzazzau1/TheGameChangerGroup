@@ -905,6 +905,8 @@ class _CreditRatesDialogState extends State<_CreditRatesDialog> {
       _reason.text.trim().isNotEmpty;
 
   Future<void> _save() async {
+    if (!_ready) return;
+    final route = ModalRoute.of(context);
     setState(() {
       _saving = true;
       _errors = const {};
@@ -917,8 +919,10 @@ class _CreditRatesDialogState extends State<_CreditRatesDialog> {
         minWithdrawal: _minimum.text.replaceAll(',', ''),
         reason: _reason.text,
       );
-      if (mounted) Navigator.pop(context, rate);
+      if (!mounted || route?.isCurrent != true) return;
+      Navigator.pop(context, rate);
     } catch (error) {
+      if (!mounted || route?.isCurrent != true) return;
       final fields = <String, String>{
         if (error is ApiException)
           for (final field in const [

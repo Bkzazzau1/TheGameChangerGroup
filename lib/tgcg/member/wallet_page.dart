@@ -480,14 +480,18 @@ class _ConvertCreditsDialogState extends State<ConvertCreditsDialog> {
   bool get _ready => !_saving && _count >= 1 && _count <= widget.wallet.credits;
 
   Future<void> _save() async {
+    if (!_ready) return;
+    final route = ModalRoute.of(context);
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
       final wallet = await TgcgBackend.of(context)!.wallets.convertCredits(_count);
-      if (mounted) Navigator.pop(context, wallet);
+      if (!mounted || route?.isCurrent != true) return;
+      Navigator.pop(context, wallet);
     } catch (error) {
+      if (!mounted || route?.isCurrent != true) return;
       setState(() {
         _saving = false;
         _error = error is ApiException
@@ -568,14 +572,18 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
   }
 
   Future<void> _save() async {
+    if (!_ready) return;
+    final route = ModalRoute.of(context);
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
       final withdrawal = await TgcgBackend.of(context)!.wallets.requestWithdrawal(_value);
-      if (mounted) Navigator.pop(context, withdrawal);
+      if (!mounted || route?.isCurrent != true) return;
+      Navigator.pop(context, withdrawal);
     } catch (error) {
+      if (!mounted || route?.isCurrent != true) return;
       setState(() {
         _saving = false;
         _error = error is ApiException
