@@ -7,11 +7,14 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/wallet_repository.dart';
 import '../domain/permissions.dart';
+import '../member/wallet_page.dart' show WalletEntryTile, withdrawalPill;
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 
-/// Payments to members' wallets in the account's areas: requested by one
-/// person, approved or rejected by another.
+/// Members' wallets in the account's areas: payments (requested by one
+/// person, approved or rejected by another), withdrawals to members' bank
+/// accounts (approved by a second person, then paid through Paystack), and
+/// the credit rates a National Administrator sets.
 class WalletPaymentsPage extends StatefulWidget {
   const WalletPaymentsPage({super.key});
 
@@ -27,15 +30,26 @@ const _filters = <(String?, String)>[
   (null, 'All'),
 ];
 
+enum _Section { payments, withdrawals, rates }
+
+/// The sections this account may open: each needs the powers its list asks for.
+List<_Section> _sectionsFor(TgcgSessionController session) => [
+  if (session.canAny(const [
+    TgcgCapability.viewWallets,
+    TgcgCapability.creditWallets,
+    TgcgCapability.approveWalletCredits,
+  ]))
+    _Section.payments,
+  if (session.canAny(const [TgcgCapability.viewWallets, TgcgCapability.approveWithdrawals]))
+    _Section.withdrawals,
+  if (session.canAny(const [TgcgCapability.viewWallets, TgcgCapability.manageCreditRates]))
+    _Section.rates,
+];
+
 class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
   int _filter = 0;
+  _Section? _section;
   Future<ApiPage<WalletPayment>>? _payments;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (TgcgBackend.of(context) != null) _payments ??= _load();
-  }
 
   Future<ApiPage<WalletPayment>> _load() =>
       TgcgBackend.of(context)!.wallets.payments(status: _filters[_filter].$1);
@@ -128,11 +142,48 @@ class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
       );
     }
     final session = TgcgSession.of(context);
+    final sections = _sectionsFor(session);
+    final section = sections.contains(_section) ? _section! : sections.firstOrNull;
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         const Text('Wallets', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        if (sections.length > 1) ...[
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton<_Section>(
+              showSelectedIcon: false,
+              segments: [
+                for (final each in sections)
+                  ButtonSegment(
+                    value: each,
+                    label: Text(switch (each) {
+                      _Section.payments => 'Payments',
+                      _Section.withdrawals => 'Withdrawals',
+                      _Section.rates => 'Credit rates',
+                    }),
+                  ),
+              ],
+              selected: {?section},
+              onSelectionChanged: (chosen) => setState(() => _section = chosen.first),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
+        ...switch (section) {
+          _Section.payments => _paymentsSection(session),
+          _Section.withdrawals => const [_WithdrawalsSection()],
+          _Section.rates => const [_CreditRatesSection()],
+          null => const <Widget>[],
+        },
+      ],
+    );
+  }
+
+  List<Widget> _paymentsSection(TgcgSessionController session) {
+    _payments ??= _load();
+    return [
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -206,8 +257,7 @@ class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
             );
           },
         ),
-      ],
-    );
+    ];
   }
 }
 
@@ -437,16 +487,15 @@ class _WalletDialog extends StatelessWidget {
                       : '${account.bankName} ${account.accountNumber}',
                   style: const TextStyle(color: TgcgColors.muted),
                 ),
-                const SizedBox(height: 8),
-                for (final entry in wallet.entries)
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(entry.purpose.isEmpty ? 'Payment from TGCG' : entry.purpose),
-                    subtitle: entry.createdAt == null ? null : Text(formatMoment(entry.createdAt!)),
-                    trailing: Text('+${formatNaira(entry.amount)}'),
-                  ),
               ],
+              const SizedBox(height: 8),
+              Text(
+                '${wallet.credits} ${wallet.credits == 1 ? 'credit' : 'credits'}, '
+                'worth ${formatNaira(wallet.creditsWorth)} today',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              for (final entry in wallet.entries) WalletEntryTile(entry: entry, dense: true),
             ],
           ),
         ),
@@ -454,4 +503,500 @@ class _WalletDialog extends StatelessWidget {
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
     );
   }
+}
+
+/// Withdrawals by members in the account's areas. A different person with
+/// approveWithdrawals approves one (Paystack then pays it, if the bank holds
+/// the account in the member's name) or rejects it.
+class _WithdrawalsSection extends StatefulWidget {
+  const _WithdrawalsSection();
+
+  @override
+  State<_WithdrawalsSection> createState() => _WithdrawalsSectionState();
+}
+
+const _withdrawalFilters = <(WithdrawalStatus?, String)>[
+  (WithdrawalStatus.pending, 'Awaiting approval'),
+  (WithdrawalStatus.processing, 'Being paid'),
+  (WithdrawalStatus.paid, 'Paid'),
+  (WithdrawalStatus.failed, 'Not paid'),
+  (WithdrawalStatus.reversed, 'Returned by the bank'),
+  (WithdrawalStatus.rejected, 'Rejected'),
+  (WithdrawalStatus.cancelled, 'Cancelled'),
+  (null, 'All'),
+];
+
+class _WithdrawalsSectionState extends State<_WithdrawalsSection> {
+  int _filter = 0;
+  Future<ApiPage<Withdrawal>>? _withdrawals;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _withdrawals ??= _load();
+  }
+
+  Future<ApiPage<Withdrawal>> _load() =>
+      TgcgBackend.of(context)!.wallets.withdrawals(status: _withdrawalFilters[_filter].$1?.name);
+
+  void _reload() => setState(() {
+    _withdrawals = _load();
+  });
+
+  Future<void> _approve(Withdrawal withdrawal) async {
+    final wallets = TgcgBackend.of(context)!.wallets;
+    final sure = await confirmAction(
+      context,
+      title: 'Approve and pay this withdrawal?',
+      message: '${formatNaira(withdrawal.amount)} to ${withdrawal.memberName} '
+          '(${withdrawal.member}), into ${withdrawal.bankName} ${withdrawal.accountNumber}. '
+          "It is paid only if the bank's name for the account is the member's.",
+      action: 'Approve and pay',
+    );
+    if (!sure) return;
+    try {
+      final done = await wallets.approveWithdrawal(withdrawal.id);
+      if (!mounted) return;
+      showDone(context, switch (done.status) {
+        WithdrawalStatus.paid => 'Withdrawal paid.',
+        WithdrawalStatus.failed || WithdrawalStatus.reversed =>
+          'Not paid${done.failureReason.isEmpty ? '' : ': ${done.failureReason}'}. '
+              "The money is back in the member's wallet.",
+        _ => 'Withdrawal approved; the payment is on its way.',
+      });
+      _reload();
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  Future<void> _reject(Withdrawal withdrawal) async {
+    final wallets = TgcgBackend.of(context)!.wallets;
+    final reason = await promptText(
+      context,
+      title: 'Reject this withdrawal?',
+      label: 'Reason',
+      action: 'Reject',
+      required: true,
+      destructive: true,
+    );
+    if (reason == null) return;
+    try {
+      await wallets.rejectWithdrawal(withdrawal.id, reason);
+      if (!mounted) return;
+      showDone(context, "Withdrawal rejected; the money is back in the member's wallet.");
+      _reload();
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (var i = 0; i < _withdrawalFilters.length; i++)
+            ChoiceChip(
+              label: Text(_withdrawalFilters[i].$2),
+              selected: _filter == i,
+              onSelected: (_) {
+                _filter = i;
+                _reload();
+              },
+            ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      FutureBuilder<ApiPage<Withdrawal>>(
+        future: _withdrawals,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return TgcgEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: 'Withdrawals could not be loaded',
+              message: failureMessage(snapshot.error!),
+              action: OutlinedButton(onPressed: _reload, child: const Text('Try again')),
+            );
+          }
+          final page = snapshot.data;
+          if (page == null) {
+            return const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (page.items.isEmpty) {
+            return const TgcgEmptyState(
+              icon: Icons.account_balance_outlined,
+              title: 'No withdrawals here',
+              message: 'Withdrawals by members in your areas appear here.',
+            );
+          }
+          return Column(
+            children: [
+              for (final withdrawal in page.items)
+                _WithdrawalTile(
+                  withdrawal: withdrawal,
+                  onApprove: withdrawal.canDecide ? () => _approve(withdrawal) : null,
+                  onReject: withdrawal.canDecide ? () => _reject(withdrawal) : null,
+                ),
+            ],
+          );
+        },
+      ),
+    ],
+  );
+}
+
+class _WithdrawalTile extends StatelessWidget {
+  const _WithdrawalTile({required this.withdrawal, this.onApprove, this.onReject});
+
+  final Withdrawal withdrawal;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 10),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${withdrawal.memberName} (${withdrawal.member})',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                formatNaira(withdrawal.amount),
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('${withdrawal.bankName} ${withdrawal.accountNumber}'),
+          if (withdrawal.bankAccountName.isNotEmpty)
+            Text(
+              "Bank's name for the account: ${withdrawal.bankAccountName}",
+              style: const TextStyle(color: TgcgColors.muted),
+            ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              withdrawalPill(withdrawal.status),
+              Text(
+                [
+                  if (withdrawal.createdAt != null) 'Asked ${formatMoment(withdrawal.createdAt!)}',
+                  if (withdrawal.decidedBy != null) 'decided by ${withdrawal.decidedBy}',
+                ].join(' · '),
+                style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+          for (final why in [withdrawal.failureReason, withdrawal.decisionReason])
+            if (why.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(why, style: const TextStyle(color: TgcgColors.muted)),
+            ],
+          if (onApprove != null) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(onPressed: onApprove, child: const Text('Approve')),
+                if (onReject != null)
+                  OutlinedButton(onPressed: onReject, child: const Text('Reject')),
+              ],
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// What registering a member earns, what a credit is worth and the smallest
+/// withdrawal, now and before. National Administrators set new rates.
+class _CreditRatesSection extends StatefulWidget {
+  const _CreditRatesSection();
+
+  @override
+  State<_CreditRatesSection> createState() => _CreditRatesSectionState();
+}
+
+class _CreditRatesSectionState extends State<_CreditRatesSection> {
+  Future<({CreditRate current, List<CreditRate> history})>? _rates;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _rates ??= TgcgBackend.of(context)!.wallets.creditRates();
+  }
+
+  void _reload() => setState(() {
+    _rates = TgcgBackend.of(context)!.wallets.creditRates();
+  });
+
+  Future<void> _change(CreditRate current) async {
+    final saved = await showDialog<CreditRate>(
+      context: context,
+      builder: (_) => _CreditRatesDialog(current: current),
+    );
+    if (saved == null || !mounted) return;
+    showDone(context, 'New rates saved.');
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSet = TgcgSession.of(context).can(TgcgCapability.manageCreditRates);
+    return FutureBuilder<({CreditRate current, List<CreditRate> history})>(
+      future: _rates,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return TgcgEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'The credit rates could not be loaded',
+            message: failureMessage(snapshot.error!),
+            action: OutlinedButton(onPressed: _reload, child: const Text('Try again')),
+          );
+        }
+        final rates = snapshot.data;
+        if (rates == null) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TgcgSectionCard(
+              title: 'Current rates',
+              trailing: canSet
+                  ? FilledButton(
+                      onPressed: () => _change(rates.current),
+                      child: const Text('Change rates'),
+                    )
+                  : null,
+              child: _RateFacts(rate: rates.current),
+            ),
+            if (rates.history.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              TgcgSectionCard(
+                title: 'Earlier rates',
+                child: Column(
+                  children: [
+                    for (final rate in rates.history)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_rateSummary(rate)),
+                        subtitle: Text(
+                          [
+                            if (rate.createdAt != null) formatMoment(rate.createdAt!),
+                            if (rate.setBy != null) 'set by ${rate.setBy}',
+                            if (rate.reason.isNotEmpty) rate.reason,
+                          ].join(' · '),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+String _rateSummary(CreditRate rate) => [
+  rate.creditsPerRegistration == 0
+      ? 'No credits for registering (paused)'
+      : '${rate.creditsPerRegistration} '
+            '${rate.creditsPerRegistration == 1 ? 'credit' : 'credits'} a member registered',
+  '${formatNaira(rate.nairaPerCredit)} a credit',
+  'withdrawals from ${formatNaira(rate.minWithdrawal)}',
+].join(' · ');
+
+class _RateFacts extends StatelessWidget {
+  const _RateFacts({required this.rate});
+
+  final CreditRate rate;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget line(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 170, child: Text(label, style: const TextStyle(color: TgcgColors.muted))),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w800))),
+        ],
+      ),
+    );
+    return Column(
+      children: [
+        line(
+          'Credits a member registered',
+          rate.creditsPerRegistration == 0 ? 'None (paused)' : '${rate.creditsPerRegistration}',
+        ),
+        line('Naira a credit', formatNaira(rate.nairaPerCredit)),
+        line('Smallest withdrawal', formatNaira(rate.minWithdrawal)),
+        line(
+          'Set',
+          rate.createdAt == null
+              ? 'Starting rates'
+              : [
+                  formatMoment(rate.createdAt!),
+                  if (rate.setBy != null) 'by ${rate.setBy}',
+                  if (rate.reason.isNotEmpty) rate.reason,
+                ].join(' · '),
+        ),
+      ],
+    );
+  }
+}
+
+class _CreditRatesDialog extends StatefulWidget {
+  const _CreditRatesDialog({required this.current});
+
+  final CreditRate current;
+
+  @override
+  State<_CreditRatesDialog> createState() => _CreditRatesDialogState();
+}
+
+class _CreditRatesDialogState extends State<_CreditRatesDialog> {
+  late final _credits = TextEditingController(text: '${widget.current.creditsPerRegistration}');
+  late final _naira = TextEditingController(text: widget.current.nairaPerCredit);
+  late final _minimum = TextEditingController(text: widget.current.minWithdrawal);
+  final _reason = TextEditingController();
+  Map<String, String> _errors = const {};
+  String? _error;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _credits.dispose();
+    _naira.dispose();
+    _minimum.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  bool get _ready =>
+      !_saving &&
+      int.tryParse(_credits.text) != null &&
+      _naira.text.trim().isNotEmpty &&
+      _minimum.text.trim().isNotEmpty &&
+      _reason.text.trim().isNotEmpty;
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _errors = const {};
+      _error = null;
+    });
+    try {
+      final rate = await TgcgBackend.of(context)!.wallets.setCreditRates(
+        creditsPerRegistration: int.parse(_credits.text),
+        nairaPerCredit: _naira.text.replaceAll(',', ''),
+        minWithdrawal: _minimum.text.replaceAll(',', ''),
+        reason: _reason.text,
+      );
+      if (mounted) Navigator.pop(context, rate);
+    } catch (error) {
+      final fields = <String, String>{
+        if (error is ApiException)
+          for (final field in const [
+            'credits_per_registration',
+            'naira_per_credit',
+            'min_withdrawal',
+            'reason',
+          ])
+            if (error.fieldError(field) case final message?) field: message,
+      };
+      setState(() {
+        _saving = false;
+        _errors = fields;
+        _error = fields.isEmpty ? failureMessage(error) : null;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Change the credit rates'),
+    content: SizedBox(
+      width: 400,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _credits,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: 'Credits a member registered',
+                helperText: '0 pauses them',
+                errorText: _errors['credits_per_registration'],
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _naira,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              decoration: InputDecoration(
+                labelText: 'Naira a credit',
+                prefixText: '₦',
+                errorText: _errors['naira_per_credit'],
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _minimum,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              decoration: InputDecoration(
+                labelText: 'Smallest withdrawal',
+                prefixText: '₦',
+                errorText: _errors['min_withdrawal'],
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _reason,
+              maxLength: 1000,
+              decoration: InputDecoration(labelText: 'Reason', errorText: _errors['reason']),
+              onChanged: (_) => setState(() {}),
+            ),
+            if (_error != null) Text(_error!, style: const TextStyle(color: TgcgColors.danger)),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+      FilledButton(onPressed: _ready ? _save : null, child: const Text('Save rates')),
+    ],
+  );
 }

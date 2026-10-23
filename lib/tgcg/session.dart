@@ -399,11 +399,14 @@ Set<TgcgModule> allowedModulesFor(
   ])) {
     modules.add(TgcgModule.messages);
   }
-  // Wallets: payments to members, for finance staff in their areas.
+  // Wallets: payments to members, withdrawals and credit rates, for finance
+  // staff in their areas and the administrators who set the rates.
   if (any(const [
     TgcgCapability.viewWallets,
     TgcgCapability.creditWallets,
     TgcgCapability.approveWalletCredits,
+    TgcgCapability.approveWithdrawals,
+    TgcgCapability.manageCreditRates,
   ])) {
     modules.add(TgcgModule.wallets);
   }

@@ -18,22 +18,85 @@ http.Response _json(Object body, [int status = 200]) =>
 Map<String, dynamic> _page(List<Object> results) =>
     {'count': results.length, 'next': null, 'previous': null, 'results': results};
 
-Map<String, dynamic> _wallet({Map<String, dynamic>? account, bool hasWallet = true}) => {
+Map<String, dynamic> _rate({int credits = 1, String naira = '100.00', String minimum = '1000.00'}) => {
+  'credits_per_registration': credits,
+  'naira_per_credit': naira,
+  'min_withdrawal': minimum,
+  'reason': '',
+  'set_by': null,
+  'created_at': null,
+};
+
+const _paid = {
+  'id': 'e1',
+  'kind': 'credit',
+  'amount': '5000.50',
+  'balance_after': '5000.50',
+  'credits': 0,
+  'credits_after': 0,
+  'purpose': 'PU agent pay',
+  'created_at': '2026-10-16T10:00:00Z',
+};
+
+const _earned = {
+  'id': 'e2',
+  'kind': 'reward',
+  'amount': '0.00',
+  'balance_after': '0.00',
+  'credits': 3,
+  'credits_after': 3,
+  'purpose': 'Registered Bala Musa',
+  'created_at': '2026-10-17T10:00:00Z',
+};
+
+const _gtbank = {
+  'bank': 'gtbank',
+  'bank_name': 'Guaranty Trust Bank (GTBank)',
+  'account_number': '0123456789',
+  'payable': true,
+};
+
+Map<String, dynamic> _wallet({
+  Map<String, dynamic>? account,
+  bool hasWallet = true,
+  String balance = '5000.50',
+  int credits = 0,
+  List<Object> entries = const [_paid],
+}) => {
   'membership_number': 'TGCG-000300',
   'has_wallet': hasWallet,
   'account_name': 'Hauwa Sani',
-  'balance': '5000.50',
+  'balance': balance,
+  'credits': credits,
+  'credits_worth': '${credits * 100}.00',
+  'rate': _rate(),
   'bank_account': account,
-  'entries': [
-    {
-      'id': 'e1',
-      'kind': 'credit',
-      'amount': '5000.50',
-      'balance_after': '5000.50',
-      'purpose': 'PU agent pay',
-      'created_at': '2026-10-16T10:00:00Z',
-    },
-  ],
+  'entries': entries,
+};
+
+Map<String, dynamic> _withdrawal({
+  String status = 'pending',
+  bool canDecide = false,
+  bool canCancel = false,
+  String failure = '',
+}) => {
+  'id': 'w1',
+  'member': 'TGCG-000300',
+  'member_name': 'Hauwa Sani',
+  'amount': '1500.00',
+  'bank': 'gtbank',
+  'bank_name': 'Guaranty Trust Bank (GTBank)',
+  'account_number': canDecide ? '******6789' : '0123456789',
+  'status': status,
+  'created_at': '2026-10-23T10:00:00Z',
+  'decided_by': status == 'pending' ? null : 'TGCG-000102',
+  'decided_at': null,
+  'decision_reason': '',
+  'bank_account_name': status == 'pending' ? '' : 'SANI HAUWA',
+  'failure_reason': failure,
+  'finished_at': null,
+  'can_decide': canDecide,
+  'can_cancel': canCancel,
 };
 
 Map<String, dynamic> _payment({String status = 'pending', bool canDecide = false}) => {
@@ -112,19 +175,13 @@ void main() {
     final server = _Server();
     server.answer = (key) => switch (key) {
       'GET me/wallet/' => _json(_wallet()),
+      'GET me/wallet/withdrawals/' => _json(_page([])),
       'GET wallets/banks/' => _json([
-        {'code': 'access', 'name': 'Access Bank'},
-        {'code': 'gtbank', 'name': 'Guaranty Trust Bank (GTBank)'},
+        {'code': 'access', 'name': 'Access Bank', 'payable': true},
+        {'code': 'gtbank', 'name': 'Guaranty Trust Bank (GTBank)', 'payable': true},
+        {'code': 'lapo', 'name': 'LAPO Microfinance Bank', 'payable': false},
       ]),
-      'PUT me/wallet/bank-account/' => _json(
-        _wallet(
-          account: {
-            'bank': 'gtbank',
-            'bank_name': 'Guaranty Trust Bank (GTBank)',
-            'account_number': '0123456789',
-          },
-        ),
-      ),
+      'PUT me/wallet/bank-account/' => _json(_wallet(account: _gtbank)),
       _ => null,
     };
     await _pump(tester, server, const MyWalletPage());
@@ -140,6 +197,14 @@ void main() {
     expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('Hauwa Sani')), findsOneWidget);
     await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
+    // A bank Paystack does not pay is listed, but cannot be chosen.
+    final lapo = tester.widget<DropdownMenuItem<String>>(
+      find.ancestor(
+        of: find.text('LAPO Microfinance Bank (cannot receive withdrawals)').last,
+        matching: find.byType(DropdownMenuItem<String>),
+      ),
+    );
+    expect(lapo.enabled, isFalse);
     await tester.tap(find.text('Guaranty Trust Bank (GTBank)').last);
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Account number'), '0123456789');
@@ -157,10 +222,253 @@ void main() {
 
   testWidgets('a member whose identity is not checked has no wallet yet', (tester) async {
     final server = _Server();
-    server.answer = (key) => key == 'GET me/wallet/' ? _json(_wallet(hasWallet: false)) : null;
+    server.answer = (key) => key == 'GET me/wallet/'
+        ? _json(_wallet(hasWallet: false, balance: '0.00', entries: const []))
+        : null;
     await _pump(tester, server, const MyWalletPage());
     expect(find.text('No wallet yet'), findsOneWidget);
     expect(find.text('Payout account'), findsNothing);
+  });
+
+  testWidgets('credits for registering are kept until the identity is checked', (tester) async {
+    final server = _Server();
+    server.answer = (key) => key == 'GET me/wallet/'
+        ? _json(_wallet(hasWallet: false, balance: '0.00', credits: 3, entries: const [_earned]))
+        : null;
+    await _pump(tester, server, const MyWalletPage());
+    expect(find.text('3 credits'), findsOneWidget);
+    expect(find.text('Worth ₦300.00 today · ₦100.00 each'), findsOneWidget);
+    expect(find.text('Registered Bala Musa'), findsOneWidget);
+    expect(find.text('+3 credits'), findsOneWidget);
+    expect(find.text('Your wallet opens once your identity is checked.'), findsOneWidget);
+    // Converting and withdrawing wait for the identity check.
+    expect(find.text('Convert to naira'), findsNothing);
+    expect(find.text('Withdraw'), findsNothing);
+    expect(find.text('Payout account'), findsNothing);
+    expect(server.requests.where((r) => r.startsWith('GET me/wallet/withdrawals/')), isEmpty);
+  });
+
+  testWidgets('a verified member converts credits to naira', (tester) async {
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET me/wallet/' => _json(_wallet(account: _gtbank, credits: 3, entries: const [_earned, _paid])),
+      'GET me/wallet/withdrawals/' => _json(_page([])),
+      'POST me/wallet/convert/' => _json(
+        _wallet(
+          account: _gtbank,
+          balance: '5300.50',
+          entries: const [
+            {
+              'id': 'e3',
+              'kind': 'conversion',
+              'amount': '300.00',
+              'balance_after': '5300.50',
+              'credits': -3,
+              'credits_after': 0,
+              'purpose': 'Converted 3 credits',
+              'created_at': '2026-10-23T10:00:00Z',
+            },
+            _earned,
+            _paid,
+          ],
+        ),
+      ),
+      _ => null,
+    };
+    await _pump(tester, server, const MyWalletPage());
+    await tester.ensureVisible(find.text('Convert to naira'));
+    await tester.tap(find.text('Convert to naira'));
+    await tester.pumpAndSettle();
+    expect(find.text('₦300.00'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Credits'), '2');
+    await tester.pump();
+    expect(find.text('₦200.00'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Credits'), '3');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Convert'));
+    await tester.pumpAndSettle();
+
+    expect(jsonDecode(server.bodies['POST me/wallet/convert/']!), {'credits': 3});
+    expect(find.text('Credits converted. Your balance is ₦5,300.50.'), findsOneWidget);
+    expect(find.text('₦5,300.50'), findsWidgets);
+    expect(find.text('0 credits'), findsOneWidget);
+    expect(find.text('Converted 3 credits'), findsOneWidget);
+  });
+
+  testWidgets('a member withdraws to the payout account, then cancels', (tester) async {
+    var withdrawals = <Object>[];
+    var balance = '5000.50';
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET me/wallet/' => _json(_wallet(account: _gtbank, balance: balance)),
+      'GET me/wallet/withdrawals/' => _json(_page(withdrawals)),
+      'POST me/wallet/withdrawals/' => () {
+        balance = '3500.50';
+        withdrawals = [_withdrawal(canCancel: true)];
+        return _json(_withdrawal(canCancel: true), 201);
+      }(),
+      'POST me/wallet/withdrawals/w1/cancel/' => () {
+        balance = '5000.50';
+        withdrawals = [_withdrawal(status: 'cancelled')];
+        return _json(_withdrawal(status: 'cancelled'));
+      }(),
+      _ => null,
+    };
+    await _pump(tester, server, const MyWalletPage());
+    await tester.tap(find.widgetWithText(FilledButton, 'Withdraw'));
+    await tester.pumpAndSettle();
+    expect(find.text('Guaranty Trust Bank (GTBank) 0123456789\nHauwa Sani'), findsOneWidget);
+    // Below the smallest withdrawal, it cannot be sent.
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '500');
+    await tester.pump();
+    expect(
+      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Send for approval')).onPressed,
+      isNull,
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '1,500');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Send for approval'));
+    await tester.pumpAndSettle();
+
+    expect(jsonDecode(server.bodies['POST me/wallet/withdrawals/']!), {'amount': '1500'});
+    expect(find.text('Withdrawal of ₦1,500.00 sent for approval.'), findsOneWidget);
+    expect(find.text('Awaiting approval'), findsOneWidget);
+    expect(find.text('A withdrawal of yours is still being handled.'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Withdraw')).onPressed,
+      isNull,
+    );
+
+    await tester.pump(const Duration(seconds: 5)); // the first message goes
+    await tester.ensureVisible(find.text('Cancel withdrawal'));
+    await tester.tap(find.text('Cancel withdrawal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Cancel withdrawal'));
+    await tester.pumpAndSettle();
+    expect(server.requests, contains('POST me/wallet/withdrawals/w1/cancel/ '));
+    expect(find.text('Withdrawal cancelled.'), findsOneWidget);
+    expect(find.text('Cancelled'), findsOneWidget);
+  });
+
+  testWidgets('an account at a bank Paystack does not pay cannot be withdrawn to', (tester) async {
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET me/wallet/' => _json(
+        _wallet(
+          account: {
+            'bank': 'lapo',
+            'bank_name': 'LAPO Microfinance Bank',
+            'account_number': '0123456789',
+            'payable': false,
+          },
+        ),
+      ),
+      'GET me/wallet/withdrawals/' => _json(_page([])),
+      _ => null,
+    };
+    await _pump(tester, server, const MyWalletPage());
+    expect(
+      find.text('Withdrawals cannot be paid into LAPO Microfinance Bank. Choose another bank.'),
+      findsOneWidget,
+    );
+    expect(find.text('Withdrawals cannot be paid into this bank. Choose another bank.'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Withdraw')).onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('a second person approves or rejects withdrawals', (tester) async {
+    var approval = _json(_withdrawal(status: 'processing'));
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET withdrawals/' => _json(_page([_withdrawal(canDecide: true)])),
+      'POST withdrawals/w1/approve/' => approval,
+      'POST withdrawals/w1/reject/' => _json(_withdrawal(status: 'rejected')),
+      _ => null,
+    };
+    await _pump(tester, server, const WalletPaymentsPage(), can: {'approveWithdrawals'});
+    // Only withdrawals: no payments are asked for, and no section switch shows.
+    expect(server.requests, contains('GET withdrawals/ status=pending'));
+    expect(server.requests.where((r) => r.startsWith('GET wallet-payments/')), isEmpty);
+    expect(find.byType(SegmentedButton<Object>), findsNothing);
+    expect(find.text('Hauwa Sani (TGCG-000300)'), findsOneWidget);
+    expect(find.text('Guaranty Trust Bank (GTBank) ******6789'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
+    await tester.pumpAndSettle();
+    expect(find.text('Approve and pay this withdrawal?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve and pay'));
+    await tester.pumpAndSettle();
+    expect(server.requests, contains('POST withdrawals/w1/approve/ '));
+    expect(find.text('Withdrawal approved; the payment is on its way.'), findsOneWidget);
+
+    // Without Paystack on the server, the approval is refused and says why.
+    approval = _json({
+      'detail': 'Withdrawals cannot be paid yet: Paystack is not set up on the server.',
+    }, 503);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve and pay'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Withdrawals cannot be paid yet: Paystack is not set up on the server.'),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Reject'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Wrong account');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Reject'));
+    await tester.pumpAndSettle();
+    expect(jsonDecode(server.bodies['POST withdrawals/w1/reject/']!), {'reason': 'Wrong account'});
+    expect(find.text("Withdrawal rejected; the money is back in the member's wallet."), findsOneWidget);
+  });
+
+  testWidgets('a National Administrator sets the credit rates', (tester) async {
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET wallets/credit-rates/' => _json({
+        'current': _rate(),
+        'history': [
+          {
+            ..._rate(credits: 2, naira: '50.00'),
+            'reason': 'Launch',
+            'set_by': 'NA-0001',
+            'created_at': '2026-10-20T10:00:00Z',
+          },
+        ],
+      }),
+      'POST wallets/credit-rates/' => _json(_rate(credits: 2, naira: '150.00'), 201),
+      _ => null,
+    };
+    await _pump(tester, server, const WalletPaymentsPage(), can: {'manageCreditRates'});
+    expect(find.text('Starting rates'), findsOneWidget);
+    expect(find.text('₦100.00'), findsOneWidget);
+    expect(find.text('₦1,000.00'), findsOneWidget);
+    expect(
+      find.text('2 credits a member registered · ₦50.00 a credit · withdrawals from ₦1,000.00'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Change rates'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Credits a member registered'), '2');
+    await tester.enterText(find.widgetWithText(TextField, 'Naira a credit'), '150');
+    await tester.enterText(find.widgetWithText(TextField, 'Reason'), 'More for registering');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save rates'));
+    await tester.pumpAndSettle();
+    expect(jsonDecode(server.bodies['POST wallets/credit-rates/']!), {
+      'credits_per_registration': 2,
+      'naira_per_credit': '150',
+      'min_withdrawal': '1000.00',
+      'reason': 'More for registering',
+    });
+    expect(find.text('New rates saved.'), findsOneWidget);
   });
 
   testWidgets('finance staff request payments and a second person approves', (tester) async {
@@ -218,6 +526,17 @@ void main() {
       );
     addTearDown(session.dispose);
     expect(session.modules, contains(TgcgModule.wallets));
+    for (final power in ['approveWithdrawals', 'manageCreditRates']) {
+      final finance = TgcgSessionController()
+        ..signInFromServer(
+          fullName: 'Finance',
+          accessId: 'TGCG-000103',
+          scope: GeographicScope.nigeria,
+          capabilities: {power},
+        );
+      addTearDown(finance.dispose);
+      expect(finance.modules, contains(TgcgModule.wallets), reason: power);
+    }
     final member = TgcgSessionController()
       ..signInFromServer(
         fullName: 'Hauwa Sani',

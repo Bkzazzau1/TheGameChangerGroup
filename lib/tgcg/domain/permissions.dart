@@ -83,6 +83,10 @@ enum TgcgCapability {
   viewWallets,
   creditWallets,
   approveWalletCredits,
+  // Withdrawals to members' bank accounts (a second person approves, and
+  // Paystack pays), and the credit rates, set by National Administrators.
+  approveWithdrawals,
+  manageCreditRates,
   // Projects: scheduled field work. Coordinators assign people to them.
   assignProjectParticipants,
   // Bulk messages: each channel is its own power, given by an administrator.
