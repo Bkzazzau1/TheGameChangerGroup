@@ -1,5 +1,7 @@
+import '../domain/models.dart';
 import 'access_repository.dart';
 import 'api_client.dart';
+import 'auth_repository.dart';
 
 DateTime? _date(Object? value) => value == null ? null : DateTime.tryParse('$value')?.toLocal();
 
@@ -137,6 +139,126 @@ class WalletEntry {
   );
 }
 
+/// People someone registered: how many signed in (each first sign-in earns
+/// the registrar a credit), how many have not yet, and how many earned one.
+class RegistrationCounts {
+  const RegistrationCounts({
+    this.registered = 0,
+    this.signedIn = 0,
+    this.waiting = 0,
+    this.credited = 0,
+  });
+
+  final int registered;
+  final int signedIn;
+
+  /// Not signed in yet: no credit until they do.
+  final int waiting;
+  final int credited;
+
+  factory RegistrationCounts.fromJson(Map<String, dynamic> json) => RegistrationCounts(
+    registered: (json['registered'] as num?)?.toInt() ?? 0,
+    signedIn: (json['signed_in'] as num?)?.toInt() ?? 0,
+    waiting: (json['waiting'] as num?)?.toInt() ?? 0,
+    credited: (json['credited'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// Someone who registers members, with their counts. [membershipNumber] is
+/// null for a staff account without a membership, which earns no credits.
+class Registrar {
+  const Registrar({
+    required this.accessId,
+    required this.fullName,
+    required this.scope,
+    required this.counts,
+    this.membershipNumber,
+    this.identityVerified = false,
+    this.creditsEarned = 0,
+    this.credits = 0,
+    this.lastRegisteredAt,
+  });
+
+  final String accessId;
+  final String fullName;
+  final String? membershipNumber;
+  final GeographicScope scope;
+
+  /// Credits turn into naira only once the registrar's identity is checked.
+  final bool identityVerified;
+  final RegistrationCounts counts;
+  final int creditsEarned;
+
+  /// Credits in the wallet now.
+  final int credits;
+  final DateTime? lastRegisteredAt;
+
+  factory Registrar.fromJson(Map<String, dynamic> json) => Registrar(
+    accessId: json['access_id'] as String,
+    fullName: json['full_name'] as String? ?? '',
+    membershipNumber: json['membership_number'] as String?,
+    scope: json['scope'] is Map<String, dynamic>
+        ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
+        : GeographicScope.nigeria,
+    identityVerified: json['identity_verified'] as bool? ?? false,
+    counts: RegistrationCounts.fromJson(json),
+    creditsEarned: (json['credits_earned'] as num?)?.toInt() ?? 0,
+    credits: (json['credits'] as num?)?.toInt() ?? 0,
+    lastRegisteredAt: _date(json['last_registered_at']),
+  );
+}
+
+/// One person a registrar registered. No phone number.
+class RegisteredPerson {
+  const RegisteredPerson({
+    required this.membershipNumber,
+    required this.fullName,
+    required this.scope,
+    this.registeredAt,
+    this.signedIn = false,
+    this.lastSignIn,
+    this.credited = false,
+    this.verificationStatus = '',
+  });
+
+  final String membershipNumber;
+  final String fullName;
+  final GeographicScope scope;
+  final DateTime? registeredAt;
+  final bool signedIn;
+  final DateTime? lastSignIn;
+
+  /// Earned their registrar a credit.
+  final bool credited;
+  final String verificationStatus;
+
+  factory RegisteredPerson.fromJson(Map<String, dynamic> json) => RegisteredPerson(
+    membershipNumber: json['membership_number'] as String,
+    fullName: json['full_name'] as String? ?? '',
+    scope: json['scope'] is Map<String, dynamic>
+        ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
+        : GeographicScope.nigeria,
+    registeredAt: _date(json['registered_at']),
+    signedIn: json['signed_in'] as bool? ?? false,
+    lastSignIn: _date(json['last_sign_in']),
+    credited: json['credited'] as bool? ?? false,
+    verificationStatus: json['verification_status'] as String? ?? '',
+  );
+}
+
+/// How the registrars list is sorted.
+enum RegistrarOrder {
+  mostRegistered('-registered'),
+  mostWaiting('-waiting'),
+  mostSignedIn('-signed_in'),
+  latest('-last_registered_at'),
+  name('full_name');
+
+  const RegistrarOrder(this.query);
+
+  final String query;
+}
+
 /// What TGCG owes a member, their credits, the history, and the account it
 /// is paid into.
 class MemberWallet {
@@ -150,6 +272,7 @@ class MemberWallet {
     this.rate,
     this.payoutAccount,
     this.entries = const [],
+    this.registrations = const RegistrationCounts(),
   });
 
   final String membershipNumber;
@@ -170,6 +293,9 @@ class MemberWallet {
   final PayoutAccount? payoutAccount;
   final List<WalletEntry> entries;
 
+  /// The people this member registered, and how many are still to sign in.
+  final RegistrationCounts registrations;
+
   factory MemberWallet.fromJson(Map<String, dynamic> json) => MemberWallet(
     membershipNumber: json['membership_number'] as String,
     hasWallet: json['has_wallet'] as bool? ?? false,
@@ -185,6 +311,9 @@ class MemberWallet {
       for (final entry in (json['entries'] as List<dynamic>? ?? const []))
         WalletEntry.fromJson(entry as Map<String, dynamic>),
     ],
+    registrations: json['registrations'] is Map<String, dynamic>
+        ? RegistrationCounts.fromJson(json['registrations'] as Map<String, dynamic>)
+        : const RegistrationCounts(),
   );
 }
 
@@ -454,6 +583,63 @@ class WalletRepository {
       ],
     );
   }
+
+  // --- Registrars ---------------------------------------------------------------
+
+  Map<String, String> _registrarQuery(String search, String state) => {
+    if (search.trim().isNotEmpty) 'search': search.trim(),
+    if (state.isNotEmpty) 'state': state,
+  };
+
+  /// Everyone who registered members, in this account's areas.
+  Future<ApiPage<Registrar>> registrars({
+    String search = '',
+    String state = '',
+    RegistrarOrder order = RegistrarOrder.mostRegistered,
+    int offset = 0,
+  }) async => ApiPage.fromJson(
+    await client.get(
+      'wallets/registrars/',
+      query: {
+        ..._registrarQuery(search, state),
+        'ordering': order.query,
+        if (offset > 0) 'offset': '$offset',
+      },
+    ),
+    Registrar.fromJson,
+  );
+
+  /// Totals for the registrars listed with the same search and state.
+  Future<({int registrars, RegistrationCounts counts})> registrarTotals({
+    String search = '',
+    String state = '',
+  }) async {
+    final json = await client.get(
+      'wallets/registrars/summary/',
+      query: _registrarQuery(search, state),
+    ) as Map<String, dynamic>;
+    return (
+      registrars: (json['registrars'] as num?)?.toInt() ?? 0,
+      counts: RegistrationCounts.fromJson(json),
+    );
+  }
+
+  /// The people a registrar registered, newest first. [signedIn] false: those
+  /// still to sign in.
+  Future<ApiPage<RegisteredPerson>> registeredBy(
+    String accessId, {
+    bool? signedIn,
+    int offset = 0,
+  }) async => ApiPage.fromJson(
+    await client.get(
+      'wallets/registrars/${Uri.encodeComponent(accessId)}/registered/',
+      query: {
+        if (signedIn != null) 'signed_in': '$signedIn',
+        if (offset > 0) 'offset': '$offset',
+      },
+    ),
+    RegisteredPerson.fromJson,
+  );
 
   /// New rates, from now on (National Administrators). 0 credits per
   /// registration pauses the incentive.

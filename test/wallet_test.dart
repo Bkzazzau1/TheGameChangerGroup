@@ -468,10 +468,11 @@ void main() {
       _ => null,
     };
     await _pump(tester, server, const WalletPaymentsPage(), can: {'approveWithdrawals'});
-    // Only withdrawals: no payments are asked for, and no section switch shows.
+    // Withdrawals first, and registrars: no payments are asked for.
     expect(server.requests, contains('GET withdrawals/ status=pending'));
     expect(server.requests.where((r) => r.startsWith('GET wallet-payments/')), isEmpty);
-    expect(find.byType(SegmentedButton<Object>), findsNothing);
+    expect(find.text('Payments'), findsNothing);
+    expect(find.text('Registrars'), findsOneWidget);
     expect(find.text('Hauwa Sani (TGCG-000300)'), findsOneWidget);
     expect(find.text('Guaranty Trust Bank (GTBank) ******6789'), findsOneWidget);
 
@@ -626,5 +627,104 @@ void main() {
       );
     addTearDown(member.dispose);
     expect(member.modules, isNot(contains(TgcgModule.wallets)));
+  });
+  testWidgets('a registrar sees how many they registered and how many are still to sign in', (
+    tester,
+  ) async {
+    final server = _Server();
+    server.answer = (key) => key == 'GET me/wallet/'
+        ? _json({
+            ..._wallet(hasWallet: false, balance: '0.00', entries: const []),
+            'registrations': {'registered': 15, 'signed_in': 3, 'waiting': 12, 'credited': 3},
+          })
+        : null;
+    await _pump(tester, server, const MyWalletPage());
+    // Not "No wallet yet": their people are on the way to earning credits.
+    expect(find.text('No wallet yet'), findsNothing);
+    expect(find.text('You registered 15 people'), findsOneWidget);
+    expect(find.text('3 signed in · 12 not signed in yet · 3 credited'), findsOneWidget);
+  });
+
+  testWidgets('finance staff see who registered how many, and open one registrar', (tester) async {
+    Map<String, dynamic> registrar(String id, String name, int registered, int signedIn) => {
+      'access_id': id,
+      'full_name': name,
+      'membership_number': id,
+      'scope': {'level': 'lga', 'country': 'Nigeria', 'stateId': 'KD', 'lgaId': 'KD-ZARIA'},
+      'identity_verified': id == 'TGCG-000401',
+      'registered': registered,
+      'signed_in': signedIn,
+      'waiting': registered - signedIn,
+      'credited': signedIn,
+      'credits_earned': signedIn,
+      'credits': signedIn,
+      'last_registered_at': '2026-10-24T09:00:00Z',
+    };
+    Map<String, dynamic> person(String number, {bool signedIn = false}) => {
+      'membership_number': number,
+      'full_name': 'Person $number',
+      'scope': {'level': 'country', 'country': 'Nigeria'},
+      'registered_at': '2026-10-20T09:00:00Z',
+      'signed_in': signedIn,
+      'last_sign_in': signedIn ? '2026-10-24T08:00:00Z' : null,
+      'credited': signedIn,
+      'verification_status': 'unverified',
+      'membership_state': 'active',
+    };
+    final server = _Server();
+    server.answer = (key) => switch (key) {
+      'GET wallet-payments/' => _json(_page([])),
+      'GET wallets/registrars/' => _json(
+        _page([
+          registrar('TGCG-000401', 'Ada Obi', 12, 2),
+          registrar('TGCG-000402', 'Bala Umar', 3, 0),
+        ]),
+      ),
+      'GET wallets/registrars/summary/' => _json({
+        'registrars': 2,
+        'registered': 15,
+        'signed_in': 2,
+        'waiting': 13,
+        'credited': 2,
+      }),
+      'GET wallets/registrars/TGCG-000401/registered/' => _json(
+        server.requests.last.contains('signed_in=false')
+            ? _page([person('TGCG-000501')])
+            : _page([person('TGCG-000501'), person('TGCG-000502', signedIn: true)]),
+      ),
+      _ => null,
+    };
+    await _pump(tester, server, const WalletPaymentsPage(), can: {'viewWallets'});
+
+    // The last section: on a phone the switch scrolls to it.
+    await tester.ensureVisible(find.text('Registrars'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registrars'));
+    await tester.pumpAndSettle();
+    expect(server.requests, contains('GET wallets/registrars/ ordering=-registered'));
+    expect(find.text('13'), findsOneWidget); // not signed in yet, of all
+    expect(find.text('Ada Obi'), findsOneWidget);
+    expect(find.text('10 not signed in yet'), findsOneWidget);
+    expect(find.text('ID not checked'), findsOneWidget); // Bala Umar
+
+    await tester.tap(find.text('Most not signed in yet'));
+    await tester.pumpAndSettle();
+    expect(server.requests, contains('GET wallets/registrars/ ordering=-waiting'));
+
+    await tester.tap(find.text('Ada Obi'));
+    await tester.pumpAndSettle();
+    expect(find.text('Person TGCG-000502 (TGCG-000502)'), findsOneWidget);
+    expect(find.text('Credited'), findsWidgets);
+    // Twelve registered, two listed: the rest were placed in other areas.
+    expect(find.text('10 registered in other areas are not listed here.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Not signed in yet'));
+    await tester.pumpAndSettle();
+    expect(
+      server.requests,
+      contains('GET wallets/registrars/TGCG-000401/registered/ signed_in=false'),
+    );
+    expect(find.text('Person TGCG-000502 (TGCG-000502)'), findsNothing);
+    expect(find.text('Person TGCG-000501 (TGCG-000501)'), findsOneWidget);
   });
 }

@@ -13,8 +13,9 @@ import '../ui/tgcg_design.dart';
 
 /// Members' wallets in the account's areas: payments (requested by one
 /// person, approved or rejected by another), withdrawals to members' bank
-/// accounts (approved by a second person, then paid through Paystack), and
-/// the credit rates a National Administrator sets.
+/// accounts (approved by a second person, then paid through Paystack), the
+/// credit rates a National Administrator sets, and who registers members and
+/// how far their people got.
 class WalletPaymentsPage extends StatefulWidget {
   const WalletPaymentsPage({super.key});
 
@@ -30,7 +31,7 @@ const _filters = <(String?, String)>[
   (null, 'All'),
 ];
 
-enum _Section { payments, withdrawals, rates }
+enum _Section { payments, withdrawals, rates, registrars }
 
 /// The sections this account may open: each needs the powers its list asks for.
 List<_Section> _sectionsFor(TgcgSessionController session) => [
@@ -44,6 +45,14 @@ List<_Section> _sectionsFor(TgcgSessionController session) => [
     _Section.withdrawals,
   if (session.canAny(const [TgcgCapability.viewWallets, TgcgCapability.manageCreditRates]))
     _Section.rates,
+  if (session.canAny(const [
+    TgcgCapability.viewWallets,
+    TgcgCapability.creditWallets,
+    TgcgCapability.approveWalletCredits,
+    TgcgCapability.approveWithdrawals,
+    TgcgCapability.manageCreditRates,
+  ]))
+    _Section.registrars,
 ];
 
 class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
@@ -159,6 +168,7 @@ class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
                   ButtonSegment(
                     value: each,
                     label: Text(switch (each) {
+                      _Section.registrars => 'Registrars',
                       _Section.payments => 'Payments',
                       _Section.withdrawals => 'Withdrawals',
                       _Section.rates => 'Credit rates',
@@ -172,6 +182,7 @@ class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
         ],
         const SizedBox(height: 12),
         ...switch (section) {
+          _Section.registrars => const [_RegistrarsSection()],
           _Section.payments => _paymentsSection(session),
           _Section.withdrawals => const [_WithdrawalsSection()],
           _Section.rates => const [_CreditRatesSection()],
@@ -503,6 +514,469 @@ class _WalletDialog extends StatelessWidget {
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
     );
   }
+}
+
+/// Everyone who registered members in the account's areas, most first: how
+/// many, how many have signed in (each first sign-in earns the registrar a
+/// credit) and how many have not yet.
+class _RegistrarsSection extends StatefulWidget {
+  const _RegistrarsSection();
+
+  @override
+  State<_RegistrarsSection> createState() => _RegistrarsSectionState();
+}
+
+const _registrarOrders = <(RegistrarOrder, String)>[
+  (RegistrarOrder.mostRegistered, 'Most registered'),
+  (RegistrarOrder.mostWaiting, 'Most not signed in yet'),
+  (RegistrarOrder.mostSignedIn, 'Most signed in'),
+  (RegistrarOrder.latest, 'Latest registration'),
+  (RegistrarOrder.name, 'Name'),
+];
+
+class _RegistrarsSectionState extends State<_RegistrarsSection> {
+  final _search = TextEditingController();
+  var _order = RegistrarOrder.mostRegistered;
+  final _registrars = <Registrar>[];
+  ({int registrars, RegistrationCounts counts})? _totals;
+  var _hasMore = false;
+  var _loading = false;
+  Object? _error;
+  var _started = false;
+  var _generation = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _load(reset: true);
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool reset = false}) async {
+    final wallets = TgcgBackend.of(context)!.wallets;
+    final generation = reset ? ++_generation : _generation;
+    final search = _search.text;
+    setState(() {
+      if (reset) {
+        _registrars.clear();
+        _hasMore = false;
+      }
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await wallets.registrars(
+        search: search,
+        order: _order,
+        offset: _registrars.length,
+      );
+      final totals = reset ? await wallets.registrarTotals(search: search) : _totals;
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _registrars.addAll(page.items);
+        _hasMore = page.hasMore;
+        _totals = totals;
+      });
+    } catch (error) {
+      if (mounted && generation == _generation) setState(() => _error = error);
+    } finally {
+      if (mounted && generation == _generation) setState(() => _loading = false);
+    }
+  }
+
+  void _open(Registrar registrar) => Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => RegistrarPeoplePage(registrar: registrar)),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final totals = _totals;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (totals != null) ...[
+          _RegistrarTotals(registrars: totals.registrars, counts: totals.counts),
+          const SizedBox(height: 12),
+        ],
+        TextField(
+          controller: _search,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _load(reset: true),
+          decoration: InputDecoration(
+            labelText: 'Search by name or membership number',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: IconButton(
+              tooltip: 'Search',
+              onPressed: () => _load(reset: true),
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (order, label) in _registrarOrders)
+              ChoiceChip(
+                label: Text(label),
+                selected: _order == order,
+                onSelected: (_) {
+                  _order = order;
+                  _load(reset: true);
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        for (final registrar in _registrars)
+          _RegistrarTile(
+            key: ValueKey(registrar.accessId),
+            registrar: registrar,
+            onOpen: () => _open(registrar),
+          ),
+        if (_error != null)
+          TgcgEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Registrars could not be loaded',
+            message: failureMessage(_error!),
+            action: OutlinedButton(
+              onPressed: () => _load(reset: _registrars.isEmpty),
+              child: const Text('Try again'),
+            ),
+          )
+        else if (!_loading && _registrars.isEmpty)
+          const TgcgEmptyState(
+            icon: Icons.group_add_outlined,
+            title: 'No registrars here',
+            message: 'People who register members in your areas appear here.',
+          ),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_hasMore && _error == null)
+          OutlinedButton(onPressed: _load, child: const Text('Show more')),
+      ],
+    );
+  }
+}
+
+class _RegistrarTotals extends StatelessWidget {
+  const _RegistrarTotals({required this.registrars, required this.counts});
+
+  final int registrars;
+  final RegistrationCounts counts;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (final (label, value, color) in [
+        ('Registrars', registrars, TgcgColors.ink),
+        ('Registered', counts.registered, TgcgColors.ink),
+        ('Signed in', counts.signedIn, TgcgColors.success),
+        ('Not signed in yet', counts.waiting, TgcgColors.warning),
+        ('Credited', counts.credited, TgcgColors.primary),
+      ])
+        Container(
+          constraints: const BoxConstraints(minWidth: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: TgcgColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: TgcgColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$value',
+                style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w900),
+              ),
+              Text(label, style: const TextStyle(color: TgcgColors.muted, fontSize: 12)),
+            ],
+          ),
+        ),
+    ],
+  );
+}
+
+class _RegistrarTile extends StatelessWidget {
+  const _RegistrarTile({super.key, required this.registrar, required this.onOpen});
+
+  final Registrar registrar;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = registrar.counts;
+    final number = registrar.membershipNumber;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          registrar.fullName,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          [number ?? 'Staff account, earns no credits', areaLabel(registrar.scope)]
+                              .join(' · '),
+                          style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${counts.registered}',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  TgcgStatusPill(
+                    compact: true,
+                    label: '${counts.signedIn} signed in',
+                    color: TgcgColors.success,
+                  ),
+                  TgcgStatusPill(
+                    compact: true,
+                    label: '${counts.waiting} not signed in yet',
+                    color: counts.waiting == 0 ? TgcgColors.muted : TgcgColors.warning,
+                  ),
+                  TgcgStatusPill(
+                    compact: true,
+                    label: '${counts.credited} credited',
+                    color: TgcgColors.primary,
+                  ),
+                  if (number != null && !registrar.identityVerified)
+                    const TgcgStatusPill(
+                      compact: true,
+                      label: 'ID not checked',
+                      color: TgcgColors.muted,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                [
+                  if (number != null) 'Credits now: ${registrar.credits}',
+                  if (registrar.lastRegisteredAt != null)
+                    'last registered ${formatMoment(registrar.lastRegisteredAt!)}',
+                ].join(' · '),
+                style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The people one registrar registered, newest first: whether each has
+/// signed in and earned the registrar a credit. No phone numbers.
+class RegistrarPeoplePage extends StatefulWidget {
+  const RegistrarPeoplePage({super.key, required this.registrar});
+
+  final Registrar registrar;
+
+  @override
+  State<RegistrarPeoplePage> createState() => _RegistrarPeoplePageState();
+}
+
+const _peopleFilters = <(bool?, String)>[
+  (null, 'All'),
+  (false, 'Not signed in yet'),
+  (true, 'Signed in'),
+];
+
+class _RegistrarPeoplePageState extends State<RegistrarPeoplePage> {
+  var _filter = 0;
+  final _people = <RegisteredPerson>[];
+  var _count = 0;
+  var _hasMore = false;
+  var _loading = false;
+  Object? _error;
+  var _started = false;
+  var _generation = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _load(reset: true);
+  }
+
+  Future<void> _load({bool reset = false}) async {
+    final wallets = TgcgBackend.of(context)!.wallets;
+    final generation = reset ? ++_generation : _generation;
+    setState(() {
+      if (reset) {
+        _people.clear();
+        _hasMore = false;
+      }
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await wallets.registeredBy(
+        widget.registrar.accessId,
+        signedIn: _peopleFilters[_filter].$1,
+        offset: _people.length,
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _people.addAll(page.items);
+        _hasMore = page.hasMore;
+        _count = page.count;
+      });
+    } catch (error) {
+      if (mounted && generation == _generation) setState(() => _error = error);
+    } finally {
+      if (mounted && generation == _generation) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final registrar = widget.registrar;
+    final counts = registrar.counts;
+    final shownAll = _filter == 0 && !_loading && _error == null;
+    final elsewhere = counts.registered - _count;
+    return Scaffold(
+      backgroundColor: TgcgColors.canvas,
+      appBar: AppBar(title: Text(registrar.fullName)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _RegistrarTotals(registrars: 1, counts: counts),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < _peopleFilters.length; i++)
+                ChoiceChip(
+                  label: Text(_peopleFilters[i].$2),
+                  selected: _filter == i,
+                  onSelected: (_) {
+                    _filter = i;
+                    _load(reset: true);
+                  },
+                ),
+            ],
+          ),
+          if (shownAll && elsewhere > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '$elsewhere registered in other areas are not listed here.',
+              style: const TextStyle(color: TgcgColors.muted),
+            ),
+          ],
+          const SizedBox(height: 12),
+          for (final person in _people) _PersonTile(key: ValueKey(person.membershipNumber), person: person),
+          if (_error != null)
+            TgcgEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: 'The list could not be loaded',
+              message: failureMessage(_error!),
+              action: OutlinedButton(
+                onPressed: () => _load(reset: _people.isEmpty),
+                child: const Text('Try again'),
+              ),
+            )
+          else if (!_loading && _people.isEmpty)
+            const TgcgEmptyState(
+              icon: Icons.person_search_outlined,
+              title: 'Nobody here',
+              message: 'Nobody matches this choice.',
+            ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_hasMore && _error == null)
+            OutlinedButton(onPressed: _load, child: const Text('Show more')),
+        ],
+      ),
+    );
+  }
+}
+
+class _PersonTile extends StatelessWidget {
+  const _PersonTile({super.key, required this.person});
+
+  final RegisteredPerson person;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 8),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${person.fullName} (${person.membershipNumber})',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          Text(
+            [
+              if (person.scope.level != GeographyLevel.country) areaLabel(person.scope),
+              if (person.registeredAt != null) 'registered ${formatMoment(person.registeredAt!)}',
+            ].join(' · '),
+            style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TgcgStatusPill(
+                compact: true,
+                label: person.signedIn ? 'Signed in' : 'Not signed in yet',
+                color: person.signedIn ? TgcgColors.success : TgcgColors.warning,
+              ),
+              if (person.credited)
+                const TgcgStatusPill(compact: true, label: 'Credited', color: TgcgColors.primary),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Withdrawals by members in the account's areas. A different person with

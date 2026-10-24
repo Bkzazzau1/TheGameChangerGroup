@@ -128,7 +128,10 @@ class _MyWalletPageState extends State<MyWalletPage> {
           final loaded = snapshot.data;
           if (loaded == null) return const Center(child: CircularProgressIndicator());
           final wallet = loaded.wallet;
-          if (!wallet.hasWallet && wallet.credits == 0 && wallet.entries.isEmpty) {
+          if (!wallet.hasWallet &&
+              wallet.credits == 0 &&
+              wallet.entries.isEmpty &&
+              wallet.registrations.registered == 0) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -239,6 +242,10 @@ class _WalletView extends StatelessWidget {
                 ].join(' · '),
                 style: const TextStyle(color: TgcgColors.muted),
               ),
+              if (wallet.registrations.registered > 0) ...[
+                const SizedBox(height: 10),
+                _RegistrationLine(counts: wallet.registrations),
+              ],
               if (wallet.hasWallet && wallet.credits > 0) ...[
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
@@ -310,6 +317,33 @@ class _WalletView extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The people the member registered: a credit comes as each first signs in.
+class _RegistrationLine extends StatelessWidget {
+  const _RegistrationLine({required this.counts});
+
+  final RegistrationCounts counts;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'You registered ${counts.registered} ${counts.registered == 1 ? 'person' : 'people'}',
+        style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        [
+          '${counts.signedIn} signed in',
+          '${counts.waiting} not signed in yet',
+          '${counts.credited} credited',
+        ].join(' · '),
+        style: const TextStyle(color: TgcgColors.muted),
+      ),
+    ],
+  );
 }
 
 /// One line of a wallet's history: naira in or out, or credits earned.
