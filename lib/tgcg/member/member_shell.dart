@@ -11,6 +11,7 @@ import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
 import '../api/wallet_repository.dart';
+import '../discussion/discussion_room_page.dart';
 import '../location/directions.dart';
 import '../messaging/inbox_page.dart';
 import '../media/device_media.dart';
@@ -26,8 +27,8 @@ import 'registered_members_page.dart';
 import 'selfie_check.dart';
 import 'wallet_page.dart';
 
-/// The member app: membership card, polling unit, announcements, volunteering
-/// and the member's own appointments.
+/// The member app: membership card, polling unit, announcements, the Social
+/// Forum, volunteering and the member's own appointments.
 class MemberShell extends StatefulWidget {
   const MemberShell({
     super.key,
@@ -146,7 +147,8 @@ class _MemberShellState extends State<MemberShell> {
             ),
           1 => _UnitTab(unit: _unit!, launch: widget.launch, scanPvc: widget.scanPvc),
           2 => _NewsTab(news: _news!),
-          3 => _VolunteerTab(
+          3 => const DiscussionRoomPage(),
+          4 => _VolunteerTab(
               offers: _volunteering!,
               onChanged: () => setState(() {
                 _volunteering = _members.volunteering();
@@ -162,6 +164,7 @@ class _MemberShellState extends State<MemberShell> {
           NavigationDestination(icon: Icon(Icons.badge_outlined), label: 'Card'),
           NavigationDestination(icon: Icon(Icons.how_to_vote_outlined), label: 'My unit'),
           NavigationDestination(icon: Icon(Icons.campaign_outlined), label: 'News'),
+          NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Social'),
           NavigationDestination(icon: Icon(Icons.volunteer_activism_outlined), label: 'Volunteer'),
           NavigationDestination(icon: Icon(Icons.assignment_ind_outlined), label: 'Roles'),
         ],

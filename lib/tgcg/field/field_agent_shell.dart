@@ -200,7 +200,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
                       TgcgModule.discussionRoom => const NavigationDestination(
                           icon: Icon(Icons.forum_outlined),
                           selectedIcon: Icon(Icons.forum_rounded),
-                          label: 'Forum',
+                          label: 'Social',
                         ),
                       _ => const NavigationDestination(
                           icon: Icon(Icons.home_outlined),
@@ -218,7 +218,7 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         TgcgModule.fieldMonitoring => 'FIELD REPORTING',
         TgcgModule.resultCapture => 'RESULT SUBMISSION',
         TgcgModule.meetingRoom => 'MEETINGS',
-        TgcgModule.discussionRoom => 'FORUM',
+        TgcgModule.discussionRoom => 'SOCIAL FORUM',
         _ => 'POLLING AGENT',
       };
 }

@@ -66,7 +66,7 @@ void main() {
       ),
       TgcgRole.readOnlyExecutive: modules(
         'overview projects liveOperations agentTracking aiAnalytics situationRoom mediaIntelligence '
-        'collation meetingRoom reports',
+        'collation discussionRoom meetingRoom reports',
       ),
     };
 
@@ -82,7 +82,8 @@ void main() {
 
     test('a security officer sees Security Response, and it works on server records', () {
       final officer = allowedModulesFor((c) => c == TgcgCapability.respondToSecurity);
-      expect(officer, {TgcgModule.overview, TgcgModule.securityResponse});
+      // The Social Forum is for everyone (24 October 2026).
+      expect(officer, {TgcgModule.overview, TgcgModule.discussionRoom, TgcgModule.securityResponse});
       expect(liveModules, contains(TgcgModule.securityResponse));
     });
 

@@ -81,7 +81,7 @@ class BackendServices {
   /// Staff work on members: identity review, standing, polling unit changes.
   final MemberAdminRepository members;
 
-  /// The discussion forum: posts, replies and their approval.
+  /// The Social Forum: posts, comments, likes and reports.
   final ForumRepository forum;
 
   /// Members' wallets and the payments TGCG makes into them.

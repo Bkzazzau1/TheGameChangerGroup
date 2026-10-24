@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../access/access_widgets.dart' show failureMessage;
+import '../access/access_widgets.dart' show failureMessage, formatMoment;
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/forum_repository.dart';
-import '../domain/permissions.dart';
-import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'forum_media.dart';
 import 'forum_post.dart';
 
-/// The discussion forum, for everyone with a role. Posts made at a polling
-/// unit wait for the ward coordinator while approval is on; the server
-/// decides who sees, posts, approves and hides.
+/// The Social Forum, for every member: posts appear at once, and everyone
+/// comments, answers, likes and reports. Editors (everyone holding a role or
+/// position) hide and restore, and see the reports. The server decides who
+/// does what.
 class DiscussionRoomPage extends StatefulWidget {
   const DiscussionRoomPage({super.key, this.pickMedia = pickForumMedia});
 
@@ -23,24 +22,27 @@ class DiscussionRoomPage extends StatefulWidget {
   State<DiscussionRoomPage> createState() => _DiscussionRoomPageState();
 }
 
-enum _View { all, assignments, mine, review }
+enum _View { all, assignments, mine, hidden, reports }
 
 class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
   var _view = _View.all;
   String? _tag;
   final _posts = <ForumPost>[];
+  final _reports = <ForumReport>[];
   var _hasMore = false;
   var _loading = false;
   Object? _error;
+  ForumMe? _me;
 
-  /// Posts waiting for this account's approval.
-  int? _waiting;
-  ForumSettings? _settings;
+  /// Open reports, for editors.
+  int? _openReports;
+  final _busyReports = <String>{};
   var _tags = const <AssignmentTag>[];
   var _started = false;
   var _generation = 0;
 
   ForumRepository? get _forum => TgcgBackend.of(context)?.forum;
+  bool get _editor => _me?.editor ?? false;
 
   @override
   void didChangeDependencies() {
@@ -48,17 +50,28 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
     if (_started || _forum == null) return;
     _started = true;
     _load(reset: true);
-    _loadSettings();
+    _loadMe();
     _loadTags();
-    _loadWaiting();
   }
 
-  Future<void> _loadSettings() async {
+  Future<void> _loadMe() async {
     try {
-      final settings = await _forum!.settings();
-      if (mounted) setState(() => _settings = settings);
+      final me = await _forum!.me();
+      if (!mounted) return;
+      setState(() => _me = me);
+      if (me.editor) _countReports();
     } catch (_) {
-      // Without them, only the settings button is missing.
+      // Without it the composer and the editors' lists stay away; the feed
+      // still loads.
+    }
+  }
+
+  Future<void> _countReports() async {
+    try {
+      final page = await _forum!.reports();
+      if (mounted) setState(() => _openReports = page.count);
+    } catch (_) {
+      // The tab still opens the list.
     }
   }
 
@@ -71,50 +84,58 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
     }
   }
 
-  Future<void> _loadWaiting() async {
-    if (!TgcgSession.of(context, listen: false).can(TgcgCapability.moderateDiscussion)) return;
-    try {
-      final page = await _forum!.posts(show: ForumShow.review);
-      if (mounted) setState(() => _waiting = page.count);
-    } catch (_) {
-      // The tab still opens the list.
-    }
-  }
-
   Future<void> _load({bool reset = false}) async {
     final forum = _forum;
     if (forum == null) return;
     final generation = reset ? ++_generation : _generation;
+    final view = _view;
     setState(() {
       if (reset) {
         _posts.clear();
+        _reports.clear();
         _hasMore = false;
       }
       _loading = true;
       _error = null;
     });
     try {
-      final page = await forum.posts(
-        show: switch (_view) {
-          _View.mine => ForumShow.mine,
-          _View.review => ForumShow.review,
-          _ => ForumShow.feed,
-        },
-        assignment: _view == _View.assignments ? _tag : null,
-        assignmentsOnly: _view == _View.assignments,
-        offset: _posts.length,
-      );
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _posts.addAll(page.items);
-        _hasMore = page.hasMore;
-        if (_view == _View.review) _waiting = page.count;
-      });
+      if (view == _View.reports) {
+        final page = await forum.reports(offset: _reports.length);
+        if (!mounted || generation != _generation) return;
+        setState(() {
+          _reports.addAll(page.items);
+          _hasMore = page.hasMore;
+          _openReports = page.count;
+        });
+      } else {
+        final page = await forum.posts(
+          show: switch (view) {
+            _View.mine => ForumShow.mine,
+            _View.hidden => ForumShow.hidden,
+            _ => ForumShow.feed,
+          },
+          assignment: view == _View.assignments ? _tag : null,
+          assignmentsOnly: view == _View.assignments,
+          offset: _posts.length,
+        );
+        if (!mounted || generation != _generation) return;
+        setState(() {
+          _posts.addAll(page.items);
+          _hasMore = page.hasMore;
+        });
+      }
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error);
     } finally {
       if (mounted && generation == _generation) setState(() => _loading = false);
     }
+  }
+
+  bool get _empty => _view == _View.reports ? _reports.isEmpty : _posts.isEmpty;
+
+  void _retry() {
+    if (_me == null) _loadMe();
+    _load(reset: _empty);
   }
 
   void _show(_View view, {String? tag}) {
@@ -125,6 +146,9 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
     _load(reset: true);
   }
 
+  void _say(String message) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
   void _posted(ForumPost post) {
     final fits = switch (_view) {
       _View.all => post.isPublished,
@@ -133,16 +157,10 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
         post.isPublished &&
             post.assignment.isNotEmpty &&
             (_tag == null || _tag!.toLowerCase() == post.assignment.toLowerCase()),
-      _View.review => false,
+      _View.hidden || _View.reports => false,
     };
     if (fits) setState(() => _posts.insert(0, post));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          post.isPending ? 'Sent to your ward coordinator for approval.' : 'Posted.',
-        ),
-      ),
-    );
+    _say('Posted.');
     if (post.assignment.isNotEmpty) _loadTags();
   }
 
@@ -150,11 +168,12 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
     final index = _posts.indexWhere((item) => item.id == post.id);
     if (index < 0) return;
     setState(() {
-      if (_view == _View.review && !post.isPending) {
-        // Approved, refused or hidden: no longer waiting.
-        _posts.removeAt(index);
-        _waiting = ((_waiting ?? 1) - 1).clamp(0, 1 << 30);
-      } else if ((_view == _View.all || _view == _View.assignments) && !post.isPublished) {
+      final gone = switch (_view) {
+        _View.all || _View.assignments => !post.isPublished,
+        _View.hidden => !post.isHidden,
+        _ => false,
+      };
+      if (gone) {
         _posts.removeAt(index);
       } else {
         _posts[index] = post;
@@ -170,7 +189,7 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
       MaterialPageRoute<void>(builder: (_) => ForumPostPage(post: post)),
     );
     if (!mounted) return;
-    // Its replies or status may have changed meanwhile.
+    // Its comments, likes or status may have changed meanwhile.
     try {
       _changed(await _forum!.post(post.id));
     } on ApiException catch (error) {
@@ -180,22 +199,80 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
     }
   }
 
-  Future<void> _openSettings() async {
-    final settings = _settings;
-    if (settings == null) return;
-    final changed = await showDialog<ForumSettings>(
-      context: context,
-      builder: (_) => _ForumSettingsDialog(settings: settings),
+  Future<void> _openReport(ForumReport report) async {
+    setState(() => _busyReports.add(report.id));
+    ForumPost? found;
+    try {
+      found = await _forum!.post(report.postId);
+    } on ApiException catch (error) {
+      if (mounted) _say(error.statusCode == 404 ? 'This post was deleted.' : failureMessage(error));
+    } catch (error) {
+      if (mounted) _say(failureMessage(error));
+    } finally {
+      if (mounted) setState(() => _busyReports.remove(report.id));
+    }
+    final post = found;
+    if (post == null || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => ForumPostPage(post: post)),
     );
-    if (changed != null && mounted) setState(() => _settings = changed);
+    // Hiding it there closes its reports.
+    if (!mounted || _view != _View.reports) return;
+    _load(reset: true);
+  }
+
+  Future<void> _hideReported(ForumReport report) async {
+    final reason = await askForumReason(
+      context,
+      title: report.isComment ? 'Hide this comment' : 'Hide this post',
+      action: 'Hide',
+    );
+    if (reason == null || !mounted) return;
+    await _settle(report, sameTarget: true, (forum) async {
+      if (report.isComment) {
+        await forum.hideReply(report.replyId!, reason);
+      } else {
+        await forum.hide(report.postId, reason);
+      }
+    });
+  }
+
+  Future<void> _dismiss(ForumReport report) =>
+      _settle(report, (forum) => forum.dismissReport(report.id));
+
+  /// Hiding closes every open report on the same post or comment;
+  /// dismissing closes only this one.
+  Future<void> _settle(
+    ForumReport report,
+    Future<void> Function(ForumRepository forum) work, {
+    bool sameTarget = false,
+  }) async {
+    final forum = _forum!;
+    setState(() => _busyReports.add(report.id));
+    try {
+      await work(forum);
+      if (!mounted) return;
+      setState(() {
+        final before = _reports.length;
+        _reports.removeWhere(
+          (item) =>
+              item.id == report.id ||
+              (sameTarget && item.postId == report.postId && item.replyId == report.replyId),
+        );
+        final closed = before - _reports.length;
+        _openReports = ((_openReports ?? before) - closed).clamp(0, 1 << 30);
+      });
+    } catch (error) {
+      if (mounted) _say(failureMessage(error));
+    } finally {
+      if (mounted) setState(() => _busyReports.remove(report.id));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = TgcgSession.of(context);
-    final moderator = session.can(TgcgCapability.moderateDiscussion);
-    final waiting = _waiting ?? 0;
     final phone = MediaQuery.sizeOf(context).width < 600;
+    final reports = _openReports ?? 0;
     if (_forum == null) {
       return const Center(
         child: Padding(
@@ -212,19 +289,12 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
       padding: EdgeInsets.all(phone ? 16 : 24),
       children: [
         TgcgPageHeader(
-          eyebrow: 'COORDINATION',
-          title: 'Discussion Forum',
-          subtitle: 'Updates, pictures and assignments from everyone with a role.',
-          trailing: _settings?.canChange == true
-              ? IconButton(
-                  tooltip: 'Forum settings',
-                  onPressed: _openSettings,
-                  icon: const Icon(Icons.tune_rounded),
-                )
-              : null,
+          eyebrow: 'COMMUNITY',
+          title: 'Social Forum',
+          subtitle: 'Posts, pictures and assignments from every member.',
         ),
         const SizedBox(height: 16),
-        if (session.can(TgcgCapability.createDiscussionThread)) ...[
+        if (_me?.takesPart ?? false) ...[
           ForumComposer(pickMedia: widget.pickMedia, tags: _tags, onPosted: _posted),
           const SizedBox(height: 16),
         ],
@@ -247,12 +317,18 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
               selected: _view == _View.mine,
               onSelected: (_) => _show(_View.mine),
             ),
-            if (moderator)
+            if (_editor) ...[
               ChoiceChip(
-                label: Text(waiting == 0 ? 'To approve' : 'To approve ($waiting)'),
-                selected: _view == _View.review,
-                onSelected: (_) => _show(_View.review),
+                label: const Text('Hidden'),
+                selected: _view == _View.hidden,
+                onSelected: (_) => _show(_View.hidden),
               ),
+              ChoiceChip(
+                label: Text(reports == 0 ? 'Reports' : 'Reports ($reports)'),
+                selected: _view == _View.reports,
+                onSelected: (_) => _show(_View.reports),
+              ),
+            ],
           ],
         ),
         if (_view == _View.assignments && _tags.isNotEmpty) ...[
@@ -271,39 +347,52 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
           ),
         ],
         const SizedBox(height: 14),
-        for (final post in _posts)
-          Padding(
-            key: ValueKey(post.id),
-            padding: const EdgeInsets.only(bottom: 12),
-            child: ForumPostCard(
-              post: post,
-              onChanged: _changed,
-              onRemoved: () => _removed(post),
-              onTag: (tag) => _show(_View.assignments, tag: tag),
-              onOpen: () => _open(post),
+        if (_view == _View.reports)
+          for (final report in _reports)
+            Padding(
+              key: ValueKey(report.id),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ReportCard(
+                report: report,
+                busy: _busyReports.contains(report.id),
+                onOpen: () => _openReport(report),
+                onHide: () => _hideReported(report),
+                onDismiss: () => _dismiss(report),
+              ),
+            )
+        else
+          for (final post in _posts)
+            Padding(
+              key: ValueKey(post.id),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ForumPostCard(
+                post: post,
+                onChanged: _changed,
+                onRemoved: () => _removed(post),
+                onTag: (tag) => _show(_View.assignments, tag: tag),
+                onOpen: () => _open(post),
+              ),
             ),
-          ),
         if (_error != null)
           TgcgEmptyState(
             icon: Icons.cloud_off_outlined,
             title: 'Could not load the forum',
             message: failureMessage(_error!),
-            action: TextButton(
-              onPressed: () => _load(reset: _posts.isEmpty),
-              child: const Text('Try again'),
-            ),
+            action: TextButton(onPressed: _retry, child: const Text('Try again')),
           )
-        else if (!_loading && _posts.isEmpty)
+        else if (!_loading && _empty)
           TgcgEmptyState(
-            icon: Icons.forum_outlined,
+            icon: _view == _View.reports ? Icons.flag_outlined : Icons.forum_outlined,
             title: switch (_view) {
               _View.all => 'No posts yet',
               _View.assignments => 'No assignment posts yet',
               _View.mine => 'You have not posted yet',
-              _View.review => 'Nothing to approve',
+              _View.hidden => 'No hidden posts',
+              _View.reports => 'No reports',
             },
             message: switch (_view) {
-              _View.review => 'Posts from your polling units will appear here.',
+              _View.hidden => 'Posts an editor hides appear here.',
+              _View.reports => 'Posts and comments people report appear here.',
               _ => 'New posts will appear here.',
             },
           ),
@@ -317,6 +406,97 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
       ],
     );
   }
+}
+
+/// A report waiting for an editor: what was reported, who reported it and
+/// why.
+class _ReportCard extends StatelessWidget {
+  const _ReportCard({
+    required this.report,
+    required this.busy,
+    required this.onOpen,
+    required this.onHide,
+    required this.onDismiss,
+  });
+
+  final ForumReport report;
+  final bool busy;
+  final VoidCallback onOpen;
+  final VoidCallback onHide;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) => TgcgSectionCard(
+    padding: const EdgeInsets.all(14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            TgcgStatusPill(
+              label: report.isComment ? 'COMMENT' : 'POST',
+              color: TgcgColors.primary,
+              compact: true,
+            ),
+            if (!report.canHide) ...[
+              const SizedBox(width: 6),
+              TgcgStatusPill(
+                label: report.targetStatus.toUpperCase(),
+                color: TgcgColors.muted,
+                compact: true,
+              ),
+            ],
+            const Spacer(),
+            Text(
+              formatMoment(report.createdAt),
+              style: const TextStyle(fontSize: 11, color: TgcgColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          report.authorName,
+          style: const TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink),
+        ),
+        if (report.excerpt.isNotEmpty)
+          Text(
+            report.excerpt,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: TgcgColors.ink, height: 1.35),
+          ),
+        const SizedBox(height: 10),
+        Text(
+          'Reported by ${report.reporter}',
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: TgcgColors.muted,
+          ),
+        ),
+        Text(report.reason, style: const TextStyle(color: TgcgColors.ink)),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: busy ? null : onOpen,
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Open post'),
+            ),
+            if (report.canHide)
+              FilledButton.icon(
+                onPressed: busy ? null : onHide,
+                icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                label: const Text('Hide'),
+              ),
+            TextButton(onPressed: busy ? null : onDismiss, child: const Text('Dismiss')),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 /// Writing a post: words, an assignment tag, pictures and videos.
@@ -575,67 +755,4 @@ class _ForumComposerState extends State<ForumComposer> {
       ),
     );
   }
-}
-
-/// The one switch: whether posts from polling units wait for approval.
-class _ForumSettingsDialog extends StatefulWidget {
-  const _ForumSettingsDialog({required this.settings});
-
-  final ForumSettings settings;
-
-  @override
-  State<_ForumSettingsDialog> createState() => _ForumSettingsDialogState();
-}
-
-class _ForumSettingsDialogState extends State<_ForumSettingsDialog> {
-  late bool _required = widget.settings.approvalRequired;
-  var _saving = false;
-  String? _error;
-
-  Future<void> _save() async {
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final saved = await TgcgBackend.of(context)!.forum.setApprovalRequired(_required);
-      if (mounted) Navigator.of(context).pop(saved);
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = failureMessage(error);
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Forum settings'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _required,
-          onChanged: _saving ? null : (value) => setState(() => _required = value),
-          title: const Text('Approve polling unit posts'),
-          subtitle: const Text('The ward coordinator approves them before everyone sees them.'),
-        ),
-        if (_error != null)
-          Text(_error!, style: const TextStyle(color: TgcgColors.danger)),
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: _saving ? null : () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: _saving || _required == widget.settings.approvalRequired ? null : _save,
-        child: const Text('Save'),
-      ),
-    ],
-  );
 }

@@ -352,8 +352,8 @@ void main() {
       expect(find.text('No project now'), findsOneWidget);
       // Agents download their membership card from here.
       expect(find.text('My membership card'), findsOneWidget);
-      // The forum is for everyone with a role, agents too (15 October 2026).
-      for (final tab in ['Home', 'Report', 'Result', 'Meetings', 'Forum']) {
+      // The Social Forum is for everyone, agents too (24 October 2026).
+      for (final tab in ['Home', 'Report', 'Result', 'Meetings', 'Social']) {
         expect(find.widgetWithText(NavigationDestination, tab), findsOneWidget, reason: tab);
       }
       for (final gone in ['Messages', 'Field Assignment Required']) {

@@ -1296,6 +1296,30 @@ void main() {
     });
   });
 
+  testWidgets('members post in the Social Forum from their app, on a narrow phone', (tester) async {
+    final server = _Server((request) => switch (_path(request)) {
+          'me/member/' => _json(_card()),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 12, 'members_in_ward': 140}),
+          'me/announcements/' => _json({'count': 0, 'results': []}),
+          'me/volunteer/' => _json([]),
+          'forum/me/' => _json({'takes_part': true, 'editor': false}),
+          'forum/posts/' => _json({'count': 0, 'next': null, 'previous': null, 'results': []}),
+          'forum/assignments/' => _json([]),
+          _ => null,
+        });
+    await _pump(tester, server.connect(), const MemberShell(), member: true);
+    tester.view.physicalSize = const Size(360, 780);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Social'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Social Forum'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Share an update'), findsOneWidget);
+    // Not an editor: no role or position.
+    expect(find.text('Reports'), findsNothing);
+  });
+
   testWidgets('a member signing in on the server opens the member app', (tester) async {
     tester.view.physicalSize = const Size(430, 1400);
     tester.view.devicePixelRatio = 1;

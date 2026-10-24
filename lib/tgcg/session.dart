@@ -353,7 +353,9 @@ Set<TgcgModule> allowedModulesFor(
   bool supervises = false,
 }) {
   bool any(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
-  final modules = <TgcgModule>{TgcgModule.overview};
+  // The Social Forum is for everyone (24 October 2026); the server decides
+  // who edits.
+  final modules = <TgcgModule>{TgcgModule.overview, TgcgModule.discussionRoom};
 
   // Member Enrolment: whoever registers members in person or accredits agents.
   if (any(const [
@@ -471,9 +473,6 @@ Set<TgcgModule> allowedModulesFor(
   }
   if (can(TgcgCapability.sendBroadcast)) {
     modules.add(TgcgModule.bulkCommunications);
-  }
-  if (can(TgcgCapability.viewDiscussionRoom)) {
-    modules.add(TgcgModule.discussionRoom);
   }
   if (can(TgcgCapability.viewMeetingRoom)) {
     modules.add(TgcgModule.meetingRoom);
