@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 24 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `4b9f177bf358120be394b23bd447d6132884d322`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `ee34d84df9d21fda6dc155212e27d4a0c6c5b1a3`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,13 +32,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261024-122253-235366b8caed` (release directory timestamps use UTC).
-- Frontend build source: `50890962df05c43b93242f9b1321df04bdc8b452` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261024-121230-be22735f1813`; the earlier wallet release `/var/www/tgcg/releases/web-20261023-195046-ff592b2dd840` is also retained.
+- Published release: `/var/www/tgcg/releases/web-20261024-133831-eb94bdb1509f` (release directory timestamps use UTC).
+- Frontend build source: `00d19ee` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261024-122253-235366b8caed` (Social Forum); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `235366b8caed7d35412f2d8731560fa5481d326272e6300a5993ae14f3cb77f8`.
-- Build: 856 files, 59,186,932 uncompressed bytes. The public JavaScript checksum matched after publication; all 23 final public checks passed.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`.
+- Main JavaScript SHA256: `eb94bdb1509f3beac0da1fa56b5e7b458c12c5d26771aea3f5c63041774ce742`.
+- Build: 856 files, 59,201,447 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; the Social Forum record is kept as `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -138,6 +138,52 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Registrars list and past sign-in credits (24 October 2026)
+
+Deployed by Claude Code over SSH with its own key. Backend `ee34d84df9d21fda6dc155212e27d4a0c6c5b1a3` went live over `4b9f177`, followed by the web build from frontend `00d19ee`. No APK was built; APK v5 stays on hold.
+
+The owner reported that registrars' credits were not increasing. Production counts showed why:
+- **409** members had been registered by **74** registrars.
+- **374** of those members had never signed in. Credits come only at a registered member's first sign-in.
+- **34** had signed in before credits started on 23 October, so they earned nothing.
+- **1** had signed in since then and was credited correctly.
+
+The owner kept the first-sign-in rule, chose to credit the 34 past sign-ins once, and asked for a registrars list for the National Administrator and finance staff by area.
+
+The release adds:
+- `GET /api/v1/wallets/registrars/`, with `summary/` and `{access_id}/registered/`;
+- the member's own `registrations` counts in `GET /api/v1/me/wallet/`;
+- `manage.py credit_past_registrations` (a dry run unless `--commit`).
+
+The app adds a Registrars section on the Wallets page, and the counts on My wallet.
+
+Validation:
+- The pinned source passed all **629 backend tests on isolated PostgreSQL**, with zero failures and zero skips (5 min 31 s). It ran under `config.settings.test`, with no dotenv file and empty provider keys, using the existing validation virtualenv. Both throwaway databases and the staging folder were removed afterwards.
+- Locally: 602 passed and 27 skipped on SQLite; Ruff passed.
+- **329 Flutter tests** passed and analysis was clean.
+- The web build used `TGCG_API_URL=https://api.tgcg.online` and base href `/`. A scan for keys and local paths found nothing; the only hits were Flutter's own graphics symbols.
+
+Deployment (`/opt/tgcg/deployment/registrars-release-20261024/deploy.sh`):
+- It refused to run unless the checkout was clean at `4b9f177`, and unless no dependency, migration or static file changed.
+- It fast-forwarded the checkout, ran `check --deploy` (only the known OpenAPI enum warning), and confirmed no unapplied migrations with `showmigrations`.
+- `migrate` was never run, so the role-sync `post_migrate` receiver never fired.
+- It restarted `tgcg-api.service`, and health passed.
+- The frontend checkout was fast-forwarded to `00d19ee`.
+
+The catch-up dry run reported **34 to credit (34 credits) to 14 registrars, 0 skipped**. `--commit` credited **34 registrations**, each audited as `wallet.creditsEarned` with `backfill: true`. A second dry run found **0** left.
+
+Read-only National Administrator checks ran in process, with no login; the administrator's `last_login` was unchanged:
+- registrars **200** (74 listed);
+- summary **200**: 74 registrars, 409 registered, 35 signed in, 35 credited, 374 waiting;
+- ordering by waiting **200**;
+- the top registrar's people **200**, with no phone numbers.
+
+An anonymous request returned **401**. Reward entries now number **35**.
+
+The web release `/var/www/tgcg/releases/web-20261024-133831-eb94bdb1509f` holds 856 files and 59,201,447 bytes. The public main JavaScript checksum matched (`eb94bdb1…`), the app returned 200 and API health was ok.
+
+Backups succeeded before and after: `20261024T133508Z-LR2zKP` and `20261024T134207Z-b8leLb`. No member, role or appointment was changed, and no money moved. No message or SMS was sent.
 
 ### Social Forum (24 October 2026)
 
