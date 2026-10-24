@@ -111,6 +111,20 @@ systemctl start tgcg-backup.service
 journalctl -u tgcg-backup.service -n 10 --no-pager
 ```
 
+## SSH access
+
+- Root signs in with a key or a password. Keys in `/root/.ssh/authorized_keys`, by comment: `codex-tgcg-vps-2026-10-12` (listed twice) and `claude-code-tgcg-2026-10-24` (Claude Code, added by the owner on 24 October 2026). To revoke a key, delete its line.
+- Password guessing against root reached 388 failed attempts before 24 October 2026. Password sign-in stays on until the owner has a key of their own. Turning it off then is the planned next step.
+- `fail2ban` (`fail2ban-server` 1.1.0 from EPEL) is enabled since 24 October 2026. An address with 5 failed SSH sign-ins within 10 minutes is blocked for 1 hour. Key sign-ins are not affected.
+  - The settings are in `/etc/fail2ban/jail.d/tgcg-sshd.local`.
+  - Bans go straight to nftables (table `inet f2b-table`), because `firewalld` is not running.
+  - Two addresses were blocked at once from the attempts still under way.
+
+```bash
+fail2ban-client status sshd
+fail2ban-client set sshd unbanip <address>
+```
+
 ## Verification completed
 
 Production settings passed `manage.py check --deploy`. Database migrations and geography imports completed. The managed service returned healthy database status. Administrator login, profile access, protected geography access, token rotation, logout and rejection of the revoked refresh token passed. Unauthenticated member access returned 401. The Gunicorn control socket runs in the service-owned `/run/tgcg` runtime directory.
