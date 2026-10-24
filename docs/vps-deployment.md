@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest code release deployed on 23 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest code release deployed on 24 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 23 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `8ed24e7d8f50d433b620aea293b9ac0121aa336c`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `4b9f177bf358120be394b23bd447d6132884d322`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,12 +32,12 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261023-195046-ff592b2dd840` (release directory timestamps use UTC).
-- Frontend build source: `909f685a1205c9d258ef8cb55427a17279f0253f` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261019-143256-956119733647`.
+- Published release: `/var/www/tgcg/releases/web-20261024-122253-235366b8caed` (release directory timestamps use UTC).
+- Frontend build source: `50890962df05c43b93242f9b1321df04bdc8b452` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261024-121230-be22735f1813`; the earlier wallet release `/var/www/tgcg/releases/web-20261023-195046-ff592b2dd840` is also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `ff592b2dd8405d594c8557614c3fee72f0669b5f5e898691d7a4726c8d3981d4`.
-- Build: 856 files, 59,169,385 uncompressed bytes. The public JavaScript checksum matched after publication; all 21 public checks passed.
+- Main JavaScript SHA256: `235366b8caed7d35412f2d8731560fa5481d326272e6300a5993ae14f3cb77f8`.
+- Build: 856 files, 59,186,932 uncompressed bytes. The public JavaScript checksum matched after publication; all 23 final public checks passed.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -124,6 +124,59 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Social Forum (24 October 2026)
+
+Backend `4b9f177bf358120be394b23bd447d6132884d322` was deployed, followed by the Social Forum web release. The user then approved the additional edit-dialog fix, committed and pushed as frontend `50890962df05c43b93242f9b1321df04bdc8b452` on top of `5cd3539`; the corrected build is now published. No APK is included; APK v5 stays on hold. This release adds no settings, dependencies or timers.
+
+The Social Forum is open to active members and accounts holding a role. Posts appear immediately, with comments, one-level answers, likes and reports. Authors can edit or delete their own posts and comments. Editors, meaning accounts holding a role or position, can hide or restore anywhere; hiding closes the item's open reports. Forum actions no longer depend on discussion permissions, and no role definition was changed. Older clients' approve/refuse requests returning 404 and settings PATCH returning 405 are expected; compatibility settings GET always reports approval disabled.
+
+All **621 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips (**327.37 seconds**); the full Ruff check passed. All **329 tracked backend files** matched the tested source exactly, and both isolated databases were removed. An initial test attempt was interrupted near a VPS boot; the clean durable second attempt passed the full suite. The final corrected web snapshot passed **327 Flutter tests in 38 seconds**, and analysis reported no issues (**58.8 seconds**). Its production build succeeded in **62.2 seconds**, after the backend was live, using the required production API define, base href `/` and PWA strategy `none`. All **817 source assets** were exact, and artifact and decoded-manifest privacy scans had **zero findings**. All **1,134 non-generated committed inputs** were verified against the tested source; two reviewed text files used canonical CRLF/LF comparison, with their raw tested hashes retained.
+
+The approved fix prevents a successful save response from closing the underlying post page when a post or comment edit dialog is dismissed during its save. Three regression cases cover the added dialog behavior; the fix is included in the final pinned web release.
+
+Exactly **`forum.0002_social_forum`** was applied, with **zero migrations pending** afterward. It adds post/comment edit timestamps and comment parents, creates Like and Report tables, deletes the old ForumSettings table, and publishes waiting posts using `published_at=created_at`. Reversing the migration does not unpublish those posts. The private transactional wrapper saved the old counts and approval values before the drop, locked the affected forum/access tables while the API was stopped, and verified the exact intended field changes. Existing attachment files were not opened or modified.
+
+Only the access application's system-role `post_migrate` receiver was suppressed for the migration process, then restored. The original deployment helper is unchanged. All five protected fingerprints matched both their independent baseline and the before/after snapshots: **92 roles, 2,381 appointments covering 2,393 areas, and 113 delegation grants covering 125 areas**. Every other old post field, all comment fields and attachment metadata were preserved; added edit timestamps and comment parents were null.
+
+The old approval switch held **one saved `true` value**; it was not using the unsaved default. Its table was removed. There were no waiting posts to publish, so **`published_from_pending=0`**. The exact aggregate counts were:
+
+| Forum records | Before | After |
+| --- | ---: | ---: |
+| Posts: pending | 0 | 0 |
+| Posts: published | 0 | 0 |
+| Posts: rejected | 0 | 0 |
+| Posts: hidden | 0 | 0 |
+| Posts: deleted | 0 | 0 |
+| Comments: visible | 0 | 0 |
+| Comments: hidden | 0 | 0 |
+| Comments: deleted | 0 | 0 |
+| Attachments | 0 | 0 |
+| Likes | Table not yet created | 0 |
+| Reports | Table not yet created | 0 |
+
+All five authenticated National Administrator checks returned **200**, using a short-lived access token held only in memory and no login call. The administrator's `last_login` was unchanged. No response bodies or forum content were retained:
+
+| Read-only GET | Result |
+| --- | --- |
+| `/api/v1/forum/me/` | `takes_part=true`, `editor=true` |
+| `/api/v1/forum/settings/` | `approval_required=false`, `can_change=false` |
+| `/api/v1/forum/posts/?show=review` | Count 0 |
+| `/api/v1/forum/reports/` | Count 0 |
+| `/api/v1/forum/posts/` | Published count 0 |
+
+API health returned **200**. The private environment remains `600:tgcg:tgcg`, registration retains `phone_code_required=false`, message channels remain empty, and all five existing TGCG timers are active. The release made no production forum posts, comments, likes, reports or moderation actions, changed no members, roles or appointments, sent no messages or SMS, and created or decided no payments, withdrawals or credit rates. No card photos were read and no bulk comparison ran.
+
+| Final release evidence | Result |
+| --- | --- |
+| Backend validation and schema | 621 PostgreSQL tests passed, zero failures/skips, 327.37 seconds; Ruff passed; both test databases removed; only forum migration 0002 applied; none pending |
+| Existing records and read-only checks | All five protected fingerprints unchanged; posts, comments and attachments stayed at zero; Like and Report counts zero; one saved approval value `true` removed with its table; five NA GETs returned 200 without login |
+| Corrected web validation | 327 Flutter tests passed in 38 seconds; analysis clean in 58.8 seconds; production build succeeded in 62.2 seconds; approved `5089096` source and assets verified with zero privacy findings |
+| Final web release | Published `/var/www/tgcg/releases/web-20261024-122253-235366b8caed`; immediate previous `/var/www/tgcg/releases/web-20261024-121230-be22735f1813` retained; 856 files, 59,186,932 bytes; main JavaScript SHA256 `235366b8caed7d35412f2d8731560fa5481d326272e6300a5993ae14f3cb77f8` |
+| Public release checks | All 23 final corrected-release checks passed, including the public checksum, health, app-origin CORS/preflights, anonymous forum me/reports 401s, private-path 404s and unchanged SMS-code 503 blocks. One JavaScript download timed out; only that failed checksum check was retried and matched |
+| Backups | All succeeded with exit status zero on 24 October 2026: pre-deployment at **11:43:16 UTC**, first Social Forum publication at **12:17:22 UTC**, and final corrected-release backup at **12:35:30 UTC** |
+
+The final uploaded web archive is **22,246,426 bytes**, SHA256 `7c5a0001be109581a8c82fc454ac60ae4c48eccd027b8de16f5e4d9ed774382e`. The first publication used original frontend `5cd3539` and remains retained as the immediate previous release; the backend did not change during the approved web correction.
 
 ### Registration credits and Paystack withdrawals (23 October 2026)
 
