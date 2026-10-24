@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -10,6 +11,7 @@ import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/api/forum_repository.dart';
 import 'package:tgcg_emcop/tgcg/discussion/discussion_room_page.dart';
 import 'package:tgcg_emcop/tgcg/discussion/forum_media.dart';
+import 'package:tgcg_emcop/tgcg/discussion/forum_post.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 
 // Names here are made up.
@@ -101,7 +103,7 @@ http.Response _me({bool editor = false}) => _json({'takes_part': true, 'editor':
 class _Server {
   final requests = <String>[];
   final bodies = <String, String>{};
-  http.Response? Function(String key, Map<String, String> query, String body) answer =
+  FutureOr<http.Response?> Function(String key, Map<String, String> query, String body) answer =
       (_, _, _) => null;
 
   BackendServices connect() => BackendServices.connect(
@@ -113,7 +115,7 @@ class _Server {
       final sent = latin1.decode(await body.toBytes());
       bodies[key] = sent;
       final response =
-          answer(key, request.url.queryParameters, sent) ?? _json({'detail': 'Not found.'}, 404);
+          await answer(key, request.url.queryParameters, sent) ?? _json({'detail': 'Not found.'}, 404);
       return http.StreamedResponse(
         Stream.value(response.bodyBytes),
         response.statusCode,
@@ -493,6 +495,92 @@ void main() {
     await tester.pumpAndSettle();
     expect(server.requests, contains('POST forum/posts/p3/restore/ '));
     expect(find.text('No hidden posts'), findsOneWidget);
+  });
+
+  for (final comment in [false, true]) {
+    testWidgets(
+      'a dismissed ${comment ? 'comment' : 'post'} edit cannot pop the post page on success',
+      (tester) async {
+        final pending = Completer<http.Response>();
+        final server = _Server()
+          ..answer = (key, _, _) => switch (key) {
+            'GET forum/posts/p1/replies/' => _json([
+              if (comment)
+                _comment('c1', author: 'Musa Bello', body: 'Original comment.', isMine: true),
+            ]),
+            'PATCH forum/posts/p1/' || 'PATCH forum/replies/c1/' => pending.future,
+            _ => null,
+          };
+        final navigator = GlobalKey<NavigatorState>();
+        await tester.pumpWidget(
+          TgcgBackend(
+            services: server.connect(),
+            child: MaterialApp(
+              navigatorKey: navigator,
+              home: const Scaffold(body: Text('Home sentinel')),
+            ),
+          ),
+        );
+        navigator.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => ForumPostPage(post: ForumPost.fromJson(_post('p1', isMine: !comment))),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('More').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit'));
+        await tester.pumpAndSettle();
+        await tester.enterText(_inDialog(find.byType(TextField)).first, 'Revised words.');
+        await tester.pump();
+        await tester.tap(_inDialog(find.text('Save')));
+        await tester.pump();
+        // Back/barrier dismissal begins its animation while the request is still pending.
+        navigator.currentState!.pop();
+        pending.complete(
+          _json(
+            comment
+                ? _comment('c1', author: 'Musa Bello', body: 'Revised words.', isMine: true)
+                : _post('p1', body: 'Revised words.', isMine: true),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(ForumPostPage), findsOneWidget);
+        expect(find.text('Home sentinel'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('an edit sends only one save before the disabled button rebuilds', (tester) async {
+    final pending = Completer<http.Response>();
+    final server = _Server()
+      ..answer = (key, _, _) => switch (key) {
+        'GET forum/me/' => _me(),
+        'GET forum/posts/' => _json(_page([_post('p1', isMine: true)])),
+        'GET forum/assignments/' => _json([]),
+        'PATCH forum/posts/p1/' => pending.future,
+        _ => null,
+      };
+    await _pump(tester, server);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_inDialog(find.byType(TextField)).first, 'Revised words.');
+    await tester.pump();
+    final save = tester.widget<FilledButton>(_inDialog(find.byType(FilledButton))).onPressed!;
+    save();
+    save();
+    await tester.pump();
+    expect(
+      server.requests.where((request) => request.startsWith('PATCH forum/posts/p1/')),
+      hasLength(1),
+    );
+    pending.complete(_json(_post('p1', body: 'Revised words.', isMine: true)));
+    await tester.pumpAndSettle();
+    expect(find.text('Revised words.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   test('pictures and videos are named for what they really are', () {

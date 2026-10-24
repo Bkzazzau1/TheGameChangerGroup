@@ -123,20 +123,22 @@ class _EditDialogState<T> extends State<_EditDialog<T>> {
       (widget.assignment != null && _assignment.text.trim() != widget.assignment!.trim());
 
   Future<void> _save() async {
+    if (_saving || !_changed) return;
+    final route = ModalRoute.of(context);
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
       final saved = await widget.save(_body.text, _assignment.text);
-      if (mounted) Navigator.of(context).pop(saved);
+      if (!mounted || route?.isCurrent != true) return;
+      Navigator.of(context).pop(saved);
     } catch (error) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = failureMessage(error);
-        });
-      }
+      if (!mounted || route?.isCurrent != true) return;
+      setState(() {
+        _saving = false;
+        _error = failureMessage(error);
+      });
     }
   }
 
