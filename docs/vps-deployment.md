@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest release verified on 19 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest code release deployed on 23 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest release verified on 19 October 2026 (Af
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `2c35f0dbd7a6685c302ad1402fe55451554418b3`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `8ed24e7d8f50d433b620aea293b9ac0121aa336c`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -28,16 +28,16 @@ Initial setup on 12 October 2026; latest release verified on 19 October 2026 (Af
 - Geography: 8,809 wards, 176,846 polling units; 160,873 polling units with INEC locations across all 36 states and the FCT.
 - Administrator: access ID and display name `TGCG`, national administrator with country scope.
 
-Nginx publishes the API and administration over HTTPS while Gunicorn remains on loopback. Flutter uses `https://api.tgcg.online`; browser access is limited to the app origin. Termii SMS credentials remain to be configured.
+Nginx publishes the API and administration over HTTPS while Gunicorn remains on loopback. Flutter uses `https://api.tgcg.online`; browser access is limited to the app origin. Termii SMS credentials and the Paystack secret key remain to be configured. Phone-code registration remains disabled; registration credits use the default `signIn` policy.
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261019-143256-956119733647` (release directory timestamps use UTC).
-- Frontend build source: `1f155cc63648eef3b26e2170e87b51280e6a06b1` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261018-133943-1e2fc9caad53`.
+- Published release: `/var/www/tgcg/releases/web-20261023-195046-ff592b2dd840` (release directory timestamps use UTC).
+- Frontend build source: `909f685a1205c9d258ef8cb55427a17279f0253f` from `Bkzazzau1/TheGameChangerGroup`. The build used a pinned snapshot; later source commits are outside this bundle.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261019-143256-956119733647`.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `95611973364781fc41edc0cfe9c39e649a8e9a7dedfdd2943f36f409891eee5a`.
-- Build: 856 files, 59,136,554 uncompressed bytes. All files matched the upload manifest, and the public JavaScript checksum matched after publication.
+- Main JavaScript SHA256: `ff592b2dd8405d594c8557614c3fee72f0669b5f5e898691d7a4726c8d3981d4`.
+- Build: 856 files, 59,169,385 uncompressed bytes. The public JavaScript checksum matched after publication; all 21 public checks passed.
 - Release metadata: `/opt/tgcg/deployment/web-release.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
@@ -98,6 +98,7 @@ Private uploads remain under `/opt/tgcg/backend/media`; they require the applica
 - `tgcg-maintenance.timer`: removes expired location history and USSD progress daily at 03:00 Africa/Lagos.
 - `tgcg-recordings.service` and `tgcg-recordings.timer`: enabled for recording maintenance every minute, including ending streams older than 120 minutes. The initial run succeeded; provider error output is discarded to keep credentials out of logs.
 - `tgcg-messages.service` and `tgcg-messages.timer`: enabled and active for message delivery every minute, using `deliver_messages --seconds 55 --batch 10`. The initial run succeeded with `Handled 0 message(s).`; only aggregate counts reach stdout and stderr is discarded.
+- `tgcg-withdrawals.service` and `tgcg-withdrawals.timer`: installed and verified, with the timer enabled and active, waiting to check withdrawal outcomes every 15 minutes as `tgcg` with production settings. Its first run succeeded with `Paystack is not set up: nothing to check.`; stderr is discarded.
 - `tgcg-backup.timer`: backs up PostgreSQL, private media, `.env`, Nginx configuration, TLS configuration and deployment metadata daily at 03:15 Africa/Lagos.
 - Backup directories: `/var/backups/tgcg/<UTC timestamp>-<unique suffix>`, accessible to root.
 - Initial backup: `/var/backups/tgcg/20261012T072156Z-gTgoU1`.
@@ -123,6 +124,51 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Registration credits and Paystack withdrawals (23 October 2026)
+
+Approved backend `8ed24e7d8f50d433b620aea293b9ac0121aa336c` was deployed, and the production web build from approved frontend `909f685a1205c9d258ef8cb55427a17279f0253f` was published. Both commits were pushed on `main`. No APK was built or published; APK v5 remains on hold.
+
+The release adds credits earned once when a member registered by another member first signs in, conversion at the current credit rate, and reviewed withdrawals to a bank account whose name matches the member. The initial defaults are **one credit per registration, ₦100.00 per credit and a ₦1,000.00 minimum withdrawal**, returned without inserting a credit-rate record. Credits can accrue before the registrar's identity is verified; conversion and withdrawals require verification. The web wallet screens show credits, conversions, withdrawal status and the payment/withdrawal/rate views allowed by the account's permissions.
+
+The approved corrections make a first sign-in atomic with its reward, login timestamp and refresh-token record. A failed reward returns 503 without consuming the first sign-in, so a retry can earn once. Password failure counters remain outside this transaction. Existing sign-ins and a first sign-in made while rewards are paused do not receive later backpay. Bank-name matching requires distinct matching words instead of reusing one word. Web dialogs reject repeated submissions and ignore responses after dismissal.
+
+All **619 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips (**331.84 seconds**); Ruff passed. All 328 approved backend files matched the tested source exactly, and both isolated test databases were removed. All **322 Flutter tests passed**, analysis was clean, and the production web build used the required API define. The archive SHA256 is `bf173ef2bc7367ae0c4bf0098f08da77a35a1f50e698591c7bfe25ca8dc7821b`.
+
+Exactly **`wallets.0002_credits_and_withdrawals`** was applied, with **zero migrations pending** afterward. The deployment used a private copy of the normal helper whose migration step invoked a transactional wrapper. It suppressed only the access application's system-role `post_migrate` receiver for that process, then restored the receiver; the original deployment helper was unchanged. This preserved stored role permissions and existing appointments rather than allowing the normal role-sync hook to rewrite them.
+
+The migration's before/after fingerprints matched for all protected role, appointment, appointment-area, delegation and delegation-area records. Original wallet balance, payment and ledger columns also matched across the additive schema change. Counts stayed at **92 roles, 2,381 appointments covering 2,393 areas, and 113 grants covering 125 areas**. Wallet, payment and ledger row counts were **zero before and after**. Lists, projects, broadcasts, deliveries and security dispatches remained zero.
+
+Read-only National Administrator checks used a short-lived access token held only in memory, without calling login; the administrator's `last_login` was unchanged. `GET /api/v1/wallets/credit-rates/` returned **200** with the initial **1 / "100.00" / "1000.00"** defaults, `set_by=null` and no history. `GET /api/v1/withdrawals/` returned **200** with `count=0`. Credit-rate, withdrawal, reward-entry and noncredit-entry row counts were all **zero**, and the protected counts and baseline fingerprints remained unchanged.
+
+`PAYSTACK_SECRET_KEY` remains **absent**. `CREDITS_EARNED_ON` remains **unset**, selecting the user's `signIn` default. Registration still reports `phone_code_required=false`, available message channels remain empty, and the Nginx SMS-code blocks are unchanged. The private environment remains `600:tgcg:tgcg`, the backend checkout is clean at the approved commit, and the original deployment helper is unchanged. No member was signed in by deployment checks. The release created or decided no payment, withdrawal or credit rate, sent no money or message, and changed no member, role or appointment. No card photos were read and no bulk identity comparison ran.
+
+The new **`tgcg-withdrawals.timer`** is installed, verified, enabled and active, waiting on its 15-minute schedule. Its first service invocation succeeded with exactly:
+
+```text
+Paystack is not set up: nothing to check.
+```
+
+The command checks processing withdrawals older than ten minutes; it never initiates a transfer. With no key configured it contacts no provider. For future processing withdrawals it can verify status and settle or refund existing records. A single webhook POST with `{}` and an invalid signature reached Django and returned **401**, recording no financial change. Nginx configuration validation passed.
+
+The new web release is `/var/www/tgcg/releases/web-20261023-195046-ff592b2dd840`; the previous `/var/www/tgcg/releases/web-20261019-143256-956119733647` remains retained. The bundle contains **856 files and 59,169,385 uncompressed bytes**, with main JavaScript SHA256 `ff592b2dd8405d594c8557614c3fee72f0669b5f5e898691d7a4726c8d3981d4`. All **21 public checks passed**, including the matching public checksum, health 200, app-origin CORS/preflights, anonymous staff/member withdrawal requests returning 401/401, SMS blocks returning 503/503 and private paths returning 404. A second authenticated read-only check after publication and the invalid webhook request again confirmed all financial row counts zero and protected fingerprints unchanged.
+
+| Final release evidence | Result |
+| --- | --- |
+| Backend and web validation | 619 PostgreSQL tests passed, zero failures/skips, 331.84 seconds; Ruff passed; both isolated databases removed; 322 Flutter tests passed and analysis clean |
+| Schema and existing records | Only wallets migration 0002 applied; none pending; protected and original money fingerprints unchanged; 92 roles, 2,381 appointments and 113 grants |
+| Authenticated read-only API | Credit rates 200 with defaults/no history; withdrawals 200 with count zero; no login and unchanged administrator login timestamp |
+| New financial tables and entries | CreditRate, Withdrawal, reward and noncredit counts all zero; no deployment money operations |
+| Configuration and withdrawal worker | Paystack absent; default `signIn`; phone code false; channels empty; 15-minute timer enabled/active and initial run succeeded without a provider call |
+| Webhook and Nginx | One invalid-signature POST returned 401 without mutation; Nginx configuration passed |
+| Public release checks | All 21 passed; public main JavaScript checksum matched; health/CORS/preflights, anonymous withdrawal 401s, SMS 503s and private-path 404s passed |
+| Backups | Both succeeded with exit status zero: the fresh pre-deployment backup finished **19:46:36 UTC on 23 October 2026**, and the post-release backup finished **19:53:46 UTC on 23 October 2026** |
+
+These Paystack dashboard steps remain for the user:
+
+- Set the webhook URL to `https://api.tgcg.online/api/v1/paystack/webhook/`.
+- Turn off OTP for transfers.
+- Fund TGCG's Paystack balance.
 
 ### Printable member lists and Adamawa chapter import (19 October 2026)
 
