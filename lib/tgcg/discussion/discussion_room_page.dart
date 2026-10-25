@@ -14,9 +14,12 @@ import 'forum_post.dart';
 /// position) hide and restore, and see the reports. The server decides who
 /// does what.
 class DiscussionRoomPage extends StatefulWidget {
-  const DiscussionRoomPage({super.key, this.pickMedia = pickForumMedia});
+  const DiscussionRoomPage({super.key, this.pickMedia = pickForumMedia, this.bottomPadding});
 
   final PickForumMedia pickMedia;
+
+  /// Room below the feed (more where a floating button covers its end).
+  final double? bottomPadding;
 
   @override
   State<DiscussionRoomPage> createState() => _DiscussionRoomPageState();
@@ -286,7 +289,12 @@ class _DiscussionRoomPageState extends State<DiscussionRoomPage> {
       );
     }
     return ListView(
-      padding: EdgeInsets.all(phone ? 16 : 24),
+      padding: EdgeInsets.fromLTRB(
+        phone ? 16 : 24,
+        phone ? 16 : 24,
+        phone ? 16 : 24,
+        widget.bottomPadding ?? (phone ? 16 : 24),
+      ),
       children: [
         TgcgPageHeader(
           eyebrow: 'COMMUNITY',

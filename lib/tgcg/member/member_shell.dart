@@ -11,6 +11,7 @@ import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
 import '../api/member_repository.dart';
 import '../api/wallet_repository.dart';
+import '../askme/ask_me_chat.dart';
 import '../discussion/discussion_room_page.dart';
 import '../location/directions.dart';
 import '../messaging/inbox_page.dart';
@@ -28,7 +29,8 @@ import 'selfie_check.dart';
 import 'wallet_page.dart';
 
 /// The member app: membership card, polling unit, announcements, the Social
-/// Forum, volunteering and the member's own appointments.
+/// Forum, volunteering and the member's own appointments, with Ask Me on
+/// every tab.
 class MemberShell extends StatefulWidget {
   const MemberShell({
     super.key,
@@ -147,15 +149,24 @@ class _MemberShellState extends State<MemberShell> {
             ),
           1 => _UnitTab(unit: _unit!, launch: widget.launch, scanPvc: widget.scanPvc),
           2 => _NewsTab(news: _news!),
-          3 => const DiscussionRoomPage(),
+          3 => const DiscussionRoomPage(bottomPadding: _belowAskMe),
           4 => _VolunteerTab(
               offers: _volunteering!,
               onChanged: () => setState(() {
                 _volunteering = _members.volunteering();
               }),
             ),
-          _ => const MyAccessPage(showHeader: false),
+          _ => const MyAccessPage(showHeader: false, bottomPadding: _belowAskMe),
         },
+      ),
+      // Ask Me, from every tab.
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'ask-me',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const AskMePage()),
+        ),
+        icon: const Icon(Icons.record_voice_over_outlined),
+        label: const Text('Ask Me'),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
@@ -516,6 +527,11 @@ class _RegisteredCard extends StatelessWidget {
 }
 
 /// Shows a loading spinner, an error with a hint, or the loaded data.
+/// Room at the bottom of each tab's list, so its last item scrolls clear of
+/// the Ask Me button.
+const _belowAskMe = 96.0;
+const _tabPadding = EdgeInsets.fromLTRB(16, 16, 16, _belowAskMe);
+
 class _Loaded<T> extends StatelessWidget {
   const _Loaded({required this.future, required this.builder});
   final Future<T> future;
@@ -575,7 +591,7 @@ class _CardTab extends StatelessWidget {
             checkSelfie: checkSelfie,
           );
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: _tabPadding,
             children: [
               if (waitingRole != null) ...[
                 _WaitingRoleNote(role: waitingRole),
@@ -1013,7 +1029,7 @@ class _UnitTab extends StatelessWidget {
             );
           }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: _tabPadding,
             children: [
               TgcgSectionCard(
                 title: unit.name,
@@ -1065,7 +1081,7 @@ class _NewsTab extends StatelessWidget {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: _tabPadding,
             itemCount: items.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
@@ -1098,7 +1114,7 @@ class _VolunteerTab extends StatelessWidget {
         builder: (items) {
           final open = items.where((offer) => offer.isOpen).firstOrNull;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: _tabPadding,
             children: [
               TgcgSectionCard(
                 title: 'Volunteer for party work',

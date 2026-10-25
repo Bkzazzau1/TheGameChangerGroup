@@ -1198,6 +1198,9 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Waiting for a coordinator'), findsOneWidget);
+      // The message lifts the Ask Me button over the row; let it go first.
+      tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)).clearSnackBars();
+      await tester.pumpAndSettle();
 
       await tester.tap(action('Your PVC')); // Withdraw
       await tester.pumpAndSettle();
@@ -1318,6 +1321,35 @@ void main() {
     expect(find.widgetWithText(TextField, 'Share an update'), findsOneWidget);
     // Not an editor: no role or position.
     expect(find.text('Reports'), findsNothing);
+  });
+
+  testWidgets('members open Ask Me from any tab', (tester) async {
+    final server = _Server((request) => switch (_path(request)) {
+          'me/member/' => _json(_card()),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 12, 'members_in_ward': 140}),
+          'me/announcements/' => _json({'count': 0, 'results': []}),
+          'me/volunteer/' => _json([]),
+          'askme/me/' => _json({
+              'can_ask': false,
+              'enabled': false,
+              'training_ok': null,
+              'asked_today': 0,
+              'daily_limit': 20,
+              'can_review': false,
+              'can_approve': false,
+              'ai_ready': false,
+            }),
+          _ => null,
+        });
+    await _pump(tester, server.connect(), const MemberShell(), member: true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('My unit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Ask Me'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Ask Me'), findsOneWidget);
+    expect(find.text('Ask Me is not open yet'), findsOneWidget);
   });
 
   testWidgets('a member signing in on the server opens the member app', (tester) async {

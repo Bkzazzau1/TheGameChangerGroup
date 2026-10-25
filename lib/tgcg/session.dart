@@ -38,6 +38,7 @@ enum TgcgModule {
   wallets,
   projects,
   messages,
+  askMe,
 }
 
 /// The modules that work on the server's records today. The others still
@@ -60,6 +61,7 @@ const liveModules = {
   TgcgModule.wallets,
   TgcgModule.projects,
   TgcgModule.messages,
+  TgcgModule.askMe,
 };
 
 class TgcgSessionController extends ChangeNotifier {
@@ -353,9 +355,13 @@ Set<TgcgModule> allowedModulesFor(
   bool supervises = false,
 }) {
   bool any(Iterable<TgcgCapability> capabilities) => capabilities.any(can);
-  // The Social Forum is for everyone (24 October 2026); the server decides
-  // who edits.
-  final modules = <TgcgModule>{TgcgModule.overview, TgcgModule.discussionRoom};
+  // The Social Forum (24 October 2026) and Ask Me (25 October 2026) are for
+  // everyone; the server decides who edits and reviews.
+  final modules = <TgcgModule>{
+    TgcgModule.overview,
+    TgcgModule.discussionRoom,
+    TgcgModule.askMe,
+  };
 
   // Member Enrolment: whoever registers members in person or accredits agents.
   if (any(const [

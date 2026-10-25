@@ -10,6 +10,7 @@ import 'collation/collation_page.dart';
 import 'communications/bulk_communications_page.dart';
 import 'communications/communications_page.dart';
 import 'dashboard_page.dart';
+import 'askme/ask_me_hub_page.dart';
 import 'discussion/discussion_room_page.dart';
 import 'evidence/evidence_capture_page.dart';
 import 'field/field_monitoring_page.dart';
@@ -196,6 +197,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.wallets => const WalletPaymentsPage(),
         TgcgModule.projects => const ProjectsPage(),
         TgcgModule.messages => const MessagesPage(),
+        TgcgModule.askMe => const AskMeHubPage(),
       };
 }
 
@@ -232,6 +234,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.bulkCommunications, 'Bulk Communications', Icons.send_to_mobile_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.messages, 'Messages', Icons.campaign_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.discussionRoom, 'Social Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.askMe, 'Ask Me', Icons.record_voice_over_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.roleAssignment, 'Roles & Access', Icons.manage_accounts_outlined, _NavGroup.control),
   _Destination(TgcgModule.memberReview, 'Member Review', Icons.verified_user_outlined, _NavGroup.control),
@@ -619,6 +622,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.wallets => 'Wallets',
       TgcgModule.projects => 'Projects',
       TgcgModule.messages => 'Messages',
+      TgcgModule.askMe => 'Ask Me',
     };
 
 

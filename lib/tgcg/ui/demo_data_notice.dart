@@ -111,6 +111,7 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.resultCapture ||
     TgcgModule.collation ||
     TgcgModule.discussionRoom ||
+    TgcgModule.askMe ||
     TgcgModule.meetingRoom => null,
   };
 }

@@ -9,9 +9,12 @@ import 'access_widgets.dart';
 /// Where the signed-in user's access comes from, and their own appointments:
 /// accept, decline or resign each one on its own.
 class MyAccessPage extends StatefulWidget {
-  const MyAccessPage({super.key, this.showHeader = true});
+  const MyAccessPage({super.key, this.showHeader = true, this.bottomPadding = 24});
 
   final bool showHeader;
+
+  /// Room below the list (more where a floating button covers its end).
+  final double bottomPadding;
 
   @override
   State<MyAccessPage> createState() => _MyAccessPageState();
@@ -94,7 +97,7 @@ class _MyAccessPageState extends State<MyAccessPage> {
     final session = TgcgSession.of(context);
     final grants = session.grants;
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, widget.bottomPadding),
       children: [
         if (widget.showHeader) ...[
           TgcgPageHeader(

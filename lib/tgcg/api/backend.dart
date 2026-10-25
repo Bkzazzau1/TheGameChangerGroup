@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import 'access_repository.dart';
 import 'api_client.dart';
+import 'askme_repository.dart';
 import 'auth_repository.dart';
 import 'field_repository.dart';
 import 'forum_repository.dart';
@@ -34,6 +35,7 @@ class BackendServices {
         access = AccessRepository(client),
         members = MemberAdminRepository(client),
         forum = ForumRepository(client),
+        askMe = AskMeRepository(client),
         wallets = WalletRepository(client),
         projects = ProjectsRepository(client),
         messaging = MessagingRepository(client),
@@ -83,6 +85,9 @@ class BackendServices {
 
   /// The Social Forum: posts, comments, likes and reports.
   final ForumRepository forum;
+
+  /// Ask Me: answers only from TGCG's approved library, and its review.
+  final AskMeRepository askMe;
 
   /// Members' wallets and the payments TGCG makes into them.
   final WalletRepository wallets;

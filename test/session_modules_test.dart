@@ -6,7 +6,11 @@ void main() {
   group('TGCG role-aware modules', () {
     const M = TgcgModule.values;
     TgcgModule m(String name) => M.byName(name);
-    Set<TgcgModule> modules(String names) => {for (final name in names.split(' ')) m(name)};
+    // Ask Me is for everyone (25 October 2026).
+    Set<TgcgModule> modules(String names) => {
+      for (final name in names.split(' ')) m(name),
+      TgcgModule.askMe,
+    };
 
     // The role grid agreed on 10 October 2026 ("Proposed"), plus screens built
     // since: Unit Mapping for coordinators who pin units, and Agents on the
@@ -83,7 +87,12 @@ void main() {
     test('a security officer sees Security Response, and it works on server records', () {
       final officer = allowedModulesFor((c) => c == TgcgCapability.respondToSecurity);
       // The Social Forum is for everyone (24 October 2026).
-      expect(officer, {TgcgModule.overview, TgcgModule.discussionRoom, TgcgModule.securityResponse});
+      expect(officer, {
+        TgcgModule.overview,
+        TgcgModule.discussionRoom,
+        TgcgModule.askMe,
+        TgcgModule.securityResponse,
+      });
       expect(liveModules, contains(TgcgModule.securityResponse));
     });
 

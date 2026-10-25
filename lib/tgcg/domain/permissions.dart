@@ -95,6 +95,10 @@ enum TgcgCapability {
   sendPushNotifications,
   // Security officers answer the incidents the Situation Room sends them.
   respondToSecurity,
+  // Ask Me: reviewers draft its library and review answers; a National
+  // Administrator approves what it may say.
+  reviewAskMe,
+  approveAskMe,
   appointNationalAdministrator,
   approveAdministratorRemoval,
   // Scheduling projects: National Administrators only.
