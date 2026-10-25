@@ -336,6 +336,7 @@ class _RegistrationLine extends StatelessWidget {
       const SizedBox(height: 2),
       Text(
         [
+          if (counts.withCode > 0) '${counts.withCode} with your code',
           '${counts.signedIn} signed in',
           '${counts.waiting} not signed in yet',
           '${counts.credited} credited',

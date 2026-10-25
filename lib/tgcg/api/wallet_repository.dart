@@ -144,12 +144,16 @@ class WalletEntry {
 class RegistrationCounts {
   const RegistrationCounts({
     this.registered = 0,
+    this.withCode = 0,
     this.signedIn = 0,
     this.waiting = 0,
     this.credited = 0,
   });
 
   final int registered;
+
+  /// Of them, joined with the member's referral code.
+  final int withCode;
   final int signedIn;
 
   /// Not signed in yet: no credit until they do.
@@ -158,6 +162,7 @@ class RegistrationCounts {
 
   factory RegistrationCounts.fromJson(Map<String, dynamic> json) => RegistrationCounts(
     registered: (json['registered'] as num?)?.toInt() ?? 0,
+    withCode: (json['with_code'] as num?)?.toInt() ?? 0,
     signedIn: (json['signed_in'] as num?)?.toInt() ?? 0,
     waiting: (json['waiting'] as num?)?.toInt() ?? 0,
     credited: (json['credited'] as num?)?.toInt() ?? 0,

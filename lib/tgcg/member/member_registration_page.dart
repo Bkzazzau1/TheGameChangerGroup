@@ -14,6 +14,7 @@ import '../session.dart';
 import '../ui/tgcg_design.dart';
 import 'disability_picker.dart';
 import 'polling_unit_finder_page.dart';
+import 'referral.dart';
 import 'selfie_check.dart';
 
 /// A photo as bytes, with a file name for the upload.
@@ -137,7 +138,11 @@ class MemberRegistrationPage extends StatefulWidget {
     this.takeSelfie = takeSelfieWithDevice,
     this.checkSelfie = checkSelfieOnDevice,
     this.readPvcText,
+    this.referralCode,
   });
+
+  /// From the inviting member's link; it can still be changed or cleared.
+  final String? referralCode;
 
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
@@ -199,6 +204,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   // Step 4: the PIN.
   final _pin = TextEditingController();
   final _pinAgain = TextEditingController();
+  late final _referral = TextEditingController(text: widget.referralCode ?? referralFromLink() ?? '');
   bool _consent = false;
 
   /// Errors by field, from the server or local checks.
@@ -218,6 +224,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       _disabilityOther,
       _pin,
       _pinAgain,
+      _referral,
     ]) {
       controller.dispose();
     }
@@ -558,6 +565,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           pin: _pin.text,
           selfie: _selfieReady ? _selfie : null,
           pvcImage: _pvcPhoto,
+          referralCode: _referral.text.trim(),
         ),
       );
       navigator.popUntil((route) => route.isFirst);
@@ -584,6 +592,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
       'photo': _Step.about,
       'pin': _Step.pin,
       'consent': _Step.pin,
+      'referral_code': _Step.pin,
     };
     final errors = {for (final entry in error.fieldErrors.entries) entry.key: entry.value.first};
     final step = errors.keys
@@ -1021,6 +1030,17 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           decoration: InputDecoration(
             labelText: 'PIN again',
             errorText: _errors['pin_again'] ?? (typedBoth ? _pinError ?? _pinAgainError : null),
+          ),
+        ),
+        TextField(
+          controller: _referral,
+          keyboardType: TextInputType.number,
+          maxLength: 7,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (_) => setState(() => _errors.remove('referral_code')),
+          decoration: InputDecoration(
+            labelText: 'Referral code (optional)',
+            errorText: _errors['referral_code'],
           ),
         ),
         const SizedBox(height: 6),

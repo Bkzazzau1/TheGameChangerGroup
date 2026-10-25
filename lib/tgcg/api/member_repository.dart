@@ -273,9 +273,13 @@ class MemberRegistration {
     this.email = '',
     this.disabilities = const [],
     this.disabilityOther = '',
+    this.referralCode = '',
   });
 
   final String phoneNumber;
+
+  /// The 7-digit code of the member who invited them, if any.
+  final String referralCode;
 
   /// The SMS code, when the server asked for one.
   final String code;
@@ -299,6 +303,33 @@ class MemberRegistration {
   /// Codes from [disabilityKinds], if the member chose to give them.
   final List<String> disabilities;
   final String disabilityOther;
+}
+
+/// A member's referral code and link, and how many joined with them.
+class MyReferral {
+  const MyReferral({
+    required this.code,
+    required this.link,
+    this.joined = 0,
+    this.signedIn = 0,
+    this.credited = 0,
+  });
+
+  final String code;
+
+  /// Opens joining in the web app with the code filled in.
+  final String link;
+  final int joined;
+  final int signedIn;
+  final int credited;
+
+  factory MyReferral.fromJson(Map<String, dynamic> json) => MyReferral(
+    code: json['code'] as String,
+    link: json['link'] as String? ?? '',
+    joined: (json['joined'] as num?)?.toInt() ?? 0,
+    signedIn: (json['signed_in'] as num?)?.toInt() ?? 0,
+    credited: (json['credited'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// The details a member sends from their one PVC scan, checked against the
@@ -558,6 +589,10 @@ class MemberRepository {
     return (body['expires_in'] as int?) ?? 600;
   }
 
+  /// The signed-in member's referral code and link.
+  Future<MyReferral> referral() async =>
+      MyReferral.fromJson(await client.get('me/referral/') as Map<String, dynamic>);
+
   /// Creates the member and signs them in.
   Future<MemberCard> register(MemberRegistration data) async {
     final dob = data.dateOfBirth;
@@ -579,6 +614,7 @@ class MemberRepository {
         if (data.disabilityOther.isNotEmpty) 'disability_other': data.disabilityOther,
         'pin': data.pin,
         'consent': 'true',
+        if (data.referralCode.isNotEmpty) 'referral_code': data.referralCode,
       },
       files: () async => [
         if (data.selfie case final selfie?)

@@ -778,6 +778,12 @@ class _RegistrarTile extends StatelessWidget {
                     label: '${counts.credited} credited',
                     color: TgcgColors.primary,
                   ),
+                  if (counts.withCode > 0)
+                    TgcgStatusPill(
+                      compact: true,
+                      label: '${counts.withCode} with their code',
+                      color: TgcgColors.muted,
+                    ),
                   if (number != null && !registrar.identityVerified)
                     const TgcgStatusPill(
                       compact: true,

@@ -266,6 +266,7 @@ void main() {
       ScanPvc? scanPvc,
       CheckSelfie? checkSelfie,
       ReadPvcText? readPvcText,
+      String? referralCode,
     }) =>
         _pump(
           tester,
@@ -275,6 +276,7 @@ void main() {
             takeSelfie: () async => XFile.fromData(_pixel),
             checkSelfie: checkSelfie ?? (_) async => const SelfieCheck.passed(),
             readPvcText: readPvcText,
+            referralCode: referralCode,
           ),
         );
 
@@ -349,6 +351,19 @@ void main() {
         'consent': 'true',
       });
       expect(upload.files, isEmpty);
+    });
+
+    testWidgets("the code from an inviting member's link goes with the joining", (tester) async {
+      final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
+      await open(tester, api, referralCode: '4827155');
+      await enterPhone(tester);
+      await typeCard(tester, vin: '90F5B0E8D0295847263');
+      await next(tester);
+      expect(find.widgetWithText(TextField, 'Referral code (optional)'), findsOneWidget);
+      expect(find.text('4827155'), findsOneWidget);
+      await choosePin(tester);
+      final upload = api.requests.last as http.MultipartRequest;
+      expect(upload.fields['referral_code'], '4827155');
     });
 
     testWidgets('a member may give their disabilities when joining', (tester) async {

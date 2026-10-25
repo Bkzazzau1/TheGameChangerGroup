@@ -5,6 +5,7 @@ import 'api/backend.dart';
 import 'app.dart';
 import 'member/forgot_pin_page.dart';
 import 'member/member_registration_page.dart';
+import 'member/referral.dart';
 import 'session.dart';
 import 'ui/tgcg_design.dart';
 
@@ -27,6 +28,21 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
   bool rememberDevice = true;
   bool signingIn = false;
   String? serverError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Opened from a member's referral link: go straight to joining.
+    final code = referralFromLink();
+    if (code != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => MemberRegistrationPage(referralCode: code)),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {

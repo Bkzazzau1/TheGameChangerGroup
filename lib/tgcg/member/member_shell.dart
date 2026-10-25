@@ -23,6 +23,7 @@ import 'member_registration_page.dart'
     show ScanPvc, TakeSelfie, readScanOnServer, scanPvcWithDevice, takeSelfieWithDevice;
 import 'disability_picker.dart';
 import 'membership_card_view.dart';
+import 'referral.dart';
 import 'pvc_scan_page.dart';
 import 'registered_members_page.dart';
 import 'selfie_check.dart';
@@ -602,6 +603,7 @@ class _CardTab extends StatelessWidget {
               _CardDownload(card: card, save: saveCard),
               const SizedBox(height: 18),
               const _WalletRow(),
+              const ReferralCard(),
               TgcgSectionCard(
                 title: 'My details',
                 child: Column(
