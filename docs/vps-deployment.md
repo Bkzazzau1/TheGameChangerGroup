@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `09e9270052af76a7040361fc9841cd3968caebcd`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `fbdc2b4b64a5d8646b2ea70084c2b3db6ba18704`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,13 +32,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261026-083201-133155abd36b` (release directory timestamps use UTC).
-- Frontend build source: `e1c4c33` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261024-133831-eb94bdb1509f` (registrars); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261026-110521-f178e86a8daa` (release directory timestamps use UTC).
+- Frontend build source: `cb5c7ac` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 was built from the same commit.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261026-083201-133155abd36b` (Ask Me and referral codes); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `133155abd36bd8defcc893137a8b834bf1a2ea52044408ab579ed150e8060c7d`.
-- Build: 856 files, 59,286,534 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `f178e86a8daa3b0b9e90d6b4def36ecdf62e3c741549a50f463fab0543352816`.
+- Build: 856 files, 59,314,404 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -138,6 +138,39 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Forum video pictures, web and Android version 5 (26 October 2026)
+
+The owner approved publishing all three. Backend `fbdc2b4b64a5d8646b2ea70084c2b3db6ba18704` went live over `09e9270`. The web build and Android version 5 both come from frontend `cb5c7ac`, so the web and phone apps match. Each forum video now shows a picture taken from it, in its own shape (upright phone videos stand upright), at most 420 pixels tall, with a play button and its length. The posting app takes the picture: Android uses `MediaMetadataRetriever` and the browser uses a canvas. The server re-saves it as a small JPEG and serves it at `/forum/attachments/{id}/poster/`.
+
+**Validation.**
+- **663 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips; the throwaway databases and the staging folder were removed.
+- Locally, 636 tests passed and 27 were skipped, and Ruff passed.
+- **346 Flutter tests** passed and analysis was clean.
+- The browser picture grab was checked in headless Chrome on a video Chrome recorded itself. The result was a 240×320 JPEG whose centre pixel was the recorded colour, so it is not a black frame. Flutter's own browser tests do not start on this PC, so `test/video_poster_web_test.dart` repeats that check where they can run.
+- The Android picture grab compiled into the release build. It has not been tried on a phone yet.
+
+**Deployment** (`/opt/tgcg/deployment/release-20261026b/`, run as a systemd job, `run.sh`):
+- The first run stopped at the backup, which failed with "file changed as we read it": the backup also archives the deployment folder, and the APK was still uploading into it. Nothing else had run. The second run's backup succeeded.
+- `deploy.sh` checked the checkout was clean at `09e9270`, that no dependency or static file changed, and that the only new migration was `forum.0003_video_posters`. With the API stopped, it applied exactly that migration, with the role-sync receiver disconnected and `migrate.py` passed to `tgcg` on standard input.
+- **Zero migrations are pending.** Fingerprints matched: **92 roles, 2,381 appointments, 113 delegation grants**. Health passed, and no server errors followed.
+- Before the deployment, a careless file-access check briefly ran `migrate.py` itself on the old code. It stopped at its guard, because the pending migrations did not match, and applied nothing.
+
+**Read-only checks.** The forum has 6 earlier videos, none with a picture. The app makes pictures itself for the 4 that are at most 5 MB; the 2 larger ones show the new layout without one. Anonymous requests for a poster return **401**.
+
+**Web release.** It went live at `/var/www/tgcg/releases/web-20261026-110521-f178e86a8daa`. The public `main.dart.js` checksum matched `f178e86a…`.
+
+**Android version 5.**
+- Download: <https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-5.apk>. Version `0.1.0+5`, package `ng.tgcg.tgcg_emcop`, minimum Android API 24, with ARM, ARM64 and x86_64 support.
+- Size: 195,680,191 bytes. SHA256: `7961d960142bda7af159054c55b4ad4681cdefde5e5301c20b0feae0b7b0abf8`.
+- It was built with `flutter build apk --release --build-number=5 --dart-define=TGCG_API_URL=https://api.tgcg.online`.
+- **Signing.** The signer matches versions 2–4 (`e58a513e…`, this PC's existing debug identity), so it installs as an update and keeps sign-in and unsent records. The build is non-debuggable, and signature and 16 KB alignment checks passed.
+- **Contents.** Every ABI has the production API address. The four ML Kit registrars keep their public no-argument constructors after R8.
+- **Download checks.** The public file has the Android package type, the right length and ranged downloads. The full download, fetched by the server over HTTPS, matched the checksum.
+- One more exact route was added to `/etc/nginx/tgcg-downloads.inc`, and nginx passed its test. Versions 2 and 3 stay available; other download paths return 404. The metadata is in `/opt/tgcg/deployment/android-release.json`, and the version 3 record is kept as `android-release-v3.json`.
+- Version 5 adds everything since version 3: Social Forum, wallets and registrars, Ask Me (typing; voice once the Spitch key is set), referral codes, projects, security response and video pictures.
+
+The frontend checkout was fast-forwarded to `cb5c7ac`. The backup after release succeeded. No member, role or appointment was changed, no money moved, and no message was sent.
 
 ### Ask Me voice, backend only, with an outage (26 October 2026)
 

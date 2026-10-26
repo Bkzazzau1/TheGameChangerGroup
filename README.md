@@ -108,8 +108,8 @@ There is no presentation or demo mode. Release APKs are built with:
 flutter build apk --release --dart-define=TGCG_API_URL=https://api.tgcg.online
 ```
 
-[Download the connected Android APK](https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-2.apk)
-(`0.1.0`, version code `2`, Android 7 or newer). Install it as an update to the
+[Download the connected Android APK](https://app.tgcg.online/downloads/tgcg-emcop-0.1.0-5.apk)
+(`0.1.0`, version code `5`, Android 7 or newer). Install it as an update to the
 existing app. APK updates must use an increasing `--build-number`; the last
 distributed version code is recorded in `docs/vps-deployment.md`. Keep the
 build number in `pubspec.yaml` (`version: 0.1.0+N`) at least that high: Run in
