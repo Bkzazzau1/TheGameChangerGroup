@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `fbdc2b4b64a5d8646b2ea70084c2b3db6ba18704`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `567d18d34105524f38d23096806a63dff4a80116`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,13 +32,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261026-110521-f178e86a8daa` (release directory timestamps use UTC).
-- Frontend build source: `cb5c7ac` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 was built from the same commit.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261026-083201-133155abd36b` (Ask Me and referral codes); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261026-125219-48b90459a43a` (release directory timestamps use UTC).
+- Frontend build source: `2608195` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac` and still says "credits"; the owner chose no new APK for the TGC token wording.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261026-110521-f178e86a8daa` (video pictures); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `f178e86a8daa3b0b9e90d6b4def36ecdf62e3c741549a50f463fab0543352816`.
-- Build: 856 files, 59,314,404 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `48b90459a43ac5be684af7588d1e4de6f06f866f33ffa80a4b3e722cd0a477b9`.
+- Build: 856 files, 59,314,534 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -138,6 +138,23 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Credits renamed TGC tokens (26 October 2026)
+
+The owner renamed registration credits "TGC tokens" and asked for the website and backend only, with no APK. Backend `567d18d34105524f38d23096806a63dff4a80116` went live over `fbdc2b4`, and the web build followed from frontend `2608195`.
+
+- Members and staff now read "TGC tokens" in the wallet, its history ("Converted 2 TGC tokens"), errors, the registrars list and referral card ("Rewarded" instead of "Credited"), the rates screen ("Token rates") and the rates permission. Naira payments from TGCG keep their names.
+- API fields, URLs, the database and audit actions still say `credits`, so phones on versions 3 and 5 keep working; they show the old word until a new APK.
+- The tokens are not on a blockchain: they remain entries in TGCG's wallet ledger, worth naira at the rate of the day.
+
+**Validation.** **663 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips; the throwaway databases were removed. Locally, 636 tests passed and 27 were skipped. **346 Flutter tests** passed and analysis was clean.
+
+**Deployment** (`/opt/tgcg/deployment/release-20261026c/`, a systemd job: backup, then `deploy.sh`):
+- The guards required a clean checkout at `fbdc2b4`, no dependency or static changes, and only `wallets.0003_tgc_token_labels`. That migration records the new entry-kind labels and changes nothing in the database.
+- With the API stopped, `migrate.py` (passed to `tgcg` on standard input) applied exactly that migration, with the role-sync receiver disconnected. **Zero migrations are pending.** Fingerprints matched: **92 roles, 2,381 appointments, 113 delegation grants**.
+- Health passed, and no server errors followed. The 47 existing reward entries are unchanged and show the new label. Anonymous `/me/wallet/` returned **401**.
+
+The web release went live at `/var/www/tgcg/releases/web-20261026-125219-48b90459a43a`, and the public `main.dart.js` checksum matched `48b90459…`. The frontend checkout was fast-forwarded to `2608195`. Backups succeeded before and after. No wallet balance, member, role or appointment was changed, no money moved, and no message was sent.
 
 ### Forum video pictures, web and Android version 5 (26 October 2026)
 
