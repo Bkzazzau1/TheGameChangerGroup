@@ -14,6 +14,7 @@ class MediaPlayerPage extends StatefulWidget {
     required this.id,
     required this.mimeType,
     required this.load,
+    this.cover,
   });
 
   final String title;
@@ -22,6 +23,9 @@ class MediaPlayerPage extends StatefulWidget {
   final String id;
   final String mimeType;
   final Future<Uint8List> Function() load;
+
+  /// A video's picture, shown while it downloads.
+  final Uint8List? cover;
 
   @override
   State<MediaPlayerPage> createState() => _MediaPlayerPageState();
@@ -102,7 +106,14 @@ class _MediaPlayerPageState extends State<MediaPlayerPage> {
                 ),
               )
             : controller == null
-            ? const CircularProgressIndicator()
+            ? Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (widget.cover case final cover?)
+                    Opacity(opacity: 0.45, child: Image.memory(cover, fit: BoxFit.contain)),
+                  const CircularProgressIndicator(),
+                ],
+              )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

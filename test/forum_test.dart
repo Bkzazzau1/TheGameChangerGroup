@@ -12,6 +12,7 @@ import 'package:tgcg_emcop/tgcg/api/forum_repository.dart';
 import 'package:tgcg_emcop/tgcg/discussion/discussion_room_page.dart';
 import 'package:tgcg_emcop/tgcg/discussion/forum_media.dart';
 import 'package:tgcg_emcop/tgcg/discussion/forum_post.dart';
+import 'package:tgcg_emcop/tgcg/media/video_poster.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 
 // Names here are made up.
@@ -592,5 +593,145 @@ void main() {
     final mov = Uint8List.fromList([0, 0, 0, 24, ...ascii.encode('ftypqt  '), ...List.filled(8, 0)]);
     expect(forumUploadFrom('clip.mp4', mov)!.mimeType, 'video/quicktime');
     expect(forumUploadFrom('notes.pdf', Uint8List.fromList(ascii.encode('%PDF-1.4'))), isNull);
+  });
+
+  testWidgets('a video shows its picture from the server, upright, with how long it runs', (tester) async {
+    final server = _Server()
+      ..answer = (key, query, _) => switch (key) {
+        'GET forum/me/' => _me(),
+        'GET forum/posts/' => _json(
+          _page([
+            _post(
+              'p1',
+              attachments: [
+                {
+                  'id': 'v1-poster',
+                  'kind': 'video',
+                  'mime_type': 'video/mp4',
+                  'size': 3145728,
+                  'url': '',
+                  'poster_url': 'https://api.tgcg.test/api/v1/forum/attachments/v1-poster/poster/',
+                  'width': 1080,
+                  'height': 1920,
+                  'duration_ms': 42500,
+                },
+              ],
+            ),
+          ]),
+        ),
+        'GET forum/attachments/v1-poster/poster/' => http.Response.bytes(_pixel, 200),
+        'GET forum/assignments/' => _json([]),
+        _ => null,
+      };
+    await _pump(tester, server);
+
+    expect(find.text('0:42 • 3.0 MB'), findsOneWidget);
+    expect(server.requests, contains('GET forum/attachments/v1-poster/poster/ '));
+    // Only its picture: the video itself waits for a tap.
+    expect(server.requests, isNot(contains('GET forum/attachments/v1-poster/ ')));
+    final tile = find.byType(ForumVideoTile);
+    expect(find.descendant(of: tile, matching: find.byType(Image)), findsWidgets);
+    // An upright phone video stands upright, no taller than the limit.
+    expect(tester.getSize(tile).height, forumVideoMaxHeight);
+    final picture = find.descendant(of: tile, matching: find.byType(Image)).last;
+    expect(tester.getSize(picture).width, closeTo(forumVideoMaxHeight * 1080 / 1920, 0.5));
+  });
+
+  testWidgets('older small videos get a picture made here, and play without a second download', (
+    tester,
+  ) async {
+    final video = Uint8List.fromList([0, 0, 0, 24, ...ascii.encode('ftypmp42'), ...List.filled(8, 0)]);
+    final server = _Server()
+      ..answer = (key, query, _) => switch (key) {
+        'GET forum/attachments/v2-old/' => http.Response.bytes(video, 200),
+        _ => null,
+      };
+    final made = <String>[];
+    Future<VideoPoster?> make(Uint8List bytes, {required String id, required String mimeType}) async {
+      made.add('$id ${bytes.length} $mimeType');
+      return VideoPoster(jpeg: _pixel, width: 1920, height: 1080, duration: const Duration(seconds: 75));
+    }
+
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      TgcgBackend(
+        services: server.connect(),
+        child: MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                ForumVideoTile(
+                  attachment: const ForumAttachment(
+                    id: 'v2-old',
+                    kind: ForumMediaKind.video,
+                    mimeType: 'video/mp4',
+                    size: 400000,
+                  ),
+                  makePoster: make,
+                ),
+                ForumVideoTile(
+                  attachment: const ForumAttachment(
+                    id: 'v3-big',
+                    kind: ForumMediaKind.video,
+                    mimeType: 'video/mp4',
+                    size: 60 * 1024 * 1024,
+                  ),
+                  makePoster: make,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(made, ['v2-old ${video.length} video/mp4']);
+    expect(find.text('1:15 • 0.4 MB'), findsOneWidget);
+    // A big one is not downloaded just for its picture.
+    expect(find.text('Video • 60.0 MB'), findsOneWidget);
+    expect(server.requests.where((request) => request.contains('v3-big')), isEmpty);
+    // A wide video fills the width.
+    expect(tester.getSize(find.byType(ForumVideoTile).first).height, closeTo(360 * 1080 / 1920, 0.5));
+
+    await tester.tap(find.text('1:15 • 0.4 MB'));
+    // The player opens on the video's picture while it gets ready.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Video'), findsOneWidget);
+    expect(find.descendant(of: find.byType(Opacity), matching: find.byType(Image)), findsOneWidget);
+    expect(server.requests.where((request) => request.startsWith('GET forum/attachments/v2-old/')), hasLength(1));
+  });
+
+  test('a video is posted with its picture and length', () async {
+    final server = _Server()
+      ..answer = (key, query, _) => switch (key) {
+        'POST forum/posts/' => _json(_post('p9', isMine: true), 201),
+        _ => null,
+      };
+    final clip = Uint8List.fromList([0, 0, 0, 24, ...ascii.encode('ftypmp42'), ...List.filled(8, 0)]);
+    final picked = await withVideoPoster(
+      forumUploadFrom('clip.mp4', clip)!,
+      makePoster: (bytes, {required id, required mimeType}) async =>
+          VideoPoster(jpeg: _jpeg, width: 1080, height: 1920, duration: const Duration(milliseconds: 42500)),
+    );
+    final photo = await withVideoPoster(
+      forumUploadFrom('picture.jpg', _jpeg)!,
+      makePoster: (bytes, {required id, required mimeType}) async => fail('pictures need no poster'),
+    );
+    expect(photo.poster, isNull);
+    final unreadable = await withVideoPoster(
+      forumUploadFrom('clip.mp4', clip)!,
+      makePoster: (bytes, {required id, required mimeType}) async => null,
+    );
+    expect(unreadable.poster, isNull);
+
+    await server.connect().forum.create(body: '', files: [photo, picked]);
+    final sent = server.bodies['POST forum/posts/']!;
+    expect(sent, contains('name="poster_1"; filename="poster.jpg"'));
+    expect(sent, isNot(contains('name="poster_0"')));
+    expect(sent, contains('name="duration_1"\r\n\r\n42500'));
   });
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../domain/models.dart';
+import '../media/video_poster.dart';
 import 'access_repository.dart';
 import 'api_client.dart';
 import 'auth_repository.dart';
@@ -18,6 +19,10 @@ class ForumAttachment {
     required this.kind,
     required this.mimeType,
     required this.size,
+    this.hasPoster = false,
+    this.width = 0,
+    this.height = 0,
+    this.duration,
   });
 
   final String id;
@@ -25,11 +30,25 @@ class ForumAttachment {
   final String mimeType;
   final int size;
 
+  /// A video's picture is on the server (posted from 26 October 2026).
+  final bool hasPoster;
+
+  /// A video's shape, from its picture; 0 when unknown.
+  final int width;
+  final int height;
+
+  /// How long a video runs, when the posting app measured it.
+  final Duration? duration;
+
   factory ForumAttachment.fromJson(Map<String, dynamic> json) => ForumAttachment(
     id: json['id'] as String,
     kind: json['kind'] == 'video' ? ForumMediaKind.video : ForumMediaKind.photo,
     mimeType: json['mime_type'] as String? ?? '',
     size: json['size'] as int? ?? 0,
+    hasPoster: json['poster_url'] != null,
+    width: (json['width'] as num?)?.toInt() ?? 0,
+    height: (json['height'] as num?)?.toInt() ?? 0,
+    duration: json['duration_ms'] is num ? Duration(milliseconds: (json['duration_ms'] as num).toInt()) : null,
   );
 }
 
@@ -316,12 +335,19 @@ class ForumUpload {
     required this.fileName,
     required this.mimeType,
     required this.bytes,
+    this.poster,
   });
 
   final ForumMediaKind kind;
   final String fileName;
   final String mimeType;
   final Uint8List bytes;
+
+  /// A video's picture, taken from it on this device.
+  final VideoPoster? poster;
+
+  ForumUpload withPoster(VideoPoster poster) =>
+      ForumUpload(kind: kind, fileName: fileName, mimeType: mimeType, bytes: bytes, poster: poster);
 }
 
 /// Which posts to list: the feed, this account's own, or (for editors) the
@@ -357,7 +383,7 @@ class ForumRepository {
       ForumPost.fromJson(await client.get('forum/posts/$id/') as Map<String, dynamic>);
 
   /// Sends the post with its files in one request; a large video may take a
-  /// while on a slow network.
+  /// while on a slow network. Each video's picture and length go with it.
   Future<ForumPost> create({
     required String body,
     String assignment = '',
@@ -366,10 +392,19 @@ class ForumRepository {
   }) async => ForumPost.fromJson(
     await client.postMultipart(
       'forum/posts/',
-      fields: {'body': body, 'assignment': assignment, 'client_id': clientId},
+      fields: {
+        'body': body,
+        'assignment': assignment,
+        'client_id': clientId,
+        for (final (index, file) in files.indexed)
+          if (file.poster?.duration case final duration?) 'duration_$index': duration.inMilliseconds,
+      },
       files: () async => [
         for (final file in files)
           http.MultipartFile.fromBytes('files', file.bytes, filename: file.fileName),
+        for (final (index, file) in files.indexed)
+          if (file.poster case final poster?)
+            http.MultipartFile.fromBytes('poster_$index', poster.jpeg, filename: 'poster.jpg'),
       ],
       requestTimeout: const Duration(minutes: 10),
     ) as Map<String, dynamic>,
@@ -463,4 +498,7 @@ class ForumRepository {
   ];
 
   Future<Uint8List> attachment(String id) => client.getBytes('forum/attachments/$id/');
+
+  /// A video's picture (JPEG).
+  Future<Uint8List> poster(String id) => client.getBytes('forum/attachments/$id/poster/');
 }

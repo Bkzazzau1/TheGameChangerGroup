@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../api/backend.dart';
 import '../api/forum_repository.dart';
 import '../media/media_player_page.dart';
+import '../media/video_poster.dart';
 import '../ui/tgcg_design.dart';
 
 /// Where a new post's pictures and videos come from.
@@ -20,7 +23,8 @@ const forumMaxPostBytes = 100 * 1024 * 1024;
 const forumMaxFiles = 10;
 
 /// Takes a picture, records a video (up to two minutes) or chooses from the
-/// gallery. Pictures are sized for a phone screen to keep uploads small.
+/// gallery. Pictures are sized for a phone screen to keep uploads small;
+/// videos get a picture taken from them.
 Future<List<ForumUpload>> pickForumMedia(ForumMediaSource source, {ImagePicker? picker}) async {
   final picking = picker ?? ImagePicker();
   final files = switch (source) {
@@ -44,9 +48,23 @@ Future<List<ForumUpload>> pickForumMedia(ForumMediaSource source, {ImagePicker? 
       imageQuality: 85,
     ),
   };
-  return [
+  final uploads = [
     for (final file in files) ?forumUploadFrom(file.name, await file.readAsBytes()),
   ];
+  return [for (final upload in uploads) await withVideoPoster(upload)];
+}
+
+/// A video with a picture taken from it, sent with it so the feed shows it
+/// before anyone plays it. Pictures, and videos this device cannot read,
+/// stay as they are.
+Future<ForumUpload> withVideoPoster(ForumUpload upload, {MakeVideoPoster makePoster = videoPoster}) async {
+  if (upload.kind != ForumMediaKind.video) return upload;
+  final poster = await makePoster(
+    upload.bytes,
+    id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+    mimeType: upload.mimeType,
+  );
+  return poster == null ? upload : upload.withPoster(poster);
 }
 
 /// What a file really is, from its first bytes; null when the forum does not
@@ -207,49 +225,200 @@ class _ForumPhotoState extends State<ForumPhoto> {
   );
 }
 
-/// A post's video: tapped, it downloads and plays.
-class ForumVideoTile extends StatelessWidget {
-  const ForumVideoTile({super.key, required this.attachment});
+/// Videos without a picture on the server (posted before 26 October 2026, or
+/// from an older app) up to this size are fetched to take one here.
+const forumPosterFromVideoBytes = 5 * 1024 * 1024;
+
+/// The tallest a video stands in a post.
+const forumVideoMaxHeight = 420.0;
+
+/// Pictures of videos seen recently, from the server or taken here.
+final _posters = <String, Future<VideoPoster?>>{};
+
+/// The ones already at hand, so a video scrolled back into view shows its
+/// picture at once.
+final _postersReady = <String, VideoPoster>{};
+
+/// Small videos fetched for their picture, kept so playing one does not
+/// fetch it again.
+final _videos = <String, Future<Uint8List>>{};
+
+Future<VideoPoster?> _posterOf(ForumRepository forum, ForumAttachment video, MakeVideoPoster make) {
+  final poster = _posters.remove(video.id) ?? _fetchPoster(forum, video, make);
+  _posters[video.id] = poster;
+  if (_posters.length > 40) _posters.remove(_posters.keys.first);
+  return poster;
+}
+
+Future<VideoPoster?> _fetchPoster(ForumRepository forum, ForumAttachment video, MakeVideoPoster make) async {
+  try {
+    final VideoPoster? poster;
+    if (video.hasPoster) {
+      poster = VideoPoster(
+        jpeg: await forum.poster(video.id),
+        width: video.width,
+        height: video.height,
+        duration: video.duration,
+      );
+    } else if (video.size > forumPosterFromVideoBytes) {
+      return null;
+    } else {
+      final bytes = _videos.remove(video.id) ?? forum.attachment(video.id);
+      _videos[video.id] = bytes;
+      if (_videos.length > 3) _videos.remove(_videos.keys.first);
+      poster = await make(await bytes, id: video.id, mimeType: video.mimeType);
+    }
+    if (poster != null) {
+      _postersReady[video.id] = poster;
+      if (_postersReady.length > 40) _postersReady.remove(_postersReady.keys.first);
+    }
+    return poster;
+  } catch (_) {
+    // Tried again the next time the video is shown.
+    _posters.remove(video.id);
+    _videos.remove(video.id);
+    return null;
+  }
+}
+
+/// A post's video, showing a picture from it and how long it runs: tapped,
+/// it downloads and plays. Upright phone videos stand upright.
+class ForumVideoTile extends StatefulWidget {
+  const ForumVideoTile({super.key, required this.attachment, this.makePoster = videoPoster});
 
   final ForumAttachment attachment;
 
+  /// Takes a picture from a video without one on the server (replaced in tests).
+  final MakeVideoPoster makePoster;
+
   @override
-  Widget build(BuildContext context) => Material(
-    color: TgcgColors.primaryDark,
-    borderRadius: BorderRadius.circular(12),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () {
-        final forum = TgcgBackend.of(context)!.forum;
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => MediaPlayerPage(
-              title: 'Video',
-              id: attachment.id,
-              mimeType: attachment.mimeType,
-              load: () => forum.attachment(attachment.id),
-            ),
-          ),
-        );
-      },
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Stack(
-          children: [
-            const Center(
-              child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 56),
-            ),
-            Positioned(
-              left: 12,
-              bottom: 10,
-              child: Text(
-                'Video • ${megabytes(attachment.size)}',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
+  State<ForumVideoTile> createState() => _ForumVideoTileState();
+}
+
+class _ForumVideoTileState extends State<ForumVideoTile> {
+  Future<VideoPoster?>? _poster;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final backend = TgcgBackend.of(context);
+    if (backend != null) _poster ??= _posterOf(backend.forum, widget.attachment, widget.makePoster);
+  }
+
+  void _play(VideoPoster? poster) {
+    final forum = TgcgBackend.of(context)!.forum;
+    final video = widget.attachment;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MediaPlayerPage(
+          title: 'Video',
+          id: video.id,
+          mimeType: video.mimeType,
+          cover: poster?.jpeg,
+          load: () => _videos[video.id] ?? forum.attachment(video.id),
         ),
       ),
-    ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<VideoPoster?>(
+    future: _poster,
+    initialData: _postersReady[widget.attachment.id],
+    builder: (context, snapshot) {
+      final video = widget.attachment;
+      final poster = snapshot.data;
+      final width = poster != null && poster.width > 0 ? poster.width : video.width;
+      final height = poster != null && poster.height > 0 ? poster.height : video.height;
+      final ratio = width > 0 && height > 0 ? width / height : 16 / 9;
+      final duration = video.duration ?? poster?.duration;
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final full = constraints.maxWidth;
+          final tall = math.min(full / ratio, forumVideoMaxHeight);
+          final wide = math.min(full, tall * ratio);
+          return Semantics(
+            button: true,
+            label: 'Play video',
+            child: Material(
+              color: TgcgColors.primaryDark,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => _play(poster),
+                child: SizedBox(
+                  height: tall,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (poster != null) ...[
+                        // An upright or narrow video: the same picture,
+                        // blurred, fills the sides.
+                        if (wide < full - 1) ...[
+                          ImageFiltered(
+                            imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                            child: Image.memory(poster.jpeg, fit: BoxFit.cover, gaplessPlayback: true),
+                          ),
+                          const ColoredBox(color: Color(0x59000000)),
+                        ],
+                        Center(
+                          child: SizedBox(
+                            width: wide,
+                            height: tall,
+                            child: Image.memory(
+                              poster.jpeg,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ],
+                      // Shade at the bottom, so the length reads on any picture.
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: [0.6, 1],
+                            colors: [Color(0x00000000), Color(0x99000000)],
+                          ),
+                        ),
+                      ),
+                      const Center(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: Color(0x8C000000), shape: BoxShape.circle),
+                          child: Padding(
+                            padding: EdgeInsets.all(10),
+                            child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 44),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 12,
+                        bottom: 10,
+                        child: Text(
+                          '${duration == null ? 'Video' : videoLength(duration)} • ${megabytes(video.size)}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      if (poster == null && snapshot.connectionState == ConnectionState.waiting)
+                        const Positioned(
+                          right: 12,
+                          bottom: 12,
+                          child: SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
   );
 }

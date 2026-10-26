@@ -5,6 +5,7 @@ import '../access/access_widgets.dart' show failureMessage, formatMoment;
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/forum_repository.dart';
+import '../media/video_poster.dart';
 import '../ui/tgcg_design.dart';
 import 'forum_media.dart';
 import 'forum_post.dart';
@@ -694,13 +695,31 @@ class _ForumComposerState extends State<ForumComposer> {
                                 )
                               : ColoredBox(
                                   color: TgcgColors.primaryDark,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                  child: Stack(
+                                    fit: StackFit.expand,
                                     children: [
-                                      const Icon(Icons.videocam_rounded, color: Colors.white),
-                                      Text(
-                                        megabytes(file.bytes.length),
-                                        style: const TextStyle(color: Colors.white, fontSize: 10),
+                                      if (file.poster case final poster?)
+                                        Image.memory(
+                                          poster.jpeg,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                                        ),
+                                      Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.play_circle_fill_rounded, color: Colors.white),
+                                          Text(
+                                            file.poster?.duration == null
+                                                ? megabytes(file.bytes.length)
+                                                : videoLength(file.poster!.duration!),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              shadows: [Shadow(blurRadius: 3)],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
