@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 24 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `ee34d84df9d21fda6dc155212e27d4a0c6c5b1a3`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `268fd07894ce20e416c4dcf7eee821f7029e5e8f`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,13 +32,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261024-133831-eb94bdb1509f` (release directory timestamps use UTC).
-- Frontend build source: `00d19ee` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261024-122253-235366b8caed` (Social Forum); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261026-083201-133155abd36b` (release directory timestamps use UTC).
+- Frontend build source: `e1c4c33` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261024-133831-eb94bdb1509f` (registrars); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `eb94bdb1509f3beac0da1fa56b5e7b458c12c5d26771aea3f5c63041774ce742`.
-- Build: 856 files, 59,201,447 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; the Social Forum record is kept as `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `133155abd36bd8defcc893137a8b834bf1a2ea52044408ab579ed150e8060c7d`.
+- Build: 856 files, 59,286,534 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -138,6 +138,34 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Ask Me and referral codes (26 October 2026)
+
+Deployed by Claude Code with the owner's approval. Backend `268fd07894ce20e416c4dcf7eee821f7029e5e8f` went live over `ee34d84`. It includes Ask Me (`6c5843e`) and referral codes (`268fd07`). The web build followed, from frontend `e1c4c33`. No APK was built; APK v5 stays on hold.
+
+**Validation.** The pinned source passed all **651 backend tests on isolated PostgreSQL**, with zero failures and zero skips. The throwaway databases and the staging folder were removed. Locally, 624 tests passed and 27 were skipped, and Ruff passed. **338 Flutter tests** passed and analysis was clean. A scan of the web build for keys and local paths found nothing.
+
+**Deployment** (`/opt/tgcg/deployment/release-20261025/deploy.sh`):
+- It refused to run unless the checkout was clean at `ee34d84`, no dependency or static file changed, and the only new migrations were `askme.0001_initial` and `membership.0016_referral_codes`.
+- The API was stopped while `migrate.py` applied exactly those two migrations, with the access app's role-sync `post_migrate` receiver disconnected.
+- **Zero migrations are pending.** The fingerprints of every role, appointment and delegation row matched before and after: **92 roles, 2,381 appointments, 113 delegation grants**.
+- `check --deploy` showed only the known OpenAPI enum warning, and health passed.
+- The scripts had first been copied with Windows line endings and refused to start. Nothing ran until they were converted.
+
+**Read-only checks.** These ran in process as the National Administrator, without a login call; the administrator's `last_login` was unchanged.
+- Ask Me settings returned **200**, `enabled=false`. Items, sites, pages and the review queue all returned **200** with **0**.
+- `ai_ready=false`: no Gemini key is set. The default settings row was created at first read.
+- The registrars summary returned **200**: 80 registrars, 439 registered, 45 signed in, **45 credited**, 394 waiting.
+- No member has a referral code yet; codes are made when first asked for.
+- Anonymous requests to `/me/referral/`, `/askme/ask/`, `/askme/me/` and `/wallets/registrars/` returned **401**.
+
+**Web release.** It went live at `/var/www/tgcg/releases/web-20261026-083201-133155abd36b`: 856 files, main JavaScript SHA256 `133155ab…`. The server's own fetch of app.tgcg.online matched that checksum.
+
+The first upload attempt failed before connecting. SSH from the owner's network timed out for about an hour while HTTPS kept working. fail2ban's log shows **2 bans of addresses in the owner's provider ranges**, which explains it. Once the owner's own key is in place and password sign-in is off, repeated wrong passwords from that network can no longer cause it.
+
+The frontend checkout was fast-forwarded to `e1c4c33`. Backups succeeded before and after: `20261026T074016Z-PMsxOq` and `20261026T083346Z-GgViuU`.
+
+**Not done.** A weekly timer for `manage.py check_askme_sources` waits for the owner's approval; it is not needed until source pages are imported. No member, role or appointment was changed, no money moved, and no message was sent.
 
 ### Registrars list and past sign-in credits (24 October 2026)
 
