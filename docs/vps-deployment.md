@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `567d18d34105524f38d23096806a63dff4a80116`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `82a304be9f293023f6f45fa327d2bf21e239dd5e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -32,13 +32,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261026-125219-48b90459a43a` (release directory timestamps use UTC).
-- Frontend build source: `2608195` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac` and still says "credits"; the owner chose no new APK for the TGC token wording.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261026-110521-f178e86a8daa` (video pictures); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261026-135340-9b5f6c72d92e` (release directory timestamps use UTC).
+- Frontend build source: `d27eef9` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261026-125219-48b90459a43a` (TGC tokens); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `48b90459a43ac5be684af7588d1e4de6f06f866f33ffa80a4b3e722cd0a477b9`.
-- Build: 856 files, 59,314,534 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `9b5f6c72d92ed9e5249382fd847b4d62fd3dfd8688c02b45ef193fe992166a6b`.
+- Build: 856 files, 59,315,630 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -150,6 +150,26 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Election-day load: shared area summaries and lighter refreshes (26 October 2026)
+
+This is the first part of election-day readiness. The owner expects about a million users on election day: at least five per polling unit, plus ward, LGA and state teams. The owner asked for the website and server only, with no APK. Backend `82a304be9f293023f6f45fa327d2bf21e239dd5e` went live over `567d18d`, and the web build followed from frontend `d27eef9`.
+
+**Server.** Collation, check-in coverage and member analysis for an area are now computed at most once per `SUMMARY_CACHE_SECONDS` (30) and shared by everyone allowed to see that area. Permissions are still checked on each request first, and each answer carries `computed_at`. The cache is each worker's memory (`LocMemCache`); `CACHE_URL` can point at Redis once there are several app servers. There were no migrations or setting changes.
+
+**Web.**
+- The dashboard refreshes every 3 minutes instead of every minute.
+- The dashboard, collation, agents on the ground, meetings, project and security screens skip their refresh while the tab is hidden. A visible window without focus still refreshes.
+- The project list is fetched about every 10 minutes instead of every 2.
+- The upload back-off (45 s up to 15 min, randomly spread, honouring `Retry-After`) only reaches phones with the next APK.
+
+**Validation.** **666 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips; the throwaway databases were removed. Locally, 639 tests passed and 27 were skipped. **351 Flutter tests** passed and analysis was clean.
+
+**Deployment** (`/opt/tgcg/deployment/release-20261026d/`, a systemd job: backup, then `deploy.sh`):
+- The guards required a clean checkout at `567d18d` and no dependency, static or migration changes. The API was stopped for the fast-forward and `check --deploy`, the script confirmed nothing was pending, and the API restarted. Health passed, and no server errors followed.
+- The backup before deployment took 22 seconds: it copied 9 new private files and shared the other 2,652. Production reports the shared cache as `LocMemCache` with 30 seconds. Anonymous collation returned **401**.
+
+The web release went live at `/var/www/tgcg/releases/web-20261026-135340-9b5f6c72d92e`, and the public `main.dart.js` checksum matched `9b5f6c72…`. The frontend checkout was fast-forwarded to `d27eef9`. Backups succeeded before and after. No data was changed.
 
 ### Credits renamed TGC tokens (26 October 2026)
 
