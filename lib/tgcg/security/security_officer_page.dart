@@ -8,6 +8,7 @@ import '../api/backend.dart';
 import '../api/security_repository.dart';
 import '../field/incident_report.dart' show incidentSeverityColor;
 import '../location/directions.dart';
+import '../ui/app_on_screen.dart';
 import '../ui/tgcg_design.dart';
 
 Color securityStepColor(String step) => switch (step) {
@@ -89,7 +90,9 @@ class _SecurityOfficerPageState extends State<SecurityOfficerPage> {
     super.didChangeDependencies();
     if (_timer == null && TgcgBackend.of(context) != null) {
       unawaited(_load());
-      _timer = Timer.periodic(widget.refreshEvery, (_) => _load());
+      _timer = Timer.periodic(widget.refreshEvery, (_) {
+        if (appOnScreen) _load();
+      });
     }
   }
 

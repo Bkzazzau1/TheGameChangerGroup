@@ -10,6 +10,7 @@ import '../api/meetings_repository.dart';
 import '../domain/permissions.dart';
 import '../session.dart';
 import '../ui/server_feed.dart';
+import '../ui/app_on_screen.dart';
 import '../ui/tgcg_design.dart';
 import 'meeting_call_page.dart';
 
@@ -52,7 +53,9 @@ class _ServerMeetingsViewState extends State<ServerMeetingsView> {
     if (!_started) {
       _started = true;
       unawaited(_load());
-      _timer = Timer.periodic(const Duration(minutes: 1), (_) => _load(quiet: true));
+      _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (appOnScreen) _load(quiet: true);
+      });
     }
   }
 

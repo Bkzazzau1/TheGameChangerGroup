@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -72,18 +73,26 @@ class DeviceProjectSharing implements ProjectSharing {
 /// The projects this account sees and takes part in, kept fresh while the
 /// app is open. While a project it accepted runs, location is shared without
 /// a switch; when the project ends, sharing stops.
+///
+/// The list is fetched about every [refreshEvery] (each phone at a random
+/// point between three quarters and one and a quarter of it, so a million
+/// phones on election day do not ask together) and whenever the app comes
+/// back to the screen. Projects start and end by the clock in between.
 class ProjectModeController extends ChangeNotifier {
   ProjectModeController({
     required this.repository,
     required this.sharing,
-    this.refreshEvery = const Duration(minutes: 2),
+    this.refreshEvery = const Duration(minutes: 10),
     this.tickEvery = const Duration(seconds: 30),
-  });
+    math.Random? random,
+  }) : _random = random ?? math.Random();
 
   final ProjectsRepository repository;
   final ProjectSharing sharing;
   final Duration refreshEvery;
   final Duration tickEvery;
+  final math.Random _random;
+  Duration _refreshIn = Duration.zero;
 
   List<TgcgProject> _projects = const [];
   GpsProblem? _gpsProblem;
@@ -126,7 +135,7 @@ class ProjectModeController extends ChangeNotifier {
 
   Future<void> _tick() async {
     final last = _refreshedAt;
-    if (last == null || DateTime.now().difference(last) >= refreshEvery) {
+    if (last == null || DateTime.now().difference(last) >= _refreshIn) {
       await refresh();
     } else {
       await _applySharing();
@@ -155,6 +164,7 @@ class ProjectModeController extends ChangeNotifier {
     }
     _projects = byId.values.toList()..sort((a, b) => a.startsAt.compareTo(b.startsAt));
     _refreshedAt = DateTime.now();
+    _refreshIn = refreshEvery * (0.75 + _random.nextDouble() / 2);
     await _applySharing();
   }
 

@@ -8,6 +8,8 @@ class SyncPushResult {
     this.serverVersion,
     this.serverReference,
     this.message,
+    this.retryAfter,
+    this.serverTrouble = false,
   });
 
   const SyncPushResult.acknowledged({
@@ -37,16 +39,23 @@ class SyncPushResult {
 
   /// Temporary problem (offline, server busy, session expired): keep the
   /// mutation queued and stop this run so later items keep their order.
-  const SyncPushResult.retryLater({required String message})
+  /// [serverTrouble]: the server could not be reached or was busy, so the
+  /// phone waits longer before trying again; false when only another record
+  /// must go first. [retryAfter]: how long the server asked it to wait.
+  const SyncPushResult.retryLater({required String message, Duration? retryAfter, bool serverTrouble = true})
       : this._(
           disposition: SyncPushDisposition.retryLater,
           message: message,
+          retryAfter: retryAfter,
+          serverTrouble: serverTrouble,
         );
 
   final SyncPushDisposition disposition;
   final int? serverVersion;
   final String? serverReference;
   final String? message;
+  final Duration? retryAfter;
+  final bool serverTrouble;
 }
 
 abstract interface class SyncTransport {
@@ -68,6 +77,8 @@ class SyncRunSummary {
     required this.failed,
     this.deferred = 0,
     this.stoppedReason,
+    this.serverTrouble = false,
+    this.retryAfter,
   });
 
   final int attempted;
@@ -80,6 +91,12 @@ class SyncRunSummary {
 
   /// Why the run stopped early (e.g. offline), if it did.
   final String? stoppedReason;
+
+  /// It stopped because the server could not be reached or was busy.
+  final bool serverTrouble;
+
+  /// How long the server asked to be left alone, if it said.
+  final Duration? retryAfter;
 }
 
 /// Queue sequence from an outbox id (`OUT-L-<micros>-<sequence>`).
@@ -114,6 +131,8 @@ class SyncWorker {
     var failed = 0;
     var attempted = 0;
     String? stoppedReason;
+    var serverTrouble = false;
+    Duration? retryAfter;
 
     for (final item in work) {
       attempted += 1;
@@ -145,6 +164,8 @@ class SyncWorker {
         case SyncPushDisposition.retryLater:
           await persistence.queueForRetry(item.id);
           stoppedReason = result.message;
+          serverTrouble = result.serverTrouble;
+          retryAfter = result.retryAfter;
       }
       if (stoppedReason != null) break;
     }
@@ -156,6 +177,8 @@ class SyncWorker {
       failed: failed,
       deferred: stoppedReason == null ? 0 : 1,
       stoppedReason: stoppedReason,
+      serverTrouble: serverTrouble,
+      retryAfter: retryAfter,
     );
   }
 }

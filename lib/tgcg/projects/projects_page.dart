@@ -9,6 +9,7 @@ import '../api/projects_repository.dart';
 import '../api/reference_repository.dart';
 import '../domain/permissions.dart';
 import '../session.dart';
+import '../ui/app_on_screen.dart';
 import '../ui/tgcg_design.dart';
 import 'project_mode.dart';
 
@@ -209,7 +210,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     super.initState();
     // Who is where changes all the time while a project runs.
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted && _watches) {
+      if (mounted && _watches && appOnScreen) {
         setState(() {
           _monitor = _repository.monitor(widget.projectId);
         });

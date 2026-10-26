@@ -9,6 +9,7 @@ import '../api/security_repository.dart';
 import '../domain/permissions.dart';
 import '../location/directions.dart' show LaunchDirections, launchDirections;
 import '../session.dart';
+import '../ui/app_on_screen.dart';
 import '../ui/tgcg_design.dart';
 import 'security_officer_page.dart' show callPhone, securityStepColor, securityTimeline;
 
@@ -44,7 +45,9 @@ class _IncidentSecurityPanelState extends State<IncidentSecurityPanel> {
     super.didChangeDependencies();
     if (_timer == null && TgcgBackend.of(context) != null && _follows) {
       unawaited(_load());
-      _timer = Timer.periodic(widget.refreshEvery, (_) => _load());
+      _timer = Timer.periodic(widget.refreshEvery, (_) {
+        if (appOnScreen) _load();
+      });
     }
   }
 

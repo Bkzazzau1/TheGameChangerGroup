@@ -12,6 +12,7 @@ import '../geography/nigeria_map.dart';
 import '../geography/ward_polling_units_page.dart';
 import '../membership/membership_store.dart';
 import '../session.dart';
+import '../ui/app_on_screen.dart';
 import '../ui/tgcg_design.dart';
 
 /// Where on-duty agents are, and who has checked in at their polling unit today.
@@ -49,7 +50,7 @@ class _AgentsOnGroundPageState extends State<AgentsOnGroundPage> {
     if (_data == null && TgcgBackend.of(context) != null) {
       _load();
       _timer = Timer.periodic(widget.refreshEvery, (_) {
-        if (mounted) setState(_load);
+        if (mounted && appOnScreen) setState(_load);
       });
     }
   }

@@ -17,6 +17,7 @@ import 'results/result_operations_store.dart';
 import 'session.dart';
 import 'shell.dart' show openMyAccess;
 import 'sync/server_records.dart';
+import 'ui/app_on_screen.dart';
 import 'ui/server_feed.dart';
 import 'ui/tgcg_design.dart';
 
@@ -53,7 +54,9 @@ class _TgcgDashboardPageState extends State<TgcgDashboardPage> with ServerAutoRe
     if (!_started) {
       _started = true;
       unawaited(_load());
-      _timer = Timer.periodic(const Duration(minutes: 1), (_) => _load());
+      _timer = Timer.periodic(const Duration(minutes: 3), (_) {
+        if (appOnScreen) _load();
+      });
     }
   }
 

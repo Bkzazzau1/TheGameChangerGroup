@@ -8,6 +8,7 @@ import '../api/backend.dart';
 import '../api/reference_repository.dart' show ServerElection;
 import '../api/results_repository.dart';
 import '../session.dart';
+import '../ui/app_on_screen.dart';
 import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
 
@@ -52,7 +53,9 @@ class _ServerCollationViewState extends State<ServerCollationView> {
     if (!_started) {
       _started = true;
       unawaited(_loadElections());
-      _timer = Timer.periodic(const Duration(minutes: 1), (_) => _loadCollation(quiet: true));
+      _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (appOnScreen) _loadCollation(quiet: true);
+      });
     }
   }
 

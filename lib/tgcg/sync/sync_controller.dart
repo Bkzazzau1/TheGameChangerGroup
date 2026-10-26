@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -9,18 +10,34 @@ import 'sync_worker.dart';
 
 /// Runs the outbox sync while signed in to the server: shortly after new
 /// records are queued, every [interval], and on demand ("Sync now").
+///
+/// When the server cannot be reached or is busy, the phone waits longer each
+/// time (about [interval], then twice that, and so on up to [longestWait]),
+/// at a random point around each wait so phones do not all come back at
+/// once, and never sooner than the server asked. "Sync now" does not wait.
 class SyncController extends ChangeNotifier {
   SyncController({
     required this.persistence,
     required this.transport,
     this.interval = const Duration(seconds: 45),
     this.debounce = const Duration(seconds: 2),
-  });
+    this.longestWait = const Duration(minutes: 15),
+    math.Random? random,
+    DateTime Function()? clock,
+  }) : _random = random ?? math.Random(),
+       _clock = clock ?? DateTime.now;
 
   final OfflinePersistenceController persistence;
   final SyncTransport transport;
   final Duration interval;
   final Duration debounce;
+  final Duration longestWait;
+  final math.Random _random;
+  final DateTime Function() _clock;
+
+  /// Server trouble in a row, and when the phone tries again.
+  int _setbacks = 0;
+  DateTime? _nextTry;
 
   Timer? _timer;
   Timer? _soon;
@@ -37,6 +54,9 @@ class SyncController extends ChangeNotifier {
 
   /// Why the last run could not finish (e.g. offline), if it couldn't.
   String? get problem => _problem;
+
+  /// When the phone next tries, while it waits after server trouble.
+  DateTime? get nextTry => _nextTry;
 
   /// Queued records this app can deliver to the server.
   int get waiting => persistence.outbox
@@ -72,14 +92,19 @@ class SyncController extends ChangeNotifier {
   }
 
   /// Runs until the outbox is empty or a temporary problem stops it.
-  Future<void> syncNow() async {
+  /// [manual]: the person asked, so any wait after server trouble is skipped.
+  Future<void> syncNow({bool manual = false}) async {
     if (!_enabled) return;
+    final next = _nextTry;
+    if (!manual && next != null && _clock().isBefore(next)) return;
     if (_running) {
       _again = true;
       return;
     }
     _running = true;
     notifyListeners();
+    var trouble = false;
+    Duration? asked;
     try {
       final worker = SyncWorker(persistence: persistence, transport: transport);
       do {
@@ -88,17 +113,38 @@ class SyncController extends ChangeNotifier {
         if (_pendingAtStart == 0) break;
         final summary = await worker.runOnce();
         _problem = summary.stoppedReason;
+        trouble = summary.serverTrouble;
+        asked = summary.retryAfter;
         if (summary.stoppedReason != null) break;
         if (summary.attempted == 0) break;
       } while (_again || waiting > 0);
       if (_problem == null) _lastSyncedAt = DateTime.now();
     } catch (error) {
       _problem = error.toString();
+      trouble = true;
     } finally {
+      _waitAfter(trouble: trouble, asked: asked);
       _pendingAtStart = waiting;
       _running = false;
       notifyListeners();
     }
+  }
+
+  /// After server trouble, waits longer each time (with a random spread);
+  /// otherwise clears the wait.
+  void _waitAfter({required bool trouble, Duration? asked}) {
+    if (!trouble) {
+      _setbacks = 0;
+      _nextTry = null;
+      return;
+    }
+    _setbacks += 1;
+    final doubling = math.min(_setbacks - 1, 10);
+    final base = math.min(interval.inMilliseconds * (1 << doubling), longestWait.inMilliseconds);
+    var wait = Duration(milliseconds: (base * (0.5 + _random.nextDouble())).round());
+    if (wait > longestWait) wait = longestWait;
+    if (asked != null && asked > wait) wait = asked;
+    _nextTry = _clock().add(wait);
   }
 
   /// Puts records the server refused back in the queue.
@@ -108,7 +154,7 @@ class SyncController extends ChangeNotifier {
         transport.supports(item.entityType))) {
       await persistence.queueForRetry(item.id);
     }
-    await syncNow();
+    await syncNow(manual: true);
   }
 
   @override
@@ -143,7 +189,14 @@ class SyncStatusCard extends StatelessWidget {
     final (title, detail) = sync.running
         ? ('Uploading…', 'Sending $waiting record${waiting == 1 ? '' : 's'} to the server.')
         : problem != null
-            ? ('$waiting waiting to upload', problem)
+            ? (
+                '$waiting waiting to upload',
+                [
+                  problem,
+                  if (sync.nextTry case final next?)
+                    'Next try ${next.hour.toString().padLeft(2, '0')}:${next.minute.toString().padLeft(2, '0')}.',
+                ].join(' '),
+              )
             : waiting > 0
                 ? ('$waiting waiting to upload', 'Uploads start automatically when online.')
                 : (
@@ -217,7 +270,7 @@ class _SyncButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _TextAction(
         label: 'Sync now',
-        onTap: sync.running ? null : () => unawaited(sync.syncNow()),
+        onTap: sync.running ? null : () => unawaited(sync.syncNow(manual: true)),
       );
 }
 

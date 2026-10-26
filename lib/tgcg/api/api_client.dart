@@ -16,12 +16,15 @@ const tgcgApiUrl = String.fromEnvironment(
 
 /// A failed API call, with the server's message and per-field errors.
 class ApiException implements Exception {
-  const ApiException(this.statusCode, this.message, {this.fieldErrors = const {}});
+  const ApiException(this.statusCode, this.message, {this.fieldErrors = const {}, this.retryAfter});
 
   /// 0 means the server could not be reached.
   final int statusCode;
   final String message;
   final Map<String, List<String>> fieldErrors;
+
+  /// How long a busy server asked to be left alone (its Retry-After).
+  final Duration? retryAfter;
 
   bool get isOffline => statusCode == 0;
   bool get isUnauthorized => statusCode == 401;
@@ -33,7 +36,7 @@ class ApiException implements Exception {
   String toString() => message;
 
   /// Turns a DRF error body into a readable exception.
-  factory ApiException.fromResponse(int statusCode, Object? body) {
+  factory ApiException.fromResponse(int statusCode, Object? body, {Duration? retryAfter}) {
     final fields = <String, List<String>>{};
     String? message;
     if (body is Map) {
@@ -63,7 +66,7 @@ class ApiException implements Exception {
             >= 500 => 'The server had a problem. Try again shortly.',
             _ => 'The request failed ($statusCode).',
           };
-    return ApiException(statusCode, message, fieldErrors: fields);
+    return ApiException(statusCode, message, fieldErrors: fields, retryAfter: retryAfter);
   }
 }
 
@@ -179,7 +182,7 @@ class ApiClient {
     }
     if (response.statusCode >= 200 && response.statusCode < 300) return response.bodyBytes;
     if (response.statusCode == 401) onSessionExpired?.call();
-    throw ApiException.fromResponse(response.statusCode, _json(response));
+    throw ApiException.fromResponse(response.statusCode, _json(response), retryAfter: _retryAfter(response));
   }
 
   /// Multipart upload. [fields] values are sent as strings; maps and lists
@@ -288,7 +291,14 @@ class ApiClient {
     final body = _json(response);
     if (response.statusCode >= 200 && response.statusCode < 300) return body;
     if (response.statusCode == 401) onSessionExpired?.call();
-    throw ApiException.fromResponse(response.statusCode, body);
+    throw ApiException.fromResponse(response.statusCode, body, retryAfter: _retryAfter(response));
+  }
+
+  /// A Retry-After given in seconds (as Django and nginx send it), at most an hour.
+  static Duration? _retryAfter(http.Response response) {
+    final seconds = int.tryParse(response.headers['retry-after']?.trim() ?? '');
+    if (seconds == null || seconds < 0) return null;
+    return Duration(seconds: seconds > 3600 ? 3600 : seconds);
   }
 
   static Object? _json(http.Response response) {

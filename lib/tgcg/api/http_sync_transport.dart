@@ -80,10 +80,10 @@ class HttpSyncTransport implements SyncTransport {
     } on _MissingData catch (error) {
       return SyncPushResult.failed(message: error.message);
     } on _NotYet catch (error) {
-      return SyncPushResult.retryLater(message: error.message);
+      return SyncPushResult.retryLater(message: error.message, serverTrouble: false);
     } on ApiException catch (error) {
       if (error.isOffline || error.isUnauthorized || error.statusCode >= 500 || error.statusCode == 429) {
-        return SyncPushResult.retryLater(message: error.message);
+        return SyncPushResult.retryLater(message: error.message, retryAfter: error.retryAfter);
       }
       if (error.statusCode == 409) return SyncPushResult.conflict(message: error.message);
       if (error.statusCode == 413) {
