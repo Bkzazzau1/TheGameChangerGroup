@@ -101,9 +101,21 @@ Private uploads remain under `/opt/tgcg/backend/media`; they require the applica
 - `tgcg-withdrawals.service` and `tgcg-withdrawals.timer`: installed and verified, with the timer enabled and active, waiting to check withdrawal outcomes every 15 minutes as `tgcg` with production settings. Its first run succeeded with `Paystack is not set up: nothing to check.`; stderr is discarded.
 - `tgcg-backup.timer`: backs up PostgreSQL, private media, `.env`, Nginx configuration, TLS configuration and deployment metadata daily at 03:15 Africa/Lagos.
 - Backup directories: `/var/backups/tgcg/<UTC timestamp>-<unique suffix>`, accessible to root.
-- Initial backup: `/var/backups/tgcg/20261012T072156Z-gTgoU1`.
 - Database archives are checked with `pg_restore --list`; a full restore has not been exercised.
-- Backups currently remain on this VPS and have no automatic retention limit.
+- **Since 26 October 2026 (owner's decision; Claude Code):**
+  - **Layout.** `/usr/local/sbin/tgcg-backup` writes:
+    - `database.dump`;
+    - `settings.tar.gz` (`.env`);
+    - `media/`, the private files as a plain folder;
+    - `web-server-config.tar.gz`;
+    - a `COMPLETE` marker, written last.
+  - **Shared files.** `media/` shares every file unchanged since the previous backup through hard links (`/usr/local/sbin/tgcg-media-snapshot`), so a backup adds only new files. The first such backup copied all 2,652 files and matched the live files exactly. The second copied none and added about 0.2 GB instead of 3.4 GB.
+  - **Older backups** hold a full `private-files.tar.gz` instead.
+  - **Undo.** The previous script is kept as `/usr/local/sbin/tgcg-backup.before-20261026`.
+- **Retention.** `/usr/local/sbin/tgcg-backup-prune --delete` runs after every backup. It keeps every backup from the last 7 days, the newest of each day for 30 days and the newest of each week after that. It always keeps the newest complete backup. It removes backups that failed part way once they are an hour old. A shared file goes only with the last backup holding it. Run it without `--delete` for a dry run.
+- **First thinning.** The schedule's first run on 26 October deleted 54 of 88 backups (9.2 GB). Free space grows over the following week as the full-copy backups of 19–26 October thin out.
+- **Restore private files** from the new layout: `cp -a <backup>/media/. /opt/tgcg/backend/media/`. Ownership (`tgcg:tgcg`), permissions and times are kept. From an older backup, extract `private-files.tar.gz` into `/opt/tgcg/backend`.
+- **Off-site copy.** All backups are still on this VPS only. An encrypted copy to Backblaze B2 is planned and waits for the owner's account and key.
 
 ```bash
 systemctl list-timers --all 'tgcg-*' --no-pager
