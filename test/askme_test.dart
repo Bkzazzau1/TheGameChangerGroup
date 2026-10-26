@@ -252,7 +252,8 @@ void main() {
     await tester.tap(find.text('Open to members'));
     await tester.tap(find.text('Passionate advocate'));
     await tester.pump();
-    await tester.ensureVisible(find.text('Save settings'));
+    // The list builds its end only once scrolled to.
+    await tester.scrollUntilVisible(find.text('Save settings'), 300, scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save settings'));
     await tester.pumpAndSettle();

@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+
 import 'access_repository.dart';
 import 'api_client.dart';
 
@@ -49,13 +53,19 @@ class AskMeAnswer {
     required this.status,
     required this.answer,
     this.language = '',
+    this.channel = 'text',
     this.sources = const [],
     this.rating,
     this.createdAt,
   });
 
   final String id;
+
+  /// As typed, or as the voice service heard it.
   final String question;
+
+  /// text or voice.
+  final String channel;
 
   /// answered, not_yet, refused, limit, off or error.
   final String status;
@@ -75,6 +85,7 @@ class AskMeAnswer {
     status: json['status'] as String? ?? 'error',
     answer: json['answer'] as String? ?? '',
     language: json['language'] as String? ?? '',
+    channel: json['channel'] as String? ?? 'text',
     sources: _sources(json['sources']),
     rating: (json['rating'] as num?)?.toInt(),
     createdAt: _date(json['created_at']),
@@ -92,6 +103,8 @@ class AskMeAccess {
     this.canReview = false,
     this.canApprove = false,
     this.aiReady = false,
+    this.voiceReady = false,
+    this.voiceOk,
   });
 
   final bool canAsk;
@@ -107,6 +120,13 @@ class AskMeAccess {
   /// A Gemini key is set on the server.
   final bool aiReady;
 
+  /// Questions may be spoken and answers heard.
+  final bool voiceReady;
+
+  /// May keep their spoken questions to train TGCG's listening AI; null
+  /// until they decide.
+  final bool? voiceOk;
+
   factory AskMeAccess.fromJson(Map<String, dynamic> json) => AskMeAccess(
     canAsk: json['can_ask'] as bool? ?? false,
     enabled: json['enabled'] as bool? ?? false,
@@ -116,6 +136,8 @@ class AskMeAccess {
     canReview: json['can_review'] as bool? ?? false,
     canApprove: json['can_approve'] as bool? ?? false,
     aiReady: json['ai_ready'] as bool? ?? false,
+    voiceReady: json['voice_ready'] as bool? ?? false,
+    voiceOk: json['voice_ok'] as bool?,
   );
 }
 
@@ -255,6 +277,9 @@ class AskMeReviewItem {
     required this.question,
     required this.status,
     this.language = '',
+    this.channel = 'text',
+    this.correctedText = '',
+    this.hasRecording = false,
     this.route = 'none',
     this.answer = '',
     this.correctedAnswer = '',
@@ -271,6 +296,15 @@ class AskMeReviewItem {
   final String question;
   final String status;
   final String language;
+
+  /// text or voice.
+  final String channel;
+
+  /// What a spoken question really said, written by a reviewer.
+  final String correctedText;
+
+  /// The spoken question was kept (the asker allowed it).
+  final bool hasRecording;
 
   /// ready (a reviewed answer), ai, or none.
   final String route;
@@ -293,6 +327,9 @@ class AskMeReviewItem {
     question: json['text'] as String? ?? '',
     status: json['status'] as String? ?? '',
     language: json['language'] as String? ?? '',
+    channel: json['channel'] as String? ?? 'text',
+    correctedText: json['corrected_text'] as String? ?? '',
+    hasRecording: json['has_recording'] as bool? ?? false,
     route: json['route'] as String? ?? 'none',
     answer: json['answer'] as String? ?? '',
     correctedAnswer: json['corrected_answer'] as String? ?? '',
@@ -318,6 +355,10 @@ class AskMeSettings {
     this.notYetMessages = const {},
     this.inSilence = false,
     this.aiAnswersThisMonth = 0,
+    this.voiceEnabled = true,
+    this.voices = const {},
+    this.voiceReady = false,
+    this.voiceOptions = const {},
   });
 
   final bool enabled;
@@ -334,6 +375,18 @@ class AskMeSettings {
   final bool inSilence;
   final int aiAnswersThisMonth;
 
+  /// Members may speak questions and hear answers.
+  final bool voiceEnabled;
+
+  /// The chosen voice for each language code.
+  final Map<String, String> voices;
+
+  /// The voice service is set up on the server.
+  final bool voiceReady;
+
+  /// The voices to choose from, by language code.
+  final Map<String, List<String>> voiceOptions;
+
   factory AskMeSettings.fromJson(Map<String, dynamic> json) => AskMeSettings(
     enabled: json['enabled'] as bool? ?? false,
     tone: json['tone'] as String? ?? 'calm',
@@ -347,6 +400,19 @@ class AskMeSettings {
     },
     inSilence: json['in_silence'] as bool? ?? false,
     aiAnswersThisMonth: (json['ai_answers_this_month'] as num?)?.toInt() ?? 0,
+    voiceEnabled: json['voice_enabled'] as bool? ?? true,
+    voices: {
+      for (final entry in (json['voice_options'] as Map<String, dynamic>? ?? const {}).entries)
+        entry.key: '${(entry.value as Map<String, dynamic>)['chosen'] ?? ''}',
+    },
+    voiceReady: json['voice_ready'] as bool? ?? false,
+    voiceOptions: {
+      for (final entry in (json['voice_options'] as Map<String, dynamic>? ?? const {}).entries)
+        entry.key: [
+          for (final voice in (entry.value as Map<String, dynamic>)['voices'] as List<dynamic>? ?? const [])
+            '$voice',
+        ],
+    },
   );
 }
 
@@ -369,6 +435,39 @@ class AskMeRepository {
   /// Whether TGCG may use this person's questions to train its own model.
   Future<AskMeAccess> setTrainingConsent(bool allowed) async => AskMeAccess.fromJson(
     await client.patch('askme/me/', body: {'training_ok': allowed}) as Map<String, dynamic>,
+  );
+
+  /// Whether TGCG may keep this person's spoken questions to train its
+  /// listening AI.
+  Future<AskMeAccess> setVoiceConsent(bool allowed) async => AskMeAccess.fromJson(
+    await client.patch('askme/me/', body: {'voice_ok': allowed}) as Map<String, dynamic>,
+  );
+
+  /// A spoken question, in [language] (not "any language"): the server has it
+  /// written down and answers it like a typed one.
+  Future<AskMeAnswer> askByVoice(
+    Uint8List audio, {
+    required String fileName,
+    required AskMeLanguage language,
+  }) async => AskMeAnswer.fromJson(
+    await client.postMultipart(
+      'askme/ask/voice/',
+      fields: {'language': language.code},
+      files: () async => [http.MultipartFile.fromBytes('audio', audio, filename: fileName)],
+      requestTimeout: const Duration(minutes: 2),
+    ) as Map<String, dynamic>,
+  );
+
+  /// The answer read aloud, as MP3.
+  Future<Uint8List> answerAudio(String id) =>
+      client.getBytes('askme/questions/$id/audio/', requestTimeout: const Duration(minutes: 1));
+
+  /// A kept spoken question, for reviewers.
+  Future<Uint8List> recording(String id) => client.getBytes('askme/review/$id/recording/');
+
+  /// What a spoken question really said, written by a reviewer.
+  Future<AskMeReviewItem> correctHeard(String id, String text) async => AskMeReviewItem.fromJson(
+    await client.post('askme/review/$id/heard/', body: {'text': text.trim()}) as Map<String, dynamic>,
   );
 
   /// The account's own questions, newest first.

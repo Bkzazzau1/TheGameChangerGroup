@@ -28,9 +28,13 @@ abstract class VoiceRecorder {
   Future<void> dispose();
 }
 
-VoiceRecorder deviceVoiceRecorder() => _DeviceVoiceRecorder();
+/// [wav]: record WAV everywhere, which every voice service reads (Ask Me).
+VoiceRecorder deviceVoiceRecorder({bool wav = false}) => _DeviceVoiceRecorder(forceWav: wav);
 
 class _DeviceVoiceRecorder implements VoiceRecorder {
+  _DeviceVoiceRecorder({this.forceWav = false});
+
+  final bool forceWav;
   final _recorder = AudioRecorder();
   var _extension = '.m4a';
   var _mime = 'audio/mp4';
@@ -41,7 +45,7 @@ class _DeviceVoiceRecorder implements VoiceRecorder {
     // Sound alerts give the microphone up while the note records.
     await Microphone.instance.take(this);
     // Phones record AAC (.m4a); a browser records WAV, which all of them can.
-    final aac = !kIsWeb && await _recorder.isEncoderSupported(AudioEncoder.aacLc);
+    final aac = !kIsWeb && !forceWav && await _recorder.isEncoderSupported(AudioEncoder.aacLc);
     _extension = aac ? '.m4a' : '.wav';
     _mime = aac ? 'audio/mp4' : 'audio/wav';
     final path = kIsWeb

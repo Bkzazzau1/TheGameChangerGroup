@@ -8,14 +8,24 @@ import '../api/askme_repository.dart';
 import '../api/backend.dart';
 import '../ui/tgcg_design.dart';
 import 'ask_me_chat.dart';
+import 'ask_me_voice.dart';
+
+AskMeSpeaker _deviceSpeaker() => DeviceSpeaker();
 
 /// Ask Me in the operations app: everyone asks; reviewers also review
 /// answers and build the library from trusted official pages; a National
 /// Administrator approves what Ask Me may say and sets its switches.
 class AskMeHubPage extends StatefulWidget {
-  const AskMeHubPage({super.key, this.openSource = openSourceInBrowser});
+  const AskMeHubPage({
+    super.key,
+    this.openSource = openSourceInBrowser,
+    this.newSpeaker = _deviceSpeaker,
+  });
 
   final OpenSource openSource;
+
+  /// Plays spoken answers and kept recordings (replaced in tests).
+  final AskMeSpeaker Function() newSpeaker;
 
   @override
   State<AskMeHubPage> createState() => _AskMeHubPageState();
@@ -51,7 +61,7 @@ class _AskMeHubPageState extends State<AskMeHubPage> {
     final access = _access;
     if (TgcgBackend.of(context) == null || _error != null || access == null || !access.canReview) {
       // AskMeChat shows its own loading, errors and "not open yet".
-      return AskMeChat(openSource: widget.openSource);
+      return AskMeChat(openSource: widget.openSource, newSpeaker: widget.newSpeaker);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -74,8 +84,8 @@ class _AskMeHubPageState extends State<AskMeHubPage> {
         ),
         Expanded(
           child: switch (_section) {
-            _Section.ask => AskMeChat(openSource: widget.openSource),
-            _Section.review => const _ReviewSection(),
+            _Section.ask => AskMeChat(openSource: widget.openSource, newSpeaker: widget.newSpeaker),
+            _Section.review => _ReviewSection(newSpeaker: widget.newSpeaker),
             _Section.library => _LibrarySection(canApprove: access.canApprove),
             _Section.sources => _SourcesSection(
               canApprove: access.canApprove,
@@ -217,7 +227,9 @@ const _reviewKinds = <(String, String)>[
 ];
 
 class _ReviewSection extends StatefulWidget {
-  const _ReviewSection();
+  const _ReviewSection({required this.newSpeaker});
+
+  final AskMeSpeaker Function() newSpeaker;
 
   @override
   State<_ReviewSection> createState() => _ReviewSectionState();
@@ -225,6 +237,55 @@ class _ReviewSection extends StatefulWidget {
 
 class _ReviewSectionState extends State<_ReviewSection> with _Paged<AskMeReviewItem, _ReviewSection> {
   var _kind = '';
+  AskMeSpeaker? _speaker;
+  String? _playing;
+
+  @override
+  void dispose() {
+    final speaker = _speaker;
+    if (speaker != null) speaker.stop();
+    super.dispose();
+  }
+
+  Future<void> _play(AskMeReviewItem question) async {
+    final speaker = _speaker ??= widget.newSpeaker();
+    if (_playing == question.id) {
+      await speaker.stop();
+      if (mounted) setState(() => _playing = null);
+      return;
+    }
+    try {
+      final audio = await TgcgBackend.of(context)!.askMe.recording(question.id);
+      await speaker.play(audio, id: question.id);
+      if (mounted) setState(() => _playing = question.id);
+    } catch (caught) {
+      if (mounted) showFailure(context, caught);
+    }
+  }
+
+  Future<void> _fixHeard(AskMeReviewItem question) async {
+    final askMe = TgcgBackend.of(context)!.askMe;
+    final written = await showDialog<String>(
+      context: context,
+      builder: (_) => _LongTextDialog(
+        title: 'What was really said',
+        initial: question.correctedText.isNotEmpty ? question.correctedText : question.question,
+        action: 'Save',
+      ),
+    );
+    if (written == null) return;
+    try {
+      final fixed = await askMe.correctHeard(question.id, written);
+      if (!mounted) return;
+      setState(() {
+        final index = items.indexWhere((item) => item.id == question.id);
+        if (index >= 0) items[index] = fixed;
+      });
+      showDone(context, 'Saved. It helps teach TGCG\'s own AI.');
+    } catch (caught) {
+      if (mounted) showFailure(context, caught);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -284,6 +345,9 @@ class _ReviewSectionState extends State<_ReviewSection> with _Paged<AskMeReviewI
               : null,
           onCorrect: () => _decide(question, 'correct'),
           onReject: question.review == 'rejected' ? null : () => _decide(question, 'reject'),
+          playing: _playing == question.id,
+          onPlay: question.hasRecording ? () => _play(question) : null,
+          onFixHeard: question.channel == 'voice' ? () => _fixHeard(question) : null,
         ),
       ...listFooter(emptyTitle: 'No questions here', icon: Icons.fact_check_outlined),
     ],
@@ -297,12 +361,22 @@ class _ReviewCard extends StatelessWidget {
     required this.onApprove,
     required this.onCorrect,
     required this.onReject,
+    this.playing = false,
+    this.onPlay,
+    this.onFixHeard,
   });
 
   final AskMeReviewItem question;
   final VoidCallback? onApprove;
   final VoidCallback onCorrect;
   final VoidCallback? onReject;
+  final bool playing;
+
+  /// Plays the kept recording of a spoken question.
+  final VoidCallback? onPlay;
+
+  /// Writes what a spoken question really said.
+  final VoidCallback? onFixHeard;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +389,11 @@ class _ReviewCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(question.question, style: const TextStyle(fontWeight: FontWeight.w800)),
+            if (question.correctedText.isNotEmpty)
+              Text(
+                'Really said: ${question.correctedText}',
+                style: const TextStyle(color: TgcgColors.ink, fontStyle: FontStyle.italic),
+              ),
             Text(
               [
                 _languageName(question.language),
@@ -340,6 +419,8 @@ class _ReviewCard extends StatelessWidget {
                 ),
                 if (question.review != 'unreviewed')
                   TgcgStatusPill(compact: true, label: question.review, color: TgcgColors.primary),
+                if (question.channel == 'voice')
+                  const TgcgStatusPill(compact: true, label: 'Spoken', color: TgcgColors.muted),
               ],
             ),
             if (shown.isNotEmpty) ...[
@@ -371,6 +452,14 @@ class _ReviewCard extends StatelessWidget {
                   child: Text(shown.isEmpty ? 'Write the answer' : 'Correct'),
                 ),
                 if (onReject != null) TextButton(onPressed: onReject, child: const Text('Reject')),
+                if (onPlay != null)
+                  TextButton.icon(
+                    onPressed: onPlay,
+                    icon: Icon(playing ? Icons.stop_rounded : Icons.play_arrow_rounded),
+                    label: Text(playing ? 'Stop' : 'Play recording'),
+                  ),
+                if (onFixHeard != null)
+                  TextButton(onPressed: onFixHeard, child: const Text('Fix what was heard')),
               ],
             ),
           ],
@@ -928,6 +1017,8 @@ class _SettingsSectionState extends State<_SettingsSection> {
   var _saving = false;
   var _enabled = false;
   var _tone = 'calm';
+  var _voiceEnabled = true;
+  var _voices = <String, String>{};
   final _daily = TextEditingController();
   final _monthly = TextEditingController();
   DateTime? _silenceStarts;
@@ -960,6 +1051,8 @@ class _SettingsSectionState extends State<_SettingsSection> {
     _settings = settings;
     _enabled = settings.enabled;
     _tone = settings.tone;
+    _voiceEnabled = settings.voiceEnabled;
+    _voices = Map.of(settings.voices);
     _daily.text = '${settings.dailyLimit}';
     _monthly.text = '${settings.monthlyAiLimit}';
     _silenceStarts = settings.silenceStartsAt;
@@ -1000,6 +1093,8 @@ class _SettingsSectionState extends State<_SettingsSection> {
       final saved = await TgcgBackend.of(context)!.askMe.updateSettings({
         'enabled': _enabled,
         'tone': _tone,
+        'voice_enabled': _voiceEnabled,
+        'voices': _voices,
         'daily_limit': int.tryParse(_daily.text.trim()) ?? 0,
         'monthly_ai_limit': int.tryParse(_monthly.text.trim()) ?? 0,
         'silence_starts_at': _silenceStarts?.toUtc().toIso8601String(),
@@ -1045,6 +1140,8 @@ class _SettingsSectionState extends State<_SettingsSection> {
             ),
             if (settings.inSilence)
               const TgcgStatusPill(label: 'Campaign silence now', color: TgcgColors.warning),
+            if (!settings.voiceReady)
+              const TgcgStatusPill(label: 'Voice service not set up', color: TgcgColors.muted),
           ],
         ),
         const SizedBox(height: 12),
@@ -1065,6 +1162,36 @@ class _SettingsSectionState extends State<_SettingsSection> {
           ],
           selected: {_tone},
           onSelectionChanged: edit ? (chosen) => setState(() => _tone = chosen.first) : null,
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Members may speak and listen'),
+          value: _voiceEnabled,
+          onChanged: edit ? (value) => setState(() => _voiceEnabled = value) : null,
+        ),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          children: [
+            for (final language in AskMeLanguage.values.where(
+              (language) => settings.voiceOptions.containsKey(language.code),
+            ))
+              SizedBox(
+                width: 170,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _voices[language.code],
+                  decoration: InputDecoration(labelText: '${language.label} voice'),
+                  items: [
+                    for (final voice in settings.voiceOptions[language.code]!)
+                      DropdownMenuItem(value: voice, child: Text(_capital(voice))),
+                  ],
+                  onChanged: edit
+                      ? (voice) => setState(() => _voices = {..._voices, language.code: voice!})
+                      : null,
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 14),
         Row(
@@ -1148,3 +1275,5 @@ class _SettingsSectionState extends State<_SettingsSection> {
     );
   }
 }
+
+String _capital(String word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1);
