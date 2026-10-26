@@ -1,6 +1,6 @@
 # TGCG VPS deployment
 
-Initial setup on 12 October 2026; latest code release deployed on 24 October 2026 (Africa/Lagos).
+Initial setup on 12 October 2026; latest code release deployed on 26 October 2026 (Africa/Lagos).
 
 ## Public URLs
 
@@ -15,7 +15,7 @@ Initial setup on 12 October 2026; latest code release deployed on 24 October 202
 ## Current state
 
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `268fd07894ce20e416c4dcf7eee821f7029e5e8f`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `09e9270052af76a7040361fc9841cd3968caebcd`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -138,6 +138,26 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Ask Me voice, backend only, with an outage (26 October 2026)
+
+The owner asked to publish all changes. Claude Code deployed backend `09e9270052af76a7040361fc9841cd3968caebcd` over `268fd07`: Ask Me's voice (`0db2c94`) and the reviewers' "what was really said" (`09e9270`). The web build was not changed; it is still from `e1c4c33`.
+
+**Validation.** The pinned source passed all **657 backend tests on isolated PostgreSQL**, with zero failures and zero skips. The throwaway databases and the staging folder were removed. Locally, 630 tests passed and 27 were skipped; **343 Flutter tests** passed.
+
+**What went wrong.**
+- The backup finished at 09:26 UTC. `deploy.sh` (`/opt/tgcg/deployment/release-20261026/`) then passed its guards, stopped the API, fast-forwarded to `09e9270` and passed `check --deploy`.
+- It could not run `migrate.py`. The release folder is root-only (mode 700), and the helper runs as `tgcg`, so it failed with "Permission denied". The script stopped, and its exit hook restarted the API on the new code **without migration `askme.0002_voice`**.
+- From 09:26 to about 10:47 UTC, `GET /askme/me/` failed with HTTP 500, because the column `voice_enabled` did not exist yet. **9 requests failed.** Health, sign-in, the forum and the rest of the API were not affected.
+- At the same time the owner had interrupted the deploy command on their PC. The command had already reached the server, so it ran there anyway.
+
+**Repair.**
+- At about 10:47 UTC, `migrate.py` was run as `tgcg` from standard input, with the API stopped. It applied exactly `askme.0002_voice`, with the role-sync `post_migrate` receiver disconnected.
+- **Zero migrations are pending.** The fingerprints matched before and after: **92 roles, 2,381 appointments, 113 delegation grants**. Health passed.
+- Read-only checks found the Ask Me settings readable (`enabled=false`, `voice_enabled=true`), 1 preference, 0 questions and 0 spoken answers. No server errors followed. Anonymous `/askme/me/` returned **401**.
+- Later release scripts pass helpers to `tgcg` on standard input (`python - < migrate.py`).
+
+Voice stays off until `SPITCH_API_KEY` is set in the private environment and the API restarted. The backup before deployment is `tgcg-backup.service` from 09:23–09:26 UTC. No member, role or appointment was changed, no money moved, and no message was sent.
 
 ### Ask Me and referral codes (26 October 2026)
 
