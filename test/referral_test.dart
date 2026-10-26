@@ -63,7 +63,7 @@ void main() {
 
     expect(find.text('4827155'), findsOneWidget);
     expect(find.text('https://app.tgcg.online/?ref=4827155'), findsOneWidget);
-    expect(find.text('3 joined with your code · 2 credited'), findsOneWidget);
+    expect(find.text('3 joined with your code · 2 rewarded'), findsOneWidget);
 
     await tester.tap(find.text('Share'));
     await tester.pumpAndSettle();

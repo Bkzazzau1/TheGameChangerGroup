@@ -63,7 +63,7 @@ class _MyWalletPageState extends State<MyWalletPage> {
       builder: (_) => ConvertCreditsDialog(wallet: wallet),
     );
     if (converted == null || !mounted) return;
-    showDone(context, 'Credits converted. Your balance is ${formatNaira(converted.balance)}.');
+    showDone(context, 'TGC tokens converted. Your balance is ${formatNaira(converted.balance)}.');
     await _show(converted);
   }
 
@@ -226,12 +226,12 @@ class _WalletView extends StatelessWidget {
           const SizedBox(height: 12),
         ],
         TgcgSectionCard(
-          title: 'Credits',
+          title: 'TGC tokens',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${wallet.credits} ${wallet.credits == 1 ? 'credit' : 'credits'}',
+                tgcTokens(wallet.credits),
                 style: const TextStyle(color: TgcgColors.ink, fontSize: 24, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 4),
@@ -339,7 +339,7 @@ class _RegistrationLine extends StatelessWidget {
           if (counts.withCode > 0) '${counts.withCode} with your code',
           '${counts.signedIn} signed in',
           '${counts.waiting} not signed in yet',
-          '${counts.credited} credited',
+          '${counts.credited} rewarded',
         ].join(' · '),
         style: const TextStyle(color: TgcgColors.muted),
       ),
@@ -347,7 +347,7 @@ class _RegistrationLine extends StatelessWidget {
   );
 }
 
-/// One line of a wallet's history: naira in or out, or credits earned.
+/// One line of a wallet's history: naira in or out, or TGC tokens earned.
 class WalletEntryTile extends StatelessWidget {
   const WalletEntryTile({super.key, required this.entry, this.dense = false});
 
@@ -369,13 +369,13 @@ class WalletEntryTile extends StatelessWidget {
         ? entry.purpose
         : switch (kind) {
             WalletEntryKind.credit => 'Payment from TGCG',
-            WalletEntryKind.reward => 'Credits for registering a member',
-            WalletEntryKind.conversion => 'Credits converted to naira',
+            WalletEntryKind.reward => 'TGC tokens for registering a member',
+            WalletEntryKind.conversion => 'TGC tokens converted to naira',
             WalletEntryKind.withdrawal => 'Withdrawal to the bank account',
             WalletEntryKind.refund => 'Withdrawal returned to the wallet',
           };
     final amount = kind == WalletEntryKind.reward
-        ? '+${entry.credits} ${entry.credits == 1 ? 'credit' : 'credits'}'
+        ? '+${tgcTokens(entry.credits)}'
         : out
         ? formatNaira(entry.amount)
         : '+${formatNaira(entry.amount)}';
@@ -388,7 +388,7 @@ class WalletEntryTile extends StatelessWidget {
         [
           if (entry.createdAt != null) formatMoment(entry.createdAt!),
           if (kind == WalletEntryKind.reward && entry.creditsAfter != null)
-            '${entry.creditsAfter} credits'
+            tgcTokens(entry.creditsAfter!)
           else
             'Balance ${formatNaira(entry.balanceAfter)}',
         ].join(' · '),
@@ -542,7 +542,7 @@ class _ConvertCreditsDialogState extends State<ConvertCreditsDialog> {
     final worth = _count * nairaToKobo(each);
     final naira = '${worth ~/ 100}.${(worth % 100).toString().padLeft(2, '0')}';
     return AlertDialog(
-      title: const Text('Convert credits'),
+      title: const Text('Convert TGC tokens'),
       content: SizedBox(
         width: 380,
         child: Column(
@@ -554,7 +554,7 @@ class _ConvertCreditsDialogState extends State<ConvertCreditsDialog> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
-                labelText: 'Credits',
+                labelText: 'TGC tokens',
                 helperText: 'You have ${widget.wallet.credits}; ${formatNaira(each)} each',
                 errorText: _error,
               ),

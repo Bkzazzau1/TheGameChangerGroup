@@ -171,7 +171,7 @@ class _WalletPaymentsPageState extends State<WalletPaymentsPage> {
                       _Section.registrars => 'Registrars',
                       _Section.payments => 'Payments',
                       _Section.withdrawals => 'Withdrawals',
-                      _Section.rates => 'Credit rates',
+                      _Section.rates => 'Token rates',
                     }),
                   ),
               ],
@@ -501,8 +501,7 @@ class _WalletDialog extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Text(
-                '${wallet.credits} ${wallet.credits == 1 ? 'credit' : 'credits'}, '
-                'worth ${formatNaira(wallet.creditsWorth)} today',
+                '${tgcTokens(wallet.credits)}, worth ${formatNaira(wallet.creditsWorth)} today',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
@@ -686,7 +685,7 @@ class _RegistrarTotals extends StatelessWidget {
         ('Registered', counts.registered, TgcgColors.ink),
         ('Signed in', counts.signedIn, TgcgColors.success),
         ('Not signed in yet', counts.waiting, TgcgColors.warning),
-        ('Credited', counts.credited, TgcgColors.primary),
+        ('Rewarded', counts.credited, TgcgColors.primary),
       ])
         Container(
           constraints: const BoxConstraints(minWidth: 100),
@@ -743,7 +742,7 @@ class _RegistrarTile extends StatelessWidget {
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         Text(
-                          [number ?? 'Staff account, earns no credits', areaLabel(registrar.scope)]
+                          [number ?? 'Staff account, earns no TGC tokens', areaLabel(registrar.scope)]
                               .join(' · '),
                           style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
                         ),
@@ -775,7 +774,7 @@ class _RegistrarTile extends StatelessWidget {
                   ),
                   TgcgStatusPill(
                     compact: true,
-                    label: '${counts.credited} credited',
+                    label: '${counts.credited} rewarded',
                     color: TgcgColors.primary,
                   ),
                   if (counts.withCode > 0)
@@ -795,7 +794,7 @@ class _RegistrarTile extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 [
-                  if (number != null) 'Credits now: ${registrar.credits}',
+                  if (number != null) 'TGC tokens now: ${registrar.credits}',
                   if (registrar.lastRegisteredAt != null)
                     'last registered ${formatMoment(registrar.lastRegisteredAt!)}',
                 ].join(' · '),
@@ -976,7 +975,7 @@ class _PersonTile extends StatelessWidget {
                 color: person.signedIn ? TgcgColors.success : TgcgColors.warning,
               ),
               if (person.credited)
-                const TgcgStatusPill(compact: true, label: 'Credited', color: TgcgColors.primary),
+                const TgcgStatusPill(compact: true, label: 'Rewarded', color: TgcgColors.primary),
             ],
           ),
         ],
@@ -1247,7 +1246,7 @@ class _CreditRatesSectionState extends State<_CreditRatesSection> {
         if (snapshot.hasError) {
           return TgcgEmptyState(
             icon: Icons.error_outline_rounded,
-            title: 'The credit rates could not be loaded',
+            title: 'The token rates could not be loaded',
             message: failureMessage(snapshot.error!),
             action: OutlinedButton(onPressed: _reload, child: const Text('Try again')),
           );
@@ -1303,10 +1302,9 @@ class _CreditRatesSectionState extends State<_CreditRatesSection> {
 
 String _rateSummary(CreditRate rate) => [
   rate.creditsPerRegistration == 0
-      ? 'No credits for registering (paused)'
-      : '${rate.creditsPerRegistration} '
-            '${rate.creditsPerRegistration == 1 ? 'credit' : 'credits'} a member registered',
-  '${formatNaira(rate.nairaPerCredit)} a credit',
+      ? 'No TGC tokens for registering (paused)'
+      : '${tgcTokens(rate.creditsPerRegistration)} a member registered',
+  '${formatNaira(rate.nairaPerCredit)} a TGC token',
   'withdrawals from ${formatNaira(rate.minWithdrawal)}',
 ].join(' · ');
 
@@ -1330,10 +1328,10 @@ class _RateFacts extends StatelessWidget {
     return Column(
       children: [
         line(
-          'Credits a member registered',
+          'TGC tokens a member registered',
           rate.creditsPerRegistration == 0 ? 'None (paused)' : '${rate.creditsPerRegistration}',
         ),
-        line('Naira a credit', formatNaira(rate.nairaPerCredit)),
+        line('Naira a TGC token', formatNaira(rate.nairaPerCredit)),
         line('Smallest withdrawal', formatNaira(rate.minWithdrawal)),
         line(
           'Set',
@@ -1423,7 +1421,7 @@ class _CreditRatesDialogState extends State<_CreditRatesDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Change the credit rates'),
+    title: const Text('Change the token rates'),
     content: SizedBox(
       width: 400,
       child: SingleChildScrollView(
@@ -1436,7 +1434,7 @@ class _CreditRatesDialogState extends State<_CreditRatesDialog> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
-                labelText: 'Credits a member registered',
+                labelText: 'TGC tokens a member registered',
                 helperText: '0 pauses them',
                 errorText: _errors['credits_per_registration'],
               ),
@@ -1448,7 +1446,7 @@ class _CreditRatesDialogState extends State<_CreditRatesDialog> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: InputDecoration(
-                labelText: 'Naira a credit',
+                labelText: 'Naira a TGC token',
                 prefixText: '₦',
                 errorText: _errors['naira_per_credit'],
               ),

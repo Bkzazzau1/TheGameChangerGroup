@@ -21,6 +21,10 @@ String formatNaira(String amount) {
   return '${negative ? '-' : ''}₦$grouped.$kobo';
 }
 
+/// What members earn for registering, shown as TGC tokens ("1 TGC token",
+/// "5 TGC tokens"). The API still calls them credits.
+String tgcTokens(int count) => '$count TGC ${count == 1 || count == -1 ? 'token' : 'tokens'}';
+
 /// Naira as the server writes it ("5000.50") in kobo, for comparing amounts.
 int nairaToKobo(String amount) {
   final negative = amount.startsWith('-');

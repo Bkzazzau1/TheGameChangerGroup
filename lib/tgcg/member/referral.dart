@@ -102,7 +102,7 @@ class _ReferralCardState extends State<ReferralCard> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${referral.joined} joined with your code · ${referral.credited} credited',
+                '${referral.joined} joined with your code · ${referral.credited} rewarded',
                 style: const TextStyle(color: TgcgColors.muted),
               ),
             ],

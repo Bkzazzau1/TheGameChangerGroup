@@ -310,16 +310,16 @@ void main() {
     expect(find.text('Payout account'), findsNothing);
   });
 
-  testWidgets('credits for registering are kept until the identity is checked', (tester) async {
+  testWidgets('TGC tokens for registering are kept until the identity is checked', (tester) async {
     final server = _Server();
     server.answer = (key) => key == 'GET me/wallet/'
         ? _json(_wallet(hasWallet: false, balance: '0.00', credits: 3, entries: const [_earned]))
         : null;
     await _pump(tester, server, const MyWalletPage());
-    expect(find.text('3 credits'), findsOneWidget);
+    expect(find.text('3 TGC tokens'), findsOneWidget);
     expect(find.text('Worth ₦300.00 today · ₦100.00 each'), findsOneWidget);
     expect(find.text('Registered Bala Musa'), findsOneWidget);
-    expect(find.text('+3 credits'), findsOneWidget);
+    expect(find.text('+3 TGC tokens'), findsOneWidget);
     expect(find.text('Your wallet opens once your identity is checked.'), findsOneWidget);
     // Converting and withdrawing wait for the identity check.
     expect(find.text('Convert to naira'), findsNothing);
@@ -328,7 +328,7 @@ void main() {
     expect(server.requests.where((r) => r.startsWith('GET me/wallet/withdrawals/')), isEmpty);
   });
 
-  testWidgets('a verified member converts credits to naira', (tester) async {
+  testWidgets('a verified member converts TGC tokens to naira', (tester) async {
     final server = _Server();
     server.answer = (key) => switch (key) {
       'GET me/wallet/' => _json(_wallet(account: _gtbank, credits: 3, entries: const [_earned, _paid])),
@@ -345,7 +345,7 @@ void main() {
               'balance_after': '5300.50',
               'credits': -3,
               'credits_after': 0,
-              'purpose': 'Converted 3 credits',
+              'purpose': 'Converted 3 TGC tokens',
               'created_at': '2026-10-23T10:00:00Z',
             },
             _earned,
@@ -360,19 +360,19 @@ void main() {
     await tester.tap(find.text('Convert to naira'));
     await tester.pumpAndSettle();
     expect(find.text('₦300.00'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, 'Credits'), '2');
+    await tester.enterText(find.widgetWithText(TextField, 'TGC tokens'), '2');
     await tester.pump();
     expect(find.text('₦200.00'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, 'Credits'), '3');
+    await tester.enterText(find.widgetWithText(TextField, 'TGC tokens'), '3');
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Convert'));
     await tester.pumpAndSettle();
 
     expect(jsonDecode(server.bodies['POST me/wallet/convert/']!), {'credits': 3});
-    expect(find.text('Credits converted. Your balance is ₦5,300.50.'), findsOneWidget);
+    expect(find.text('TGC tokens converted. Your balance is ₦5,300.50.'), findsOneWidget);
     expect(find.text('₦5,300.50'), findsWidgets);
-    expect(find.text('0 credits'), findsOneWidget);
-    expect(find.text('Converted 3 credits'), findsOneWidget);
+    expect(find.text('0 TGC tokens'), findsOneWidget);
+    expect(find.text('Converted 3 TGC tokens'), findsOneWidget);
   });
 
   testWidgets('a member withdraws to the payout account, then cancels', (tester) async {
@@ -509,7 +509,7 @@ void main() {
     expect(find.text("Withdrawal rejected; the money is back in the member's wallet."), findsOneWidget);
   });
 
-  testWidgets('a National Administrator sets the credit rates', (tester) async {
+  testWidgets('a National Administrator sets the TGC token rates', (tester) async {
     final server = _Server();
     server.answer = (key) => switch (key) {
       'GET wallets/credit-rates/' => _json({
@@ -531,14 +531,14 @@ void main() {
     expect(find.text('₦100.00'), findsOneWidget);
     expect(find.text('₦1,000.00'), findsOneWidget);
     expect(
-      find.text('2 credits a member registered · ₦50.00 a credit · withdrawals from ₦1,000.00'),
+      find.text('2 TGC tokens a member registered · ₦50.00 a TGC token · withdrawals from ₦1,000.00'),
       findsOneWidget,
     );
 
     await tester.tap(find.widgetWithText(FilledButton, 'Change rates'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Credits a member registered'), '2');
-    await tester.enterText(find.widgetWithText(TextField, 'Naira a credit'), '150');
+    await tester.enterText(find.widgetWithText(TextField, 'TGC tokens a member registered'), '2');
+    await tester.enterText(find.widgetWithText(TextField, 'Naira a TGC token'), '150');
     await tester.enterText(find.widgetWithText(TextField, 'Reason'), 'More for registering');
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Save rates'));
@@ -642,7 +642,7 @@ void main() {
     // Not "No wallet yet": their people are on the way to earning credits.
     expect(find.text('No wallet yet'), findsNothing);
     expect(find.text('You registered 15 people'), findsOneWidget);
-    expect(find.text('3 signed in · 12 not signed in yet · 3 credited'), findsOneWidget);
+    expect(find.text('3 signed in · 12 not signed in yet · 3 rewarded'), findsOneWidget);
   });
 
   testWidgets('finance staff see who registered how many, and open one registrar', (tester) async {
@@ -714,7 +714,7 @@ void main() {
     await tester.tap(find.text('Ada Obi'));
     await tester.pumpAndSettle();
     expect(find.text('Person TGCG-000502 (TGCG-000502)'), findsOneWidget);
-    expect(find.text('Credited'), findsWidgets);
+    expect(find.text('Rewarded'), findsWidgets);
     // Twelve registered, two listed: the rest were placed in other areas.
     expect(find.text('10 registered in other areas are not listed here.'), findsOneWidget);
 
