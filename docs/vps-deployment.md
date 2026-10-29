@@ -14,7 +14,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 ## Current state
 
-- Maintenance mode is off. At the owner's request it ran on 29 October 2026 from 09:38 to 16:56 Africa/Lagos ("Maintenance is ongoing. Please come back later."); see Operations to switch it again.
+- **Maintenance mode is ON** again since 29 October 2026, 21:01 Africa/Lagos, at the owner's request. The page now has a countdown to the presidential election. It first ran the same day from 09:38 to 16:56. See Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
 - Source: `Bkzazzau1/tgcg_backend`, deployed commit `82a304be9f293023f6f45fa327d2bf21e239dd5e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
@@ -79,6 +79,10 @@ The switch is the file `/etc/nginx/tgcg-maintenance.on`. Nginx checks for it on 
 
 **What it does when on:**
 - **Web app:** every page of app.tgcg.online, including referral links and APK downloads, shows the maintenance page with HTTP 503. The page is `/var/www/tgcg/maintenance/maintenance.html`, with its logo beside it.
+- **Countdown:** since 29 October 2026 the page counts down, in days, hours, minutes and seconds, to the start of the presidential election day: Saturday 16 January 2027, 00:00 WAT. That is the date in INEC's revised timetable under the Electoral Act 2026; the earlier date was 20 February 2027. On the day it reads "Today is the presidential election", and after it, "The presidential election was held on 16 January 2027".
+  - The clock runs in the visitor's browser; the date is in the page's script (`Date.UTC(2027, 0, 15, 23, 0, 0)`).
+  - **If INEC moves the election, change that date.**
+  - Copies are in `/opt/tgcg/deployment/maintenance-20261029/`: `maintenance-countdown.html` (current) and `maintenance-plain.html` (without the countdown).
 - **API:** every api.tgcg.online request gets HTTP 503 with `{"detail": "Maintenance is ongoing. Please come back later."}` and `Retry-After: 3600`. It carries the CORS headers for the web app, and CORS preflights still reach Django, so an open browser tab can show the message. The apps show the `detail`.
 - **Phones:** they keep unsent records queued and send them after maintenance.
 
