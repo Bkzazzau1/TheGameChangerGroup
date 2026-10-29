@@ -14,6 +14,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 ## Current state
 
+- **Maintenance mode is ON** since 29 October 2026, 09:38 Africa/Lagos, at the owner's request ("Maintenance is ongoing. Please come back later."). See Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
 - Source: `Bkzazzau1/tgcg_backend`, deployed commit `82a304be9f293023f6f45fa327d2bf21e239dd5e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
@@ -71,6 +72,26 @@ cat /root/tgcg-admin-initial.txt
 The credentials file is root-owned with mode 600. No password or signing secret is included in these notes.
 
 ## Operations
+
+### Maintenance mode
+
+The switch is the file `/etc/nginx/tgcg-maintenance.on`. Nginx checks for it on every request, so turning it on or off needs no reload or restart.
+
+**What it does when on:**
+- **Web app:** every page of app.tgcg.online, including referral links and APK downloads, shows the maintenance page with HTTP 503. The page is `/var/www/tgcg/maintenance/maintenance.html`, with its logo beside it.
+- **API:** every api.tgcg.online request gets HTTP 503 with `{"detail": "Maintenance is ongoing. Please come back later."}` and `Retry-After: 3600`. It carries the CORS headers for the web app, and CORS preflights still reach Django, so an open browser tab can show the message. The apps show the `detail`.
+- **Phones:** they keep unsent records queued and send them after maintenance.
+
+**What it leaves alone:** the admin site (admin.tgcg.online), the API service itself, timers, backups and certificate renewal on port 80.
+
+**How it is wired:** the rules are `/etc/nginx/tgcg-maintenance-app.inc` and `/etc/nginx/tgcg-maintenance-api.inc`, included in the app and API server blocks of `conf.d/tgcg.conf`. The configuration before them is kept in `/opt/tgcg/deployment/maintenance-20261029/`. With the switch off, the app, API health, the temporary SMS notices, admin and downloads behaved exactly as before.
+
+```bash
+rm /etc/nginx/tgcg-maintenance.on      # end maintenance: everything is live again
+touch /etc/nginx/tgcg-maintenance.on   # start maintenance
+```
+
+### Service
 
 ```bash
 systemctl status tgcg-api.service --no-pager
