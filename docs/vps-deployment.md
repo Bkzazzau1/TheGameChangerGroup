@@ -14,7 +14,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 ## Current state
 
-- **Maintenance mode is ON** since 29 October 2026, 09:38 Africa/Lagos, at the owner's request ("Maintenance is ongoing. Please come back later."). See Operations.
+- Maintenance mode is off. At the owner's request it ran on 29 October 2026 from 09:38 to 16:56 Africa/Lagos ("Maintenance is ongoing. Please come back later."); see Operations to switch it again.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
 - Source: `Bkzazzau1/tgcg_backend`, deployed commit `82a304be9f293023f6f45fa327d2bf21e239dd5e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
