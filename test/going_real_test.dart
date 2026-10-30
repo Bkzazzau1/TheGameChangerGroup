@@ -226,7 +226,8 @@ void main() {
         'capabilities': ['createIncident', 'submitFieldReport', 'submitElectionResult'],
       });
 
-      for (final button in ['Change PIN', 'Sign out']) {
+      // On a phone the rarer buttons wait behind More.
+      for (final button in ['Messages', 'More']) {
         expect(drawn(tester, button), TgcgColors.ink, reason: button);
       }
     });

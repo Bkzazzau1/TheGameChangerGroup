@@ -206,11 +206,11 @@ class SyncStatusCard extends StatelessWidget {
                         : 'Last upload ${last.hour.toString().padLeft(2, '0')}:${last.minute.toString().padLeft(2, '0')}.',
                   );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 12),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: TgcgColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(TgcgRadius.md),
           border: Border.all(color: TgcgColors.border),
         ),
         child: Padding(
@@ -220,19 +220,19 @@ class SyncStatusCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(
-                    problem != null
+                  TgcgIconBadge(
+                    icon: problem != null
                         ? Icons.cloud_off_outlined
                         : Icons.cloud_done_outlined,
                     color: problem != null ? TgcgColors.warning : TgcgColors.success,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-                        Text(detail, style: const TextStyle(fontSize: 11.5, color: TgcgColors.muted)),
+                        Text(title, style: TgcgType.bodyStrong),
+                        Text(detail, style: TgcgType.caption),
                       ],
                     ),
                   ),
@@ -246,9 +246,8 @@ class SyncStatusCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '$rejected record${rejected == 1 ? ' was' : 's were'} refused by the server. '
-                          'Open Sync Status to see why.',
-                          style: const TextStyle(fontSize: 11.5, color: TgcgColors.danger),
+                          '$rejected record${rejected == 1 ? ' was' : 's were'} refused by the server.',
+                          style: TgcgType.caption.copyWith(color: TgcgColors.danger),
                         ),
                       ),
                       _RetryButton(sync: sync),

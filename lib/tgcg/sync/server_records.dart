@@ -6,6 +6,21 @@ import '../api/api_client.dart';
 import '../api/http_sync_transport.dart' show syncClientId;
 import '../offline/offline_persistence.dart';
 
+/// Where a record stands on its way to the server.
+enum RecordUpload {
+  /// Saved on this device, in the queue. The server has not seen it.
+  waiting,
+
+  /// Being sent now. The server has not confirmed it.
+  uploading,
+
+  /// The server confirmed it.
+  uploaded,
+
+  /// The server refused it.
+  refused,
+}
+
 /// The server side of a store's records.
 ///
 /// In presentation mode a store holds sample records. Once connected
@@ -173,12 +188,30 @@ mixin ServerRecords<S> on ChangeNotifier {
     for (final outbox in _local.values) {
       if (_uploaded(outbox) && _refreshedFor.add(outbox)) uploaded = true;
     }
+    // Whoever shows where a record stands sees it move.
+    if (_local.isNotEmpty && !_disposed) notifyListeners();
     if (uploaded) unawaited(refresh());
   }
 
   /// Made on this device and not yet replaced by the server's copy: it has
   /// no server reference, so it cannot be acted on yet.
   bool isOnDevice(String id) => _local.containsKey(id);
+
+  /// Where [id] stands, from the outbox itself. A record not made here came
+  /// from the server. Null without a server connection: nothing is known.
+  RecordUpload? uploadState(String id) {
+    if (!_connected) return null;
+    final outbox = _local[id];
+    if (outbox == null) return RecordUpload.uploaded;
+    final entry = _outboxEntry(outbox);
+    if (entry == null) return RecordUpload.uploaded;
+    return switch (entry.state) {
+      SyncState.synced => RecordUpload.uploaded,
+      SyncState.failed || SyncState.conflict => RecordUpload.refused,
+      SyncState.syncing => RecordUpload.uploading,
+      SyncState.queued => RecordUpload.waiting,
+    };
+  }
 
   /// Where a record made on this device stands, for showing it.
   String? uploadStatus(String id) {

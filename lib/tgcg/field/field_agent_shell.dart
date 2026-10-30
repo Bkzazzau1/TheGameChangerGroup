@@ -103,58 +103,32 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
       alerts: _alerts,
       child: Scaffold(
         backgroundColor: TgcgColors.canvas,
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: TgcgColors.surface,
-          // The theme's white icons are for dark bars: this one is light.
-          foregroundColor: TgcgColors.ink,
-          surfaceTintColor: Colors.transparent,
-          titleSpacing: 14,
-          title: Row(
-            children: [
-              const TgcgLogo(size: 34),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _titleFor(selectedModule),
-                      style: const TextStyle(
-                        color: TgcgColors.ink,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      session.scope.pollingUnitName ?? session.scope.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: TgcgColors.muted,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        appBar: TgcgBrandBar(
+          title: _titleFor(selectedModule),
+          subtitle: session.scope.pollingUnitName ?? session.scope.label,
           actions: [
             const InboxButton(),
-            const RegisterMembersButton(),
-            IconButton(
-              tooltip: 'Change PIN',
-              onPressed: () => showChangePin(context),
-              icon: const Icon(Icons.password_rounded),
+            TgcgBarMenu(
+              actions: [
+                TgcgBarAction(
+                  label: 'Register members',
+                  icon: Icons.person_add_alt_1_rounded,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const RegisteredMembersPage()),
+                  ),
+                ),
+                TgcgBarAction(
+                  label: 'Change PIN',
+                  icon: Icons.password_rounded,
+                  onPressed: () => showChangePin(context),
+                ),
+                TgcgBarAction(
+                  label: 'Sign out',
+                  icon: Icons.logout_rounded,
+                  onPressed: session.signOut,
+                ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Sign out',
-              onPressed: session.signOut,
-              icon: const Icon(Icons.logout_rounded),
-            ),
-            const SizedBox(width: 4),
           ],
         ),
         body: Column(
@@ -176,7 +150,6 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
         bottomNavigationBar: tabs.length < 2
             ? null
             : NavigationBar(
-                height: 68,
                 selectedIndex: tabs.indexOf(selectedModule),
                 onDestinationSelected: (index) => _open(tabs[index]),
                 destinations: [
@@ -215,10 +188,10 @@ class _FieldAgentShellState extends State<FieldAgentShell> {
   }
 
   String _titleFor(TgcgModule module) => switch (module) {
-        TgcgModule.fieldMonitoring => 'FIELD REPORTING',
-        TgcgModule.resultCapture => 'RESULT SUBMISSION',
-        TgcgModule.meetingRoom => 'MEETINGS',
-        TgcgModule.discussionRoom => 'SOCIAL FORUM',
-        _ => 'POLLING AGENT',
+        TgcgModule.fieldMonitoring => 'Field Reporting',
+        TgcgModule.resultCapture => 'Result Submission',
+        TgcgModule.meetingRoom => 'Meetings',
+        TgcgModule.discussionRoom => 'Social Forum',
+        _ => 'Field Operations',
       };
 }

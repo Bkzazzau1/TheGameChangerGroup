@@ -6,6 +6,7 @@ import '../access/access_widgets.dart' show formatMoment;
 import '../api/backend.dart';
 import '../api/projects_repository.dart';
 import '../domain/permissions.dart';
+import '../election/election_countdown.dart';
 import '../location/gps_prompt.dart';
 import '../location/gps_service.dart';
 import '../member/member_shell.dart';
@@ -15,11 +16,14 @@ import '../projects/project_mode.dart';
 import '../results/result_operations_store.dart';
 import '../session.dart';
 import '../sound/sound_alerts.dart';
+import '../sync/server_records.dart';
+import '../sync/sync_controller.dart';
 import '../ui/tgcg_design.dart';
 import 'field_operations_store.dart';
 
-/// An agent's home on the phone: who and where they are (from their server
-/// account), check-in, on-duty location sharing, and the work of the day.
+/// An agent's home on the phone: an operations dashboard. Who and where they
+/// are (from their server account), check-in, the two urgent jobs, what is
+/// still on the phone, on-duty location sharing, and what they have sent.
 class AgentHomePage extends StatefulWidget {
   const AgentHomePage({super.key, required this.onOpenModule, this.soundAlerts});
 
@@ -117,53 +121,86 @@ class _AgentHomePageState extends State<AgentHomePage> {
         last.month == today.month &&
         last.day == today.day;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+    final sync = TgcgSync.of(context);
+    final syncBlocked = sync?.problem != null;
+
+    final identity = _AgentCard(
+      name: session.operatorName,
+      accessId: me,
+      role: session.roleTitle,
+      scope: session.scope,
+    );
+    final checkIn = _CheckInCard(
+      checkedInAt: checkedInToday ? last : null,
+      busy: _checkingIn,
+      onCheckIn: _checkIn,
+    );
+    final canReport = session.modules.contains(TgcgModule.fieldMonitoring);
+    final canSubmit = session.modules.contains(TgcgModule.resultCapture);
+    final urgent = _UrgentActions(
+      onReport: canReport ? () => widget.onOpenModule(TgcgModule.fieldMonitoring) : null,
+      onSubmit: canSubmit ? () => widget.onOpenModule(TgcgModule.resultCapture) : null,
+    );
+    final duty = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AgentCard(
-          name: session.operatorName,
-          accessId: me,
-          role: session.roleTitle,
-          scope: session.scope,
-        ),
-        const SizedBox(height: 14),
-        _CheckInCard(
-          checkedInAt: checkedInToday ? last : null,
-          busy: _checkingIn,
-          onCheckIn: _checkIn,
-        ),
-        const SizedBox(height: 10),
         const _ProjectDutyCard(),
         if (alerts.supported) ...[
           const SizedBox(height: 10),
           _SoundAlertsCard(alerts: alerts),
         ],
-        const SizedBox(height: 18),
-        const Text(
-          'Your work today',
-          style: TextStyle(color: TgcgColors.ink, fontSize: 15, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 10),
-        _Action(
-          icon: Icons.report_problem_outlined,
-          title: 'Report an incident',
-          detail: 'Violence, missing materials, anything wrong at your unit',
-          onTap: () => widget.onOpenModule(TgcgModule.fieldMonitoring),
-        ),
-        _Action(
-          icon: Icons.ballot_outlined,
-          title: 'Submit the result',
-          detail: 'Figures from the signed sheet, with its photo',
-          onTap: () => widget.onOpenModule(TgcgModule.resultCapture),
-        ),
-        _Action(
-          icon: Icons.call_rounded,
-          title: 'Meetings',
-          detail: 'Calls from your coordinators',
-          onTap: () => widget.onOpenModule(TgcgModule.meetingRoom),
-        ),
+      ],
+    );
+    const countdown = ElectionCountdown(size: ElectionCountdownSize.compact);
+    final sent = _SentList(
+      rows: [
+        for (final item in submissions.take(3))
+          _Sent(
+            icon: Icons.ballot_outlined,
+            title: 'Result ${item.pollingUnitScope.pollingUnitId ?? ''}',
+            detail: _sentDetail(item.status.name, item.submittedAt),
+            upload: results.uploadState(item.id),
+            refusal: results.uploadStatus(item.id),
+            syncBlocked: syncBlocked,
+          ),
+        for (final item in incidents.take(3))
+          _Sent(
+            icon: Icons.warning_amber_rounded,
+            title: item.title,
+            detail: _sentDetail(item.status.name, item.reportedAt),
+            upload: field.uploadState(item.id),
+            refusal: field.uploadStatus(item.id),
+            syncBlocked: syncBlocked,
+          ),
+        for (final item in reports.take(3))
+          _Sent(
+            icon: Icons.feed_outlined,
+            title: item.category,
+            detail: _sentDetail(item.status.name, item.reportedAt),
+            upload: field.uploadState(item.id),
+            refusal: field.uploadStatus(item.id),
+            syncBlocked: syncBlocked,
+          ),
+      ],
+    );
+    final tools = TgcgRowGroup(
+      children: [
+        if (session.modules.contains(TgcgModule.meetingRoom))
+          TgcgActionRow(
+            icon: Icons.call_rounded,
+            title: 'Meetings',
+            detail: 'Calls from your coordinators',
+            onTap: () => widget.onOpenModule(TgcgModule.meetingRoom),
+          ),
+        if (session.modules.contains(TgcgModule.discussionRoom))
+          TgcgActionRow(
+            icon: Icons.forum_outlined,
+            title: 'Social Forum',
+            detail: 'Posts and discussions',
+            onTap: () => widget.onOpenModule(TgcgModule.discussionRoom),
+          ),
         if (session.membershipNumber != null)
-          _Action(
+          TgcgActionRow(
             icon: Icons.badge_outlined,
             title: 'My membership card',
             detail: 'Your details and photos, and the card to download',
@@ -172,7 +209,7 @@ class _AgentHomePageState extends State<AgentHomePage> {
             ),
           ),
         if (session.membershipNumber != null)
-          _Action(
+          TgcgActionRow(
             icon: Icons.account_balance_wallet_outlined,
             title: 'My wallet',
             detail: 'Payments from TGCG, and the account they go to',
@@ -181,7 +218,7 @@ class _AgentHomePageState extends State<AgentHomePage> {
             ),
           ),
         if (session.can(TgcgCapability.verifyMemberIdentity))
-          _Action(
+          TgcgActionRow(
             icon: Icons.verified_user_outlined,
             title: 'Identity checks',
             detail: 'Confirm the members of your polling unit',
@@ -195,45 +232,76 @@ class _AgentHomePageState extends State<AgentHomePage> {
               ),
             ),
           ),
-        const SizedBox(height: 18),
-        const Text(
-          'What you have sent',
-          style: TextStyle(color: TgcgColors.ink, fontSize: 15, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 10),
-        if (incidents.isEmpty && reports.isEmpty && submissions.isEmpty)
-          const Text(
-            'Nothing yet. Incidents, reports and results you send appear here.',
-            style: TextStyle(color: TgcgColors.muted),
-          )
-        else ...[
-          for (final item in submissions.take(3))
-            _Sent(
-              icon: Icons.ballot_outlined,
-              title: 'Result ${item.pollingUnitScope.pollingUnitId ?? ''}',
-              detail: '${item.status.name} · ${formatMoment(item.submittedAt.toLocal())}',
-              onDevice: results.isOnDevice(item.id),
-            ),
-          for (final item in incidents.take(3))
-            _Sent(
-              icon: Icons.warning_amber_rounded,
-              title: item.title,
-              detail: '${item.status.name} · ${formatMoment(item.reportedAt.toLocal())}',
-              onDevice: field.isOnDevice(item.id),
-            ),
-          for (final item in reports.take(3))
-            _Sent(
-              icon: Icons.feed_outlined,
-              title: item.category,
-              detail: '${item.status.name} · ${formatMoment(item.reportedAt.toLocal())}',
-              onDevice: field.isOnDevice(item.id),
-            ),
-        ],
       ],
     );
+    final hasTools = session.modules.contains(TgcgModule.meetingRoom) ||
+        session.modules.contains(TgcgModule.discussionRoom) ||
+        session.membershipNumber != null ||
+        session.can(TgcgCapability.verifyMemberIdentity);
+
+    const gap = SizedBox(height: 12);
+    final operations = <Widget>[identity, gap, checkIn, gap, urgent, gap];
+    final standing = <Widget>[if (sync != null) const SyncStatusCard(), duty, gap];
+    final records = <Widget>[
+      const TgcgSectionHeading(title: 'What you have sent'),
+      sent,
+      if (hasTools) ...[
+        const SizedBox(height: 18),
+        const TgcgSectionHeading(title: 'More'),
+        tools,
+      ],
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 900) {
+          return SingleChildScrollView(
+            padding: tgcgPagePadding(constraints.maxWidth, maxWidth: 1120, top: TgcgSpacing.lg),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [...operations, ...standing],
+                  ),
+                ),
+                const SizedBox(width: TgcgSpacing.lg),
+                Expanded(
+                  flex: 6,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [countdown, const SizedBox(height: 18), ...records],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return ListView(
+          padding: tgcgPagePadding(constraints.maxWidth),
+          children: [
+            ...operations,
+            ...standing,
+            countdown,
+            const SizedBox(height: 18),
+            ...records,
+          ],
+        );
+      },
+    );
+  }
+
+  /// "Under review · 16 Jan 09:40": the record's state, as the app knows it.
+  String _sentDetail(String status, DateTime at) {
+    final words = status.replaceAllMapped(RegExp('[A-Z]'), (match) => ' ${match[0]!.toLowerCase()}');
+    final state = words.isEmpty ? words : words[0].toUpperCase() + words.substring(1);
+    return '$state · ${formatMoment(at.toLocal())}';
   }
 }
 
+/// The agent, and the place they answer for.
 class _AgentCard extends StatelessWidget {
   const _AgentCard({
     required this.name,
@@ -250,46 +318,92 @@ class _AgentCard extends StatelessWidget {
   final GeographicScope scope;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: TgcgColors.primaryDark,
-          borderRadius: BorderRadius.circular(18),
+  Widget build(BuildContext context) {
+    final atUnit = scope.level == GeographyLevel.pollingUnit;
+    final area = [
+      if ((scope.wardName ?? scope.wardId) case final ward?) ward,
+      if ((scope.lgaName ?? scope.lgaId) case final lga?) lga,
+      if ((scope.stateName ?? scope.stateId) case final state?) state,
+    ].join(' · ');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TgcgRadius.lg),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [TgcgColors.primaryDark, TgcgColors.primary],
         ),
-        child: Row(
-          children: [
-            const TgcgLogo(size: 48),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
+        border: Border.all(color: TgcgColors.accent.withValues(alpha: .45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const TgcgLogo(size: 46),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  Text(
-                    '$accessId · $role',
-                    style: const TextStyle(color: Color(0xFFC9D4F0), fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    scope.level == GeographyLevel.pollingUnit
-                        ? '${scope.pollingUnitName ?? scope.pollingUnitId} · '
-                            '${scope.wardName ?? scope.wardId ?? ''}'
-                        : scope.label,
-                    style: const TextStyle(color: Colors.white, fontSize: 12.5),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '$accessId · $role',
+                      style: const TextStyle(color: TgcgColors.onNavyMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      );
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(height: 1, color: TgcgColors.accent.withValues(alpha: .35)),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 1),
+                child: Icon(Icons.place_outlined, color: TgcgColors.accentBright, size: 19),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      atUnit ? scope.pollingUnitName ?? scope.pollingUnitId ?? '' : scope.label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (atUnit && area.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        area,
+                        style: const TextStyle(color: TgcgColors.onNavyMuted, fontSize: 12.5),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CheckInCard extends StatelessWidget {
@@ -302,150 +416,261 @@ class _CheckInCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final at = checkedInAt;
+    if (at != null) {
+      return TgcgNotice(
+        icon: Icons.verified_rounded,
+        color: TgcgColors.success,
+        child: Text(
+          'Checked in today at ${_hhmm(at)}',
+          style: TgcgType.bodyStrong,
+        ),
+      );
+    }
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: TgcgColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: at == null ? TgcgColors.border : TgcgColors.success),
+        borderRadius: BorderRadius.circular(TgcgRadius.md),
+        border: Border.all(color: TgcgColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            at == null ? Icons.where_to_vote_outlined : Icons.verified_rounded,
-            color: at == null ? TgcgColors.muted : TgcgColors.success,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              at == null
-                  ? 'Check in when you reach your polling unit. Your GPS position is recorded.'
-                  : 'Checked in today at ${at.hour.toString().padLeft(2, '0')}:'
-                      '${at.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                color: TgcgColors.ink,
-                fontWeight: at == null ? FontWeight.w600 : FontWeight.w900,
+          const Row(
+            children: [
+              TgcgIconBadge(icon: Icons.where_to_vote_outlined),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Check in when you reach your polling unit. Your GPS position is recorded.',
+                  style: TgcgType.body,
+                ),
               ),
-            ),
+            ],
           ),
-          if (at == null)
-            FilledButton(
-              onPressed: busy ? null : onCheckIn,
-              child: busy
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Check in'),
-            ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: busy ? null : onCheckIn,
+            icon: busy
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.my_location_rounded),
+            label: const Text('Check in'),
+          ),
         ],
       ),
     );
   }
 }
 
-class _Action extends StatelessWidget {
-  const _Action({
+/// The two jobs that cannot wait, side by side on all but the narrowest
+/// phones. Each shows only for an agent the server allows it.
+class _UrgentActions extends StatelessWidget {
+  const _UrgentActions({required this.onReport, required this.onSubmit});
+
+  final VoidCallback? onReport;
+  final VoidCallback? onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      if (onReport != null)
+        _UrgentAction(
+          icon: Icons.report_problem_outlined,
+          title: 'Report an incident',
+          detail: 'Anything wrong at your unit',
+          color: TgcgColors.danger,
+          onTap: onReport!,
+        ),
+      if (onSubmit != null)
+        _UrgentAction(
+          icon: Icons.ballot_outlined,
+          title: 'Submit the result',
+          detail: 'From the signed sheet',
+          color: TgcgColors.primary,
+          onTap: onSubmit!,
+        ),
+    ];
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (actions.length == 1 || constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (index, action) in actions.indexed) ...[
+                if (index > 0) const SizedBox(height: 10),
+                action,
+              ],
+            ],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: actions[0]),
+              const SizedBox(width: 10),
+              Expanded(child: actions[1]),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _UrgentAction extends StatelessWidget {
+  const _UrgentAction({
     required this.icon,
     required this.title,
     required this.detail,
+    required this.color,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String detail;
+  final Color color;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Material(
-          color: TgcgColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: TgcgColors.border),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, color: TgcgColors.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: TgcgColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          detail,
-                          style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
-                        ),
-                      ],
-                    ),
+  Widget build(BuildContext context) => Material(
+        color: color,
+        borderRadius: BorderRadius.circular(TgcgRadius.md),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: Colors.white, size: 26),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 1.2,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: TgcgColors.muted),
-                ],
-              ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .85),
+                    fontSize: 12.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       );
 }
 
+/// What the agent has sent, or the plain note that nothing has been yet.
+class _SentList extends StatelessWidget {
+  const _SentList({required this.rows});
+
+  final List<_Sent> rows;
+
+  @override
+  Widget build(BuildContext context) => TgcgSectionCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: rows.isEmpty
+            ? const Text(
+                'Nothing yet. Incidents, reports and results you send appear here.',
+                style: TgcgType.support,
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (index, row) in rows.indexed) ...[
+                    if (index > 0) const Divider(height: 18),
+                    row,
+                  ],
+                ],
+              ),
+      );
+}
+
+/// One record: what it is, its state, and where it stands on its way to the
+/// server, as the outbox says. Nothing is shown as uploaded before the server
+/// has confirmed it.
 class _Sent extends StatelessWidget {
   const _Sent({
     required this.icon,
     required this.title,
     required this.detail,
-    required this.onDevice,
+    required this.upload,
+    required this.refusal,
+    required this.syncBlocked,
   });
 
   final IconData icon;
   final String title;
   final String detail;
-  final bool onDevice;
+  final RecordUpload? upload;
+
+  /// The server's reason, for a record it refused.
+  final String? refusal;
+
+  /// Uploads are stopped for now (offline, or the server is busy).
+  final bool syncBlocked;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: TgcgColors.primaryMid),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w800),
-                  ),
-                  Text(detail, style: const TextStyle(color: TgcgColors.muted, fontSize: 11.5)),
-                ],
-              ),
-            ),
-            if (onDevice)
-              const TgcgStatusPill(
-                label: 'ON THIS PHONE',
-                color: TgcgColors.accentDeep,
-                compact: true,
-              ),
-          ],
+  Widget build(BuildContext context) {
+    final state = switch (upload) {
+      RecordUpload.waiting => syncBlocked
+          ? ('Saved on phone', TgcgColors.accentDeep)
+          : ('Waiting to upload', TgcgColors.accentDeep),
+      RecordUpload.uploading => ('Uploading', TgcgColors.info),
+      RecordUpload.uploaded => ('Uploaded', TgcgColors.success),
+      RecordUpload.refused => ('Not accepted', TgcgColors.danger),
+      null => null,
+    };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 21, color: TgcgColors.primaryMid),
         ),
-      );
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TgcgType.bodyStrong,
+              ),
+              const SizedBox(height: 2),
+              Text(detail, style: TgcgType.caption),
+              if (upload == RecordUpload.refused && refusal != null) ...[
+                const SizedBox(height: 2),
+                Text(refusal!, style: TgcgType.caption.copyWith(color: TgcgColors.danger)),
+              ],
+              if (state != null) ...[
+                const SizedBox(height: 6),
+                TgcgStatusPill(label: state.$1, color: state.$2, compact: true),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Switch for sharing live location while on duty on election day.
@@ -478,10 +703,10 @@ class _ProjectDutyCard extends StatelessWidget {
           _ => ('No project now', 'Your location is not shared.'),
         };
         return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           decoration: BoxDecoration(
             color: sharing ? TgcgColors.primary : TgcgColors.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(TgcgRadius.md),
             border: Border.all(color: sharing ? TgcgColors.primary : TgcgColors.border),
           ),
           child: Row(
@@ -497,17 +722,15 @@ class _ProjectDutyCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
+                      style: TgcgType.bodyStrong.copyWith(
                         color: sharing ? Colors.white : TgcgColors.ink,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       detail,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: sharing ? const Color(0xFFC9D4F0) : TgcgColors.muted,
+                      style: TgcgType.caption.copyWith(
+                        color: sharing ? TgcgColors.onNavyMuted : TgcgColors.muted,
                       ),
                     ),
                   ],
@@ -555,10 +778,10 @@ class _SoundAlertsCard extends StatelessWidget {
                   : 'Last alert ${_hhmm(last.at.toLocal())}: ${last.kind.label}'),
         };
         return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           decoration: BoxDecoration(
             color: on ? TgcgColors.primary : TgcgColors.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(TgcgRadius.md),
             border: Border.all(color: on ? TgcgColors.primary : TgcgColors.border),
           ),
           child: Row(
@@ -574,17 +797,15 @@ class _SoundAlertsCard extends StatelessWidget {
                   children: [
                     Text(
                       on ? 'Sound alerts on' : 'Sound alerts',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
+                      style: TgcgType.bodyStrong.copyWith(
                         color: on ? Colors.white : TgcgColors.ink,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       detail,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: on ? const Color(0xFFC9D4F0) : TgcgColors.muted,
+                      style: TgcgType.caption.copyWith(
+                        color: on ? TgcgColors.onNavyMuted : TgcgColors.muted,
                       ),
                     ),
                   ],
