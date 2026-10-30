@@ -14,7 +14,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 ## Current state
 
-- **Maintenance mode is ON** again since 29 October 2026, 21:01 Africa/Lagos, at the owner's request. The page now has a countdown to the presidential election. It first ran the same day from 09:38 to 16:56. See Operations.
+- Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
 - Source: `Bkzazzau1/tgcg_backend`, deployed commit `82a304be9f293023f6f45fa327d2bf21e239dd5e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261026-135340-9b5f6c72d92e` (release directory timestamps use UTC).
-- Frontend build source: `d27eef9` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261026-125219-48b90459a43a` (TGC tokens); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261030-162004-32435077cb2d` (release directory timestamps use UTC).
+- Frontend build source: `3c20011` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261026-135340-9b5f6c72d92e` (lighter refreshes, `d27eef9`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `9b5f6c72d92ed9e5249382fd847b4d62fd3dfd8688c02b45ef193fe992166a6b`.
-- Build: 856 files, 59,315,630 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `32435077cb2dbc5559d5e13daa05ee11e00be7794c7d9c9bfa4f21903bebb233`.
+- Build: 856 files, 59,351,565 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,20 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Premium redesign live, maintenance ended (30 October 2026)
+
+The owner asked for the website to be built, published and made live. Everything since `d27eef9` went out together from frontend `3c20011`: the design system, the election countdown from one central date, the member Home and Account, the agent dashboard, the new sign-in, and the command screens (dashboard, Situation Room, collation, Members & Exco, navigation). Backend `82a304b` was not touched: the release adds no API calls, and it has no migrations or setting changes. There is no APK for this release: Android stays on version 5.
+
+**Behaviour to know.**
+- A server session's dashboard and Situation Room show no incident figures until the server has answered once. If it cannot be reached, they say so; they never show zero or "no incidents" (`ServerRecords.recordsKnown`).
+- Collation says "Unofficial" on its lead panel and on the party totals as well as the existing label and note.
+
+**Validation.** **430 Flutter tests** passed and analysis was clean. The command screens were tested through the real login at 320, 360, 390, 428 and 1200 wide, with data, with nothing yet, and with the server down. The build scan found no secrets; the only match was the graphics engine's `sk_test_bit` symbol, in files identical to the previous release. `main.dart.js` names `https://api.tgcg.online`.
+
+**Deployment.** The build was uploaded to `/var/www/tgcg/releases/web-20261030-162004-32435077cb2d` and all 856 files matched the local checksums before the link was swapped. The frontend checkout was fast-forwarded to `3c20011`, then `/etc/nginx/tgcg-maintenance.on` was removed at 17:28 Africa/Lagos.
+
+**After going live.** The public app, a referral link, the APK download and the administration login returned 200; the public JavaScript checksum matched `32435077…`. Anonymous API calls returned 401 and a browser preflight 200. Chrome drew the live sign-in page at 1440, 390 and 320 wide with no page errors; the two phone widths used phone emulation. The first 121 requests after reopening had no server errors, and the API log showed none. The backup after the release completed. No data was changed.
 
 ### Election-day load: shared area summaries and lighter refreshes (26 October 2026)
 
