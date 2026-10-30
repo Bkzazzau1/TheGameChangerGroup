@@ -123,7 +123,7 @@ Widget memberApp(BackendServices services, TgcgSessionController session, Widget
       services: services,
       child: TgcgSession(
         controller: session,
-        child: MaterialApp(theme: tgcgTheme(), home: home),
+        child: MaterialApp(debugShowCheckedModeBanner: false, theme: tgcgTheme(), home: home),
       ),
     );
 
@@ -248,7 +248,7 @@ class AgentPhone {
             controller: field,
             child: ResultOperations(
               controller: results,
-              child: MaterialApp(theme: tgcgTheme(), home: home),
+              child: MaterialApp(debugShowCheckedModeBanner: false, theme: tgcgTheme(), home: home),
             ),
           ),
         ),

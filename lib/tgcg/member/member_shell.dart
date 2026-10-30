@@ -132,7 +132,6 @@ class _MemberShellState extends State<MemberShell> {
       backgroundColor: TgcgColors.canvas,
       appBar: TgcgBrandBar(
         title: 'TGCG Member',
-        subtitle: 'The Game Changer Group',
         actions: [
           IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
           const InboxButton(),
@@ -1747,18 +1746,14 @@ class _Detail extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+  Widget build(BuildContext context) => ConstrainedBox(
+        // As tall as a row with a button, so every row matches.
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
-            Expanded(
-              flex: 2,
-              child: Text(label, style: TgcgType.support),
-            ),
-            Expanded(
-              flex: 3,
-              child: Text(value, style: TgcgType.bodyStrong),
-            ),
+            SizedBox(width: 96, child: Text(label, style: TgcgType.support)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(value, style: TgcgType.bodyStrong)),
             ?action,
           ],
         ),

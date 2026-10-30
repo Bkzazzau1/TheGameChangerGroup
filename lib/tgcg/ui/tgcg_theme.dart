@@ -87,7 +87,11 @@ ThemeData tgcgTheme() {
         minimumSize: const Size(64, 48),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TgcgRadius.md)),
-        textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          fontSize: 14.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -97,13 +101,17 @@ ThemeData tgcgTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         side: const BorderSide(color: Color(0xFFC6CEE0)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TgcgRadius.md)),
-        textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          fontSize: 14.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: TgcgColors.primary,
-        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(fontFamily: 'Roboto', fontSize: 14, fontWeight: FontWeight.w700),
       ),
     ),
     snackBarTheme: const SnackBarThemeData(
@@ -118,7 +126,12 @@ ThemeData tgcgTheme() {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleTextStyle: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+      titleTextStyle: TextStyle(
+        fontFamily: 'Roboto',
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+      ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 68,
@@ -134,6 +147,7 @@ ThemeData tgcgTheme() {
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
+          fontFamily: 'Roboto',
           fontSize: 12,
           fontWeight: states.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w600,
           color: states.contains(WidgetState.selected) ? TgcgColors.primary : TgcgColors.muted,
@@ -142,7 +156,12 @@ ThemeData tgcgTheme() {
     ),
     listTileTheme: const ListTileThemeData(
       iconColor: TgcgColors.primary,
-      titleTextStyle: TextStyle(color: TgcgColors.ink, fontSize: 14.5, fontWeight: FontWeight.w600),
+      titleTextStyle: TextStyle(
+        fontFamily: 'Roboto',
+        color: TgcgColors.ink,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+      ),
       subtitleTextStyle: TextStyle(color: TgcgColors.muted, fontSize: 12.5, height: 1.35),
     ),
     popupMenuTheme: PopupMenuThemeData(
@@ -151,7 +170,12 @@ ThemeData tgcgTheme() {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TgcgRadius.md)),
       labelTextStyle: const WidgetStatePropertyAll(
-        TextStyle(color: TgcgColors.ink, fontSize: 14.5, fontWeight: FontWeight.w600),
+        TextStyle(
+          fontFamily: 'Roboto',
+          color: TgcgColors.ink,
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
     bottomSheetTheme: const BottomSheetThemeData(

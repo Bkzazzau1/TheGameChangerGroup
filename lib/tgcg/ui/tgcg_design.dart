@@ -153,11 +153,11 @@ class TgcgBrandBar extends StatelessWidget implements PreferredSizeWidget {
         // The theme's white icons are for dark bars: this one is light.
         foregroundColor: TgcgColors.ink,
         surfaceTintColor: Colors.transparent,
-        titleSpacing: 14,
+        titleSpacing: 10,
         shape: const Border(bottom: BorderSide(color: TgcgColors.border)),
         title: Row(
           children: [
-            const TgcgLogo(size: 36),
+            const TgcgLogo(size: 34),
             const SizedBox(width: 10),
             // Shrinks rather than overflow beside the buttons on a narrow phone.
             Expanded(
@@ -170,6 +170,7 @@ class TgcgBrandBar extends StatelessWidget implements PreferredSizeWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
+                      fontFamily: 'Roboto',
                       color: TgcgColors.ink,
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -181,6 +182,7 @@ class TgcgBrandBar extends StatelessWidget implements PreferredSizeWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        fontFamily: 'Roboto',
                         color: TgcgColors.muted,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -425,7 +427,8 @@ class TgcgSectionCard extends StatelessWidget {
                       );
                     }
                     return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          trailingBeside ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                       children: [
                         if (title != null) Expanded(child: _heading()),
                         if (trailing != null) trailing!,
@@ -433,7 +436,7 @@ class TgcgSectionCard extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: trailingBeside ? 4 : 14),
               ],
               child,
             ],
