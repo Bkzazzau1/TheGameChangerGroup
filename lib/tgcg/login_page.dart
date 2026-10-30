@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'api/api_client.dart';
 import 'api/backend.dart';
-import 'app.dart';
 import 'member/forgot_pin_page.dart';
 import 'member/member_registration_page.dart';
 import 'member/referral.dart';
@@ -19,11 +18,16 @@ class TgcgLoginPage extends StatefulWidget {
   State<TgcgLoginPage> createState() => _TgcgLoginPageState();
 }
 
+/// Who is signing in. Both go to the same sign-in on the server; this decides
+/// what the form asks for, and the keyboard it opens.
+enum _SignInAs { member, staff }
+
 class _TgcgLoginPageState extends State<TgcgLoginPage> {
   final accessIdController = TextEditingController();
   final passwordController = TextEditingController();
 
   bool showForm = false;
+  _SignInAs signInAs = _SignInAs.member;
   bool obscurePassword = true;
   bool rememberDevice = true;
   bool signingIn = false;
@@ -55,7 +59,9 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
     final services = TgcgBackend.of(context)!;
     final identifier = accessIdController.text.trim();
     if (identifier.isEmpty || passwordController.text.isEmpty) {
-      setState(() => serverError = 'Enter your access ID or phone number and password.');
+      setState(() => serverError = signInAs == _SignInAs.member
+          ? 'Enter your phone number and PIN.'
+          : 'Enter your access ID or phone number and password.');
       return;
     }
     setState(() {
@@ -132,7 +138,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
               }
               if (!showForm) return _phoneWelcome(constraints);
               return ListView(
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
                 children: [
                   Row(
                     children: [
@@ -145,7 +151,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                       const Expanded(child: _Brand()),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
                   _formPanel(),
                 ],
               );
@@ -154,32 +160,48 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         ),
       );
 
-  /// A phone's first page: the poster, the welcome, and the two ways in.
-  Widget _phoneWelcome(BoxConstraints constraints) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+  /// A phone's first page: the poster and the welcome scroll, and the two
+  /// ways in stay on screen, however small the phone.
+  Widget _phoneWelcome(BoxConstraints constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: constraints.maxHeight * .6),
-              child: const _Poster(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: constraints.maxHeight * .5),
+                    child: const _Poster(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const _WelcomeNote(),
+              ],
             ),
           ),
-          const SizedBox(height: 18),
-          const _WelcomeNote(),
-          const SizedBox(height: 18),
-          SizedBox(
-            height: 52,
-            child: FilledButton.icon(
-              onPressed: () => setState(() => showForm = true),
-              icon: const Icon(Icons.login_rounded),
-              label: const Text('Sign in'),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            decoration: const BoxDecoration(
+              color: TgcgColors.surface,
+              border: Border(top: BorderSide(color: TgcgColors.border)),
             ),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _register,
-            icon: const Icon(Icons.person_add_alt_1_rounded),
-            label: const Text('New member? Register with your PVC'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => setState(() => showForm = true),
+                  icon: const Icon(Icons.login_rounded),
+                  label: const Text('Sign in'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _register,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: const Text('New member? Register with your PVC'),
+                ),
+              ],
+            ),
           ),
         ],
       );
@@ -193,44 +215,54 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (welcome) ...[const _WelcomeNote(), const SizedBox(height: 28)],
-                const Text(
-                  'Sign in to your account',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: TgcgApp.ink,
-                    letterSpacing: -.5,
-                  ),
+                const Text('Sign in to your account', style: TgcgType.display),
+                const SizedBox(height: 14),
+                _SignInChoice(
+                  value: signInAs,
+                  onChanged: (value) => setState(() {
+                    signInAs = value;
+                    serverError = null;
+                  }),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Members use their phone number and 6-digit PIN. Coordinators and agents use '
-                  'their access ID and password.',
-                  style: TextStyle(color: TgcgApp.muted, fontSize: 13, height: 1.4),
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 TextField(
+                  key: ValueKey('sign-in-id-${signInAs.name}'),
                   controller: accessIdController,
                   autofillHints: const [AutofillHints.username],
+                  keyboardType:
+                      signInAs == _SignInAs.member ? TextInputType.phone : TextInputType.text,
                   textInputAction: TextInputAction.next,
-                  decoration: _decoration(
-                    'Access ID or phone number',
-                    'e.g. TGCG-KD-0001 or 0803 123 4567',
-                    Icons.badge_outlined,
+                  decoration: InputDecoration(
+                    labelText: signInAs == _SignInAs.member
+                        ? 'Phone number'
+                        : 'Access ID or phone number',
+                    hintText: signInAs == _SignInAs.member
+                        ? 'e.g. 0803 123 4567'
+                        : 'e.g. TGCG-KD-0001',
+                    prefixIcon: Icon(
+                      signInAs == _SignInAs.member ? Icons.phone_outlined : Icons.badge_outlined,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  key: ValueKey('sign-in-secret-${signInAs.name}'),
                   controller: passwordController,
                   obscureText: obscurePassword,
                   onSubmitted: (_) => _signIn(),
                   autofillHints: const [AutofillHints.password],
-                  decoration: _decoration(
-                    'Password or PIN',
-                    'Members use their 6-digit PIN',
-                    Icons.lock_outline_rounded,
-                  ).copyWith(
+                  keyboardType:
+                      signInAs == _SignInAs.member ? TextInputType.number : TextInputType.text,
+                  decoration: InputDecoration(
+                    labelText: signInAs == _SignInAs.member ? 'PIN' : 'Password',
+                    hintText: signInAs == _SignInAs.member ? 'Your 6-digit PIN' : null,
+                    helperText: signInAs == _SignInAs.member
+                        ? 'Registered by someone else? Use your phone number until you set a PIN.'
+                        : null,
+                    helperMaxLines: 2,
+                    prefixIcon: const Icon(Icons.lock_outline_rounded),
                     suffixIcon: IconButton(
+                      tooltip: obscurePassword ? 'Show' : 'Hide',
                       onPressed: () => setState(() => obscurePassword = !obscurePassword),
                       icon: Icon(
                         obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
@@ -238,7 +270,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Checkbox(
@@ -246,10 +278,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                       onChanged: (value) => setState(() => rememberDevice = value ?? false),
                     ),
                     const Expanded(
-                      child: Text(
-                        'Remember this device',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                      child: Text('Remember this device', style: TgcgType.bodyStrong),
                     ),
                     TextButton(
                       onPressed: () => Navigator.of(context).push(
@@ -261,34 +290,16 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                 ),
                 if (serverError != null) ...[
                   const SizedBox(height: 4),
-                  Container(
+                  TgcgNotice(
                     key: const ValueKey('login-error'),
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: TgcgColors.danger.withValues(alpha: .08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: TgcgColors.danger.withValues(alpha: .3)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.error_outline_rounded, color: TgcgColors.danger, size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            serverError!,
-                            style: const TextStyle(color: TgcgColors.ink, height: 1.35),
-                          ),
-                        ),
-                      ],
-                    ),
+                    icon: Icons.error_outline_rounded,
+                    color: TgcgColors.danger,
+                    child: Text(serverError!),
                   ),
                 ],
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  height: 54,
                   child: FilledButton.icon(
                     onPressed: signingIn ? null : _signIn,
                     icon: signingIn
@@ -299,15 +310,9 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                           )
                         : const Icon(Icons.login_rounded),
                     label: Text(signingIn ? 'Signing in…' : 'Sign in'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: TgcgApp.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -322,20 +327,90 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         ),
       );
 
-  InputDecoration _decoration(String label, String hint, IconData icon) => InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFDDDFE5)),
+}
+
+/// Member or agent: two plain choices, saying what each one signs in with.
+class _SignInChoice extends StatelessWidget {
+  const _SignInChoice({required this.value, required this.onChanged});
+
+  final _SignInAs value;
+  final ValueChanged<_SignInAs> onChanged;
+
+  @override
+  Widget build(BuildContext context) => IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _Choice(
+                title: 'Member',
+                detail: 'Phone number and PIN',
+                selected: value == _SignInAs.member,
+                onTap: () => onChanged(_SignInAs.member),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _Choice(
+                title: 'Agent or coordinator',
+                detail: 'Access ID and password',
+                selected: value == _SignInAs.staff,
+                onTap: () => onChanged(_SignInAs.staff),
+              ),
+            ),
+          ],
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: TgcgApp.primary, width: 1.5),
+      );
+}
+
+class _Choice extends StatelessWidget {
+  const _Choice({
+    required this.title,
+    required this.detail,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String detail;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? TgcgColors.primary : TgcgColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(TgcgRadius.md),
+            side: BorderSide(color: selected ? TgcgColors.primary : TgcgColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TgcgType.bodyStrong.copyWith(
+                      color: selected ? Colors.white : TgcgColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    detail,
+                    style: TgcgType.caption.copyWith(
+                      color: selected ? TgcgColors.onNavyMuted : TgcgColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       );
 }
@@ -354,7 +429,7 @@ class _Poster extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: const Color(0xFF000E2F),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(TgcgRadius.lg),
           ),
           child: Image.asset(
             'assets/brand/login_poster.webp',
@@ -383,15 +458,13 @@ class _Brand extends StatelessWidget {
                 Text(
                   'TGCG-EMCOP',
                   style: TextStyle(
-                    color: TgcgApp.ink,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .8,
+                    color: TgcgColors.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .6,
                   ),
                 ),
-                Text(
-                  'Election Monitoring & Collation Programme',
-                  style: TextStyle(color: TgcgApp.muted, fontSize: 11),
-                ),
+                Text('Election Monitoring & Collation Programme', style: TgcgType.caption),
               ],
             ),
           ),
@@ -408,21 +481,13 @@ class _WelcomeNote extends StatelessWidget {
         children: [
           _Brand(),
           SizedBox(height: 16),
-          Text(
-            'Welcome to TGCG-EMCOP',
-            style: TextStyle(
-              color: TgcgApp.ink,
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              height: 1.15,
-            ),
-          ),
+          Text('Welcome to TGCG-EMCOP', style: TgcgType.display),
           SizedBox(height: 8),
           Text(
             "The Game Changer Group's election monitoring and collation programme. Sign in to "
             'report from your polling unit, follow results and work with your coordinators. '
             'New members register with their voter card (PVC).',
-            style: TextStyle(color: TgcgApp.muted, fontSize: 14, height: 1.45),
+            style: TgcgType.support,
           ),
         ],
       );
