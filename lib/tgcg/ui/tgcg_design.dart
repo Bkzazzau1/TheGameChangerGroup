@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// Brand palette taken from the TGCG logo: deep navy ring (#001E5A) and
@@ -25,6 +27,9 @@ class TgcgColors {
   static const muted = Color(0xFF5D6782);
   static const border = Color(0xFFDFE4EF);
 
+  /// Secondary text on navy.
+  static const onNavyMuted = Color(0xFFC9D4F0);
+
   // Semantic
   static const success = Color(0xFF087A55);
   static const info = Color(0xFF2563EB);
@@ -42,6 +47,61 @@ class TgcgSpacing {
   static const double lg = 24;
   static const double xl = 32;
 }
+
+class TgcgRadius {
+  const TgcgRadius._();
+
+  static const double sm = 10;
+  static const double md = 14;
+  static const double lg = 18;
+}
+
+/// The app's type scale. Nothing a person must read is smaller than
+/// [caption].
+class TgcgType {
+  const TgcgType._();
+
+  static const display = TextStyle(
+    color: TgcgColors.ink,
+    fontSize: 26,
+    height: 1.15,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -.4,
+  );
+  static const title = TextStyle(
+    color: TgcgColors.ink,
+    fontSize: 20,
+    height: 1.2,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -.2,
+  );
+  static const section = TextStyle(
+    color: TgcgColors.ink,
+    fontSize: 16,
+    height: 1.25,
+    fontWeight: FontWeight.w800,
+  );
+  static const body = TextStyle(color: TgcgColors.ink, fontSize: 14, height: 1.45);
+  static const bodyStrong = TextStyle(
+    color: TgcgColors.ink,
+    fontSize: 14,
+    height: 1.35,
+    fontWeight: FontWeight.w700,
+  );
+  static const support = TextStyle(color: TgcgColors.muted, fontSize: 13, height: 1.4);
+  static const caption = TextStyle(color: TgcgColors.muted, fontSize: 12, height: 1.35);
+  static const eyebrow = TextStyle(
+    color: TgcgColors.primaryMid,
+    fontSize: 11.5,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 1,
+  );
+}
+
+/// A soft, restrained lift for cards that stand on the canvas.
+const tgcgCardShadow = [
+  BoxShadow(color: Color(0x0A0A2463), blurRadius: 16, offset: Offset(0, 4)),
+];
 
 enum TgcgMetricTone { neutral, success, info, warning, danger, ai }
 
@@ -72,6 +132,163 @@ class TgcgLogo extends StatelessWidget {
       );
 }
 
+/// The top bar of the member and agent apps: the logo, what this page is,
+/// and the page's buttons.
+class TgcgBrandBar extends StatelessWidget implements PreferredSizeWidget {
+  const TgcgBrandBar({super.key, required this.title, this.subtitle, this.actions = const []});
+
+  final String title;
+  final String? subtitle;
+  final List<Widget> actions;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(64);
+
+  @override
+  Widget build(BuildContext context) => AppBar(
+        toolbarHeight: 64,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: TgcgColors.surface,
+        // The theme's white icons are for dark bars: this one is light.
+        foregroundColor: TgcgColors.ink,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 14,
+        shape: const Border(bottom: BorderSide(color: TgcgColors.border)),
+        title: Row(
+          children: [
+            const TgcgLogo(size: 36),
+            const SizedBox(width: 10),
+            // Shrinks rather than overflow beside the buttons on a narrow phone.
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: TgcgColors.ink,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: TgcgColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [...actions, const SizedBox(width: 4)],
+      );
+}
+
+/// One button of a top bar that may not have room for all of them.
+class TgcgBarAction {
+  const TgcgBarAction({required this.label, required this.icon, required this.onPressed});
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+}
+
+/// A top bar's less frequent buttons: side by side where there is room, and
+/// behind a "More" menu on a phone.
+class TgcgBarMenu extends StatelessWidget {
+  const TgcgBarMenu({super.key, required this.actions, this.color, this.inlineFrom = 600});
+
+  final List<TgcgBarAction> actions;
+  final Color? color;
+
+  /// The screen width from which the buttons stand in the bar.
+  final double inlineFrom;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width >= inlineFrom) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final action in actions)
+            IconButton(
+              tooltip: action.label,
+              onPressed: action.onPressed,
+              icon: Icon(action.icon, color: color),
+            ),
+        ],
+      );
+    }
+    return PopupMenuButton<TgcgBarAction>(
+      tooltip: 'More',
+      icon: Icon(Icons.more_vert_rounded, color: color),
+      onSelected: (action) => action.onPressed(),
+      itemBuilder: (_) => [
+        for (final action in actions)
+          PopupMenuItem(
+            value: action,
+            child: Row(
+              children: [
+                Icon(action.icon, size: 20, color: TgcgColors.primary),
+                const SizedBox(width: 12),
+                Flexible(child: Text(action.label)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// How far a page's content stands from the edges at [width]: phones use the
+/// whole width, wider screens keep a readable column in the middle.
+EdgeInsets tgcgPagePadding(
+  double width, {
+  double maxWidth = 760,
+  double top = TgcgSpacing.md,
+  double bottom = TgcgSpacing.lg,
+}) {
+  final side = math.max(TgcgSpacing.md, (width - maxWidth) / 2);
+  return EdgeInsets.fromLTRB(side, top, side, bottom);
+}
+
+/// A scrolling page of cards, in a readable column on wide screens.
+class TgcgPageList extends StatelessWidget {
+  const TgcgPageList({
+    super.key,
+    required this.children,
+    this.maxWidth = 760,
+    this.bottomPadding = TgcgSpacing.lg,
+  });
+
+  final List<Widget> children;
+  final double maxWidth;
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          padding: tgcgPagePadding(
+            constraints.maxWidth,
+            maxWidth: maxWidth,
+            bottom: bottomPadding,
+          ),
+          children: children,
+        ),
+      );
+}
+
 class TgcgPageHeader extends StatelessWidget {
   const TgcgPageHeader({
     super.key,
@@ -90,36 +307,12 @@ class TgcgPageHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (eyebrow != null) ...[
-            Text(
-              eyebrow!.toUpperCase(),
-              style: const TextStyle(
-                color: TgcgColors.primaryMid,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.15,
-              ),
-            ),
+            Text(eyebrow!.toUpperCase(), style: TgcgType.eyebrow),
             const SizedBox(height: 7),
           ],
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: compact ? 26 : 30,
-              height: 1.05,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -.7,
-              color: TgcgColors.ink,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: TgcgColors.muted,
-              height: 1.45,
-              fontSize: 13,
-            ),
-          ),
+          Text(title, style: compact ? TgcgType.title.copyWith(fontSize: 22) : TgcgType.display),
+          const SizedBox(height: 6),
+          Text(subtitle, style: TgcgType.support.copyWith(height: 1.45)),
         ],
       );
 
@@ -153,6 +346,25 @@ class TgcgPageHeader extends StatelessWidget {
       );
 }
 
+/// The heading of a group of cards, with an optional action ("See all").
+class TgcgSectionHeading extends StatelessWidget {
+  const TgcgSectionHeading({super.key, required this.title, this.action});
+
+  final String title;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: TgcgSpacing.sm),
+        child: Row(
+          children: [
+            Expanded(child: Text(title, style: TgcgType.section)),
+            ?action,
+          ],
+        ),
+      );
+}
+
 class TgcgSectionCard extends StatelessWidget {
   const TgcgSectionCard({
     super.key,
@@ -160,7 +372,7 @@ class TgcgSectionCard extends StatelessWidget {
     this.title,
     this.subtitle,
     this.trailing,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(18),
     this.backgroundColor = TgcgColors.surface,
   });
 
@@ -174,25 +386,10 @@ class TgcgSectionCard extends StatelessWidget {
   Widget _heading() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (title != null)
-            Text(
-              title!,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: TgcgColors.ink,
-              ),
-            ),
-          if (subtitle != null) ...[
+          if (title != null) Text(title!, style: TgcgType.section),
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(
-              subtitle!,
-              style: const TextStyle(
-                fontSize: 11,
-                color: TgcgColors.muted,
-                height: 1.4,
-              ),
-            ),
+            Text(subtitle!, style: TgcgType.caption),
           ],
         ],
       );
@@ -201,15 +398,9 @@ class TgcgSectionCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(TgcgRadius.lg),
           border: Border.all(color: TgcgColors.border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x08000000),
-              blurRadius: 18,
-              offset: Offset(0, 5),
-            ),
-          ],
+          boxShadow: tgcgCardShadow,
         ),
         child: Padding(
           padding: padding,
@@ -238,11 +429,152 @@ class TgcgSectionCard extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
               ],
               child,
             ],
           ),
+        ),
+      );
+}
+
+/// A small tinted square holding an icon: the one way the app marks a row.
+class TgcgIconBadge extends StatelessWidget {
+  const TgcgIconBadge({
+    super.key,
+    required this.icon,
+    this.color = TgcgColors.primary,
+    this.size = 40,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(size * .3),
+        ),
+        child: Icon(icon, color: color, size: size * .52),
+      );
+}
+
+/// A row that opens something: an icon, what it is, and a short detail.
+class TgcgActionRow extends StatelessWidget {
+  const TgcgActionRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.detail,
+    this.trailing,
+    this.onTap,
+    this.color = TgcgColors.primary,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? detail;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 60),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                TgcgIconBadge(icon: icon, color: color),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: TgcgType.bodyStrong),
+                      if (detail != null && detail!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(detail!, style: TgcgType.caption),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                trailing ??
+                    (onTap == null
+                        ? const SizedBox.shrink()
+                        : const Icon(Icons.chevron_right_rounded, color: TgcgColors.muted)),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+/// Rows standing together in one card, with hairlines between them.
+class TgcgRowGroup extends StatelessWidget {
+  const TgcgRowGroup({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: TgcgColors.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TgcgRadius.lg),
+          side: const BorderSide(color: TgcgColors.border),
+        ),
+        child: Column(
+          children: [
+            for (final (index, child) in children.indexed) ...[
+              if (index > 0) const Divider(height: 1, thickness: 1, indent: 66),
+              child,
+            ],
+          ],
+        ),
+      );
+}
+
+/// A short message inside a page: something to know, or to do.
+class TgcgNotice extends StatelessWidget {
+  const TgcgNotice({
+    super.key,
+    required this.icon,
+    required this.child,
+    this.color = TgcgColors.primary,
+    this.action,
+  });
+
+  final IconData icon;
+  final Widget child;
+  final Color color;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(TgcgRadius.md),
+          border: Border.all(color: color.withValues(alpha: .2)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: DefaultTextStyle.merge(style: TgcgType.body, child: child),
+            ),
+            if (action != null) ...[const SizedBox(width: 8), action!],
+          ],
         ),
       );
 }
@@ -272,10 +604,10 @@ class TgcgMetricCard extends StatelessWidget {
     final color = tgcgToneColor(tone);
     final body = Container(
       width: width,
-      padding: const EdgeInsets.all(17),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: TgcgColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(TgcgRadius.lg),
         border: Border.all(color: TgcgColors.border),
       ),
       child: Column(
@@ -283,32 +615,24 @@ class TgcgMetricCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 39,
-                height: 39,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .09),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
+              TgcgIconBadge(icon: icon, color: color),
               const Spacer(),
               if (onTap != null)
                 const Icon(
                   Icons.arrow_outward_rounded,
-                  size: 17,
+                  size: 18,
                   color: TgcgColors.muted,
                 ),
             ],
           ),
-          const SizedBox(height: 17),
+          const SizedBox(height: 14),
           Text(
             value,
             style: const TextStyle(
               color: TgcgColors.ink,
-              fontWeight: FontWeight.w900,
-              fontSize: 27,
-              letterSpacing: -.5,
+              fontWeight: FontWeight.w800,
+              fontSize: 26,
+              letterSpacing: -.4,
             ),
           ),
           const SizedBox(height: 3),
@@ -316,21 +640,17 @@ class TgcgMetricCard extends StatelessWidget {
             label,
             style: const TextStyle(
               color: TgcgColors.ink,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
           if (detail != null) ...[
-            const SizedBox(height: 5),
+            const SizedBox(height: 4),
             Text(
               detail!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: TgcgColors.muted,
-                fontSize: 10.5,
-                height: 1.35,
-              ),
+              style: TgcgType.caption,
             ),
           ],
         ],
@@ -339,7 +659,7 @@ class TgcgMetricCard extends StatelessWidget {
 
     if (onTap == null) return body;
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(TgcgRadius.lg),
       onTap: onTap,
       child: body,
     );
@@ -364,19 +684,19 @@ class TgcgStatusPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 8 : 10,
-          vertical: compact ? 5 : 7,
+          vertical: compact ? 4 : 6,
         ),
         decoration: BoxDecoration(
           color: color.withValues(alpha: .09),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: .17)),
+          border: Border.all(color: color.withValues(alpha: .2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, color: color, size: compact ? 13 : 15),
-              const SizedBox(width: 6),
+              Icon(icon, color: color, size: compact ? 14 : 16),
+              const SizedBox(width: 5),
             ],
             Flexible(
               child: Text(
@@ -384,9 +704,9 @@ class TgcgStatusPill extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: color,
-                  fontSize: compact ? 9.5 : 10.5,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .25,
+                  fontSize: compact ? 11 : 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: .2,
                 ),
               ),
             ),
@@ -419,36 +739,13 @@ class TgcgEmptyState extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 360),
             child: Column(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: TgcgColors.primarySoft,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Icon(icon, color: TgcgColors.primary),
-                ),
+                TgcgIconBadge(icon: icon, size: 52),
                 const SizedBox(height: 12),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: TgcgColors.ink,
-                  ),
-                ),
+                Text(title, textAlign: TextAlign.center, style: TgcgType.section),
                 const SizedBox(height: 5),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: TgcgColors.muted,
-                    fontSize: 11,
-                    height: 1.45,
-                  ),
-                ),
+                Text(message, textAlign: TextAlign.center, style: TgcgType.support),
                 if (action != null) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   action!,
                 ],
               ],

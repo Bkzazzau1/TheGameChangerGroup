@@ -455,10 +455,13 @@ class _ReportCard extends StatelessWidget {
                 compact: true,
               ),
             ],
-            const Spacer(),
-            Text(
-              formatMoment(report.createdAt),
-              style: const TextStyle(fontSize: 11, color: TgcgColors.muted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                formatMoment(report.createdAt),
+                textAlign: TextAlign.end,
+                style: TgcgType.caption,
+              ),
             ),
           ],
         ),
