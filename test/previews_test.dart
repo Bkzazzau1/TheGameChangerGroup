@@ -9,11 +9,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
+import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 import 'package:tgcg_emcop/tgcg/ui/tgcg_theme.dart';
 
+import 'support/command_fixtures.dart';
 import 'support/redesign_fixtures.dart';
 
 const _enabled = bool.fromEnvironment('TGCG_PREVIEWS');
@@ -61,7 +63,9 @@ Widget _framed(Widget app) => RepaintBoundary(key: _frame, child: app);
 
 void main() {
   setUpAll(() async {
-    if (_enabled) await _loadFonts();
+    if (!_enabled) return;
+    await _loadFonts();
+    await loadMapOnce();
   });
 
   for (final width in screenWidths) {
@@ -148,6 +152,46 @@ void main() {
       await tester.pumpAndSettle();
       await _shot(tester, 'agent-offline-$tag');
       phone.stop();
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+
+  }
+
+  for (final width in [...screenWidths, 1700.0]) {
+    final tag = width.round();
+
+    testWidgets('command screens at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, Size(width, width > 900 ? 3400 : 5600));
+      await tester.pumpWidget(_framed(TgcgApp(backend: commandBackend())));
+      await signInAsCoordinator(tester, width);
+      await _shot(tester, 'command-dashboard-$tag');
+      await openModule(tester, 'Situation Room', width);
+      await _shot(tester, 'command-situation-$tag');
+      await openModule(tester, 'Collation', width);
+      await _shot(tester, 'command-collation-$tag');
+      await openModule(tester, 'Members & Exco', width);
+      await _shot(tester, 'command-members-$tag');
+      await tester.pumpWidget(const SizedBox());
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+  }
+
+  for (final (state, services) in [
+    ('down', commandBackend(down: true)),
+    ('quiet', commandBackend(quiet: true)),
+  ]) {
+    testWidgets('command screens with the server $state', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, const Size(390, 1800));
+      await tester.pumpWidget(_framed(TgcgApp(backend: services)));
+      await signInAsCoordinator(tester, 390);
+      await _shot(tester, 'command-$state-dashboard');
+      await openModule(tester, 'Situation Room', 390);
+      await _shot(tester, 'command-$state-situation');
+      await openModule(tester, 'Collation', 390);
+      await _shot(tester, 'command-$state-collation');
+      await tester.pumpWidget(const SizedBox());
       debugDisableShadows = true;
     }, skip: !_enabled);
   }

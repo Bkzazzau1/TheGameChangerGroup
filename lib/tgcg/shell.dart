@@ -87,29 +87,34 @@ class _TgcgShellState extends State<TgcgShell> {
           backgroundColor: TgcgColors.canvas,
           appBar: desktop
               ? null
-              : AppBar(
-                  elevation: 0,
-                  backgroundColor: TgcgColors.surface,
-                  // The theme's white icons are for dark bars: this one is light.
-                  foregroundColor: TgcgColors.ink,
-                  surfaceTintColor: Colors.transparent,
-                  title: const _CompactBrand(),
+              : TgcgBrandBar(
+                  // Beside these buttons a phone has room for less of the name.
+                  title: constraints.maxWidth < 350
+                      ? ''
+                      : (constraints.maxWidth < 420 ? 'TGCG' : 'TGCG-EMCOP'),
                   actions: [
-                    const _CompactSync(),
-                    const SizedBox(width: 2),
-                    const MemberSearchButton(),
-                    const InboxButton(),
-                    const RegisterMembersButton(),
-                    if (allowed.contains(TgcgModule.alertCenter))
-                      IconButton(
-                        tooltip: 'Alert Centre',
-                        onPressed: () => _select(TgcgModule.alertCenter),
-                        icon: const Badge(
-                          smallSize: 7,
-                          child: Icon(Icons.notifications_none_rounded),
-                        ),
+                    _CompactSync(iconOnly: constraints.maxWidth < 430),
+                    // Five buttons share a narrow phone's bar with the name.
+                    Theme(
+                      data: Theme.of(context).copyWith(visualDensity: VisualDensity.compact),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const MemberSearchButton(),
+                          const InboxButton(),
+                          const RegisterMembersButton(),
+                          if (allowed.contains(TgcgModule.alertCenter))
+                            IconButton(
+                              tooltip: 'Alert Centre',
+                              onPressed: () => _select(TgcgModule.alertCenter),
+                              icon: const Badge(
+                                smallSize: 7,
+                                child: Icon(Icons.notifications_none_rounded),
+                              ),
+                            ),
+                        ],
                       ),
-                    const SizedBox(width: 6),
+                    ),
                   ],
                 ),
           drawer: desktop
@@ -264,25 +269,21 @@ class _Navigation extends StatelessWidget {
         child: Column(
           children: [
             const Padding(
-              padding: EdgeInsets.fromLTRB(18, 18, 18, 12),
+              padding: EdgeInsets.fromLTRB(18, 18, 18, 10),
               child: _Brand(),
             ),
+            Divider(height: 1, color: Colors.white.withValues(alpha: .1)),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
                 children: [
                   for (final group in _NavGroup.values)
                     if (destinations.any((item) => item.group == group)) ...[
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 15, 10, 7),
+                        padding: const EdgeInsets.fromLTRB(11, 16, 11, 7),
                         child: Text(
                           _groupLabel(group),
-                          style: const TextStyle(
-                            color: Color(0xFF8D94A5),
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.1,
-                          ),
+                          style: TgcgType.eyebrow.copyWith(color: TgcgColors.onNavyMuted),
                         ),
                       ),
                       ...destinations
@@ -317,38 +318,39 @@ class _NavTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 3),
+        padding: const EdgeInsets.only(bottom: 2),
         child: Material(
-          color: active ? const Color(0xFF0C1D45) : Colors.transparent,
-          borderRadius: BorderRadius.circular(11),
+          color: active ? Colors.white.withValues(alpha: .1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(TgcgRadius.sm),
           child: InkWell(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(TgcgRadius.sm),
             onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(11),
-                border: active
-                    ? const Border(left: BorderSide(color: TgcgColors.accent, width: 3))
-                    : null,
-              ),
-              child: Row(
-                children: [
-                  Icon(item.icon, size: 19, color: active ? Colors.white : const Color(0xFFA8AEBC)),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: active ? Colors.white : const Color(0xFFB8BCC7),
-                        fontSize: 12,
-                        fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 11),
+                child: Row(
+                  children: [
+                    Icon(
+                      item.icon,
+                      size: 20,
+                      color: active ? TgcgColors.accentBright : TgcgColors.onNavyMuted,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: active ? Colors.white : TgcgColors.onNavyMuted,
+                          fontSize: 13.5,
+                          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -362,26 +364,22 @@ class _OperatorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(11),
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .055),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: .08)),
+          color: Colors.white.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(TgcgRadius.md),
+          border: Border.all(color: Colors.white.withValues(alpha: .1)),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: TgcgColors.accent.withValues(alpha: .16),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: const Icon(Icons.person_outline_rounded, color: TgcgColors.accent, size: 19),
+                const TgcgIconBadge(
+                  icon: Icons.person_outline_rounded,
+                  color: TgcgColors.accentBright,
+                  size: 36,
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,23 +388,42 @@ class _OperatorCard extends StatelessWidget {
                         session.operatorName.isEmpty ? 'TGCG Operator' : session.operatorName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11.5),
+                        style: TgcgType.label.copyWith(color: Colors.white),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         session.roleTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFFA4AAB9), fontSize: 9.5),
+                        style: TgcgType.caption.copyWith(color: TgcgColors.onNavyMuted),
                       ),
                     ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, color: TgcgColors.onNavyMuted, size: 15),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    session.scope.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TgcgType.caption.copyWith(color: TgcgColors.onNavyMuted),
                   ),
                 ),
                 if (session.isServerSession)
                   // One menu, so the name keeps its room in a phone's drawer.
                   PopupMenuButton<VoidCallback>(
                     tooltip: 'Account',
-                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFFA4AAB9), size: 18),
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: TgcgColors.onNavyMuted,
+                      size: 19,
+                    ),
                     onSelected: (open) => open(),
                     itemBuilder: (_) => [
                       if (session.membershipNumber != null)
@@ -432,22 +449,7 @@ class _OperatorCard extends StatelessWidget {
                   tooltip: 'Sign out',
                   onPressed: session.signOut,
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.logout_rounded, color: Color(0xFFA4AAB9), size: 18),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, color: Color(0xFF7F8697), size: 14),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    session.scope.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Color(0xFF8D94A5), fontSize: 9.5),
-                  ),
+                  icon: const Icon(Icons.logout_rounded, color: TgcgColors.onNavyMuted, size: 19),
                 ),
               ],
             ),
@@ -480,10 +482,7 @@ class _CommandBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
-            _moduleLabel(selectedModule),
-            style: const TextStyle(color: TgcgColors.ink, fontSize: 14, fontWeight: FontWeight.w900),
-          ),
+          Text(_moduleLabel(selectedModule), style: TgcgType.section),
           const Spacer(),
           TgcgStatusPill(
             label: pending == 0 ? 'SYNCED' : '$pending TO SYNC',
@@ -508,14 +507,9 @@ class _CommandBar extends StatelessWidget {
           Tooltip(
             message: '${session.roleTitle} • ${session.scope.label}',
             child: InkWell(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(TgcgRadius.sm),
               onTap: session.isServerSession ? () => openMyAccess(context) : null,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(color: TgcgColors.primarySoft, borderRadius: BorderRadius.circular(11)),
-                child: const Icon(Icons.person_outline_rounded, color: TgcgColors.primary, size: 19),
-              ),
+              child: const TgcgIconBadge(icon: Icons.person_outline_rounded, size: 36),
             ),
           ),
         ],
@@ -525,17 +519,30 @@ class _CommandBar extends StatelessWidget {
 }
 
 class _CompactSync extends StatelessWidget {
-  const _CompactSync();
+  const _CompactSync({this.iconOnly = false});
+
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
     final pending = OfflinePersistence.of(context).pendingOutbox.length;
-    return TgcgStatusPill(
-      label: pending == 0 ? 'SYNCED' : '$pending QUEUED',
-      color: pending == 0 ? TgcgColors.success : TgcgColors.warning,
-      icon: pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
-      compact: true,
-    );
+    final label = pending == 0 ? 'SYNCED' : '$pending QUEUED';
+    final color = pending == 0 ? TgcgColors.success : TgcgColors.warning;
+    final icon = pending == 0 ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined;
+    if (iconOnly) {
+      return Tooltip(
+        message: label,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Badge.count(
+            count: pending,
+            isLabelVisible: pending > 0,
+            child: Icon(icon, color: color, size: 20, semanticLabel: label),
+          ),
+        ),
+      );
+    }
+    return TgcgStatusPill(label: label, color: color, icon: icon, compact: true);
   }
 }
 
@@ -553,32 +560,19 @@ class _Brand extends StatelessWidget {
               children: [
                 Text(
                   'TGCG-EMCOP',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: .7, fontSize: 14),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .6,
+                    fontSize: 15,
+                  ),
                 ),
-                SizedBox(height: 2),
-                Text('National Operations', style: TextStyle(color: Color(0xFF8D94A5), fontSize: 9.5)),
+                SizedBox(height: 1),
+                Text(
+                  'National Operations',
+                  style: TextStyle(color: TgcgColors.onNavyMuted, fontSize: 12),
+                ),
               ],
-            ),
-          ),
-        ],
-      );
-}
-
-class _CompactBrand extends StatelessWidget {
-  const _CompactBrand();
-
-  @override
-  Widget build(BuildContext context) => const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TgcgLogo(size: 36),
-          SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              'TGCG-EMCOP',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontWeight: FontWeight.w900, color: TgcgColors.ink),
             ),
           ),
         ],

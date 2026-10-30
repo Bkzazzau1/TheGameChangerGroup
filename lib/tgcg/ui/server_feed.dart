@@ -36,19 +36,10 @@ class ServerFeedStatus extends StatelessWidget {
                 icon: failed ? Icons.cloud_off_rounded : Icons.circle,
               ),
               if (loadedAt != null)
-                Text(
-                  'Updated ${formatMoment(loadedAt)}',
-                  style: const TextStyle(color: TgcgColors.muted, fontSize: 11),
-                ),
-              IconButton(
-                tooltip: 'Load again',
-                onPressed: records.loading ? null : () => unawaited(records.refresh()),
-                icon: records.loading
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded),
+                Text('Updated ${formatMoment(loadedAt)}', style: TgcgType.caption),
+              TgcgReloadButton(
+                loading: records.loading,
+                onPressed: () => unawaited(records.refresh()),
               ),
             ],
           );
@@ -95,19 +86,16 @@ class ServerNote extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: TgcgColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(TgcgRadius.md),
           border: Border.all(color: TgcgColors.border),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 17, color: TgcgColors.primaryMid),
+            Icon(icon, size: 18, color: TgcgColors.primaryMid),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(color: TgcgColors.ink, fontSize: 10.5, height: 1.4),
-              ),
+              child: Text(text, style: TgcgType.support.copyWith(color: TgcgColors.ink)),
             ),
           ],
         ),

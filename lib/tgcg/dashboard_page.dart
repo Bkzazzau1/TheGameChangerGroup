@@ -10,9 +10,12 @@ import 'api/overview_repository.dart';
 import 'api/tracking_repository.dart';
 import 'domain/permissions.dart';
 import 'api/member_admin_repository.dart' show AreaRef, MemberAnalysis;
+import 'election/election_countdown.dart';
 import 'field/field_operations_store.dart';
-import 'membership/members_exco_page.dart'
-    show ShareBar, formatCount, levelLabel, levelsLabel, share;
+import 'field/incident_actions.dart' show incidentStatusLabel;
+import 'field/incident_report.dart'
+    show incidentSeverityColor, incidentSeverityLabel, incidentSeverityRank, isOpenIncident;
+import 'membership/members_exco_page.dart' show levelLabel, levelsLabel;
 import 'results/result_operations_store.dart';
 import 'session.dart';
 import 'shell.dart' show openMyAccess;
@@ -20,6 +23,7 @@ import 'sync/server_records.dart';
 import 'ui/app_on_screen.dart';
 import 'ui/server_feed.dart';
 import 'ui/tgcg_design.dart';
+import 'ui/tgcg_figures.dart';
 
 /// The command view: every number on it comes from the server, and only
 /// what the account may see there.
@@ -98,12 +102,9 @@ class _TgcgDashboardPageState extends State<TgcgDashboardPage> with ServerAutoRe
     final numbers = _numbers;
     final onOpenModule = widget.onOpenModule;
 
-    final openIncidents = field
-        .incidentsForScope(scope)
-        .where(
-          (item) => item.status != IncidentStatus.resolved && item.status != IncidentStatus.closed,
-        )
-        .toList(growable: false);
+    final showIncidents = session.can(TgcgCapability.viewIncidents);
+    final openIncidents =
+        field.incidentsForScope(scope).where(isOpenIncident).toList(growable: false);
     final highPriority = openIncidents
         .where(
           (item) =>
@@ -111,104 +112,161 @@ class _TgcgDashboardPageState extends State<TgcgDashboardPage> with ServerAutoRe
         )
         .length;
     final awaiting = results.awaitingOnServer;
+    final shortcuts = _quickCommands(modules);
+    // An empty list is only good news once the server has said so. Results
+    // count when the account may see them at all.
+    final seesResults = numbers?.results != null;
+    final notChecked = (showIncidents && field.loadError != null) ||
+        (seesResults && results.loadError != null);
+    final stillChecking =
+        (showIncidents && !field.recordsKnown) || (seesResults && !results.recordsKnown);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        final padding = compact ? 16.0 : 24.0;
-        final loadedAt = _loadedAt;
-
-        return ListView(
-          padding: EdgeInsets.fromLTRB(padding, 22, padding, 36),
-          children: [
-            TgcgPageHeader(
-              eyebrow: scope.level == GeographyLevel.country
-                  ? 'NATIONAL COMMAND CENTRE'
-                  : 'YOUR AREAS',
-              title: 'Operations Command',
-              subtitle: '${session.roleTitle} • ${areaLabel(scope)}. Members, agents, incidents '
-                  'and results, as the server holds them now.',
-              trailing: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (loadedAt != null)
-                    Text(
-                      'Updated ${formatMoment(loadedAt)}',
-                      style: const TextStyle(color: TgcgColors.muted, fontSize: 11),
-                    ),
-                  IconButton(
-                    tooltip: 'Load again',
-                    onPressed: _loading
-                        ? null
-                        : () {
-                            unawaited(_load());
-                            unawaited(field.refresh());
-                            unawaited(results.refresh());
-                          },
-                    icon: _loading
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh_rounded),
-                  ),
-                ],
-              ),
+    return TgcgPageList(
+      maxWidth: tgcgCommandWidth,
+      bottomPadding: 36,
+      children: [
+        _CommandBand(
+          national: scope.level == GeographyLevel.country,
+          who: '${session.roleTitle} • ${areaLabel(scope)}',
+          loadedAt: _loadedAt,
+          loading: _loading,
+          onReload: () {
+            unawaited(_load());
+            unawaited(field.refresh());
+            unawaited(results.refresh());
+          },
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: ServerNote(
+              icon: Icons.cloud_off_rounded,
+              text: 'The numbers could not be loaded from the server: $_error',
             ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: ServerNote(
-                  icon: Icons.cloud_off_rounded,
-                  text: 'The numbers could not be loaded from the server: $_error',
+          ),
+        const SizedBox(height: TgcgSpacing.md),
+        _MetricGrid(
+          numbers: numbers,
+          loading: _loading && numbers == null,
+          openIncidents: field.isLive ? field.openOnServer : openIncidents.length,
+          highPriority: highPriority,
+          awaiting: awaiting,
+          awaitingKnown: results.recordsKnown,
+          showIncidents: showIncidents && field.recordsKnown,
+          modules: modules,
+          onOpenModule: onOpenModule,
+        ),
+        const SizedBox(height: TgcgSpacing.lg),
+        _Attention(
+          events: showIncidents || awaiting > 0
+              ? _PriorityEvents(
+                  incidents: openIncidents,
+                  reviewCount: awaiting,
+                  notChecked: notChecked,
+                  stillChecking: stillChecking,
+                  modules: modules,
+                  onOpenModule: onOpenModule,
+                )
+              : null,
+          shortcuts: shortcuts.isEmpty
+              ? null
+              : _QuickCommand(actions: shortcuts, onOpenModule: onOpenModule),
+        ),
+        if (numbers?.coverage case final coverage?) ...[
+          const SizedBox(height: TgcgSpacing.lg),
+          _CheckInCoverage(
+            coverage: coverage,
+            onOpen: modules.contains(TgcgModule.agentTracking)
+                ? () => onOpenModule(TgcgModule.agentTracking)
+                : null,
+          ),
+        ],
+        if (numbers?.analysis case final analysis?) ...[
+          const SizedBox(height: TgcgSpacing.lg),
+          _MembersAndExco(
+            analysis: analysis,
+            onOpen: modules.contains(TgcgModule.membershipNetwork)
+                ? () => onOpenModule(TgcgModule.membershipNetwork)
+                : null,
+          ),
+        ],
+        if (session.grants.isNotEmpty) ...[
+          const SizedBox(height: TgcgSpacing.lg),
+          _AccessSummary(grants: session.grants),
+        ],
+      ],
+    );
+  }
+}
+
+/// What this page is, whose it is, and how long to the election.
+class _CommandBand extends StatelessWidget {
+  const _CommandBand({
+    required this.national,
+    required this.who,
+    required this.loadedAt,
+    required this.loading,
+    required this.onReload,
+  });
+
+  final bool national;
+  final String who;
+  final DateTime? loadedAt;
+  final bool loading;
+  final VoidCallback onReload;
+
+  @override
+  Widget build(BuildContext context) {
+    final loaded = loadedAt;
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          national ? 'NATIONAL COMMAND CENTRE' : 'YOUR AREAS',
+          style: TgcgType.eyebrow.copyWith(color: TgcgColors.accentBright),
+        ),
+        const SizedBox(height: 7),
+        Text('Operations Command', style: TgcgType.display.copyWith(color: Colors.white)),
+        const SizedBox(height: 6),
+        Text(who, style: TgcgType.support.copyWith(color: TgcgColors.onNavyMuted)),
+        if (loaded != null)
+          Text(
+            'Updated ${formatMoment(loaded)}',
+            style: TgcgType.caption.copyWith(color: TgcgColors.onNavyMuted),
+          ),
+      ],
+    );
+    final reload = TgcgReloadButton(loading: loading, onPressed: onReload, color: Colors.white);
+    const countdown = ElectionCountdown(size: ElectionCountdownSize.band);
+    return TgcgNavyPanel(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 680) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [Expanded(child: title), reload],
                 ),
-              ),
-            const SizedBox(height: 20),
-            if (session.grants.isNotEmpty) ...[
-              _AccessSummary(grants: session.grants),
-              const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Divider(height: 1, color: Colors.white.withValues(alpha: .16)),
+                const SizedBox(height: 12),
+                countdown,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: TgcgSpacing.lg),
+              const Flexible(flex: 0, child: countdown),
+              const SizedBox(width: 8),
+              reload,
             ],
-            _MetricGrid(
-              numbers: numbers,
-              loading: _loading && numbers == null,
-              openIncidents: field.isLive ? field.openOnServer : openIncidents.length,
-              highPriority: highPriority,
-              awaiting: awaiting,
-              showIncidents: session.can(TgcgCapability.viewIncidents),
-              modules: modules,
-              onOpenModule: onOpenModule,
-            ),
-            if (numbers?.analysis case final analysis?) ...[
-              const SizedBox(height: 16),
-              _MembersAndExco(
-                analysis: analysis,
-                onOpen: modules.contains(TgcgModule.membershipNetwork)
-                    ? () => onOpenModule(TgcgModule.membershipNetwork)
-                    : null,
-              ),
-            ],
-            if (numbers?.coverage case final coverage?) ...[
-              const SizedBox(height: 16),
-              _CheckInCoverage(
-                coverage: coverage,
-                onOpen: modules.contains(TgcgModule.agentTracking)
-                    ? () => onOpenModule(TgcgModule.agentTracking)
-                    : null,
-              ),
-            ],
-            const SizedBox(height: 16),
-            _PriorityEventsPanel(
-              incidents: openIncidents,
-              reviewCount: awaiting,
-              modules: modules,
-              onOpenModule: onOpenModule,
-            ),
-            const SizedBox(height: 16),
-            _QuickCommandPanel(modules: modules, onOpenModule: onOpenModule),
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -220,6 +278,7 @@ class _MetricGrid extends StatelessWidget {
     required this.openIncidents,
     required this.highPriority,
     required this.awaiting,
+    required this.awaitingKnown,
     required this.showIncidents,
     required this.modules,
     required this.onOpenModule,
@@ -232,6 +291,7 @@ class _MetricGrid extends StatelessWidget {
   final int openIncidents;
   final int highPriority;
   final int awaiting;
+  final bool awaitingKnown;
   final bool showIncidents;
   final Set<TgcgModule> modules;
   final ValueChanged<TgcgModule> onOpenModule;
@@ -240,299 +300,124 @@ class _MetricGrid extends StatelessWidget {
       modules.contains(module) ? () => onOpenModule(module) : null;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1180
-              ? 4
-              : constraints.maxWidth >= 780
-                  ? 3
-                  : constraints.maxWidth >= 500
-                      ? 2
-                      : 1;
-          const gap = 12.0;
-          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-          final n = numbers;
-          final coverage = n?.coverage?.total;
-
-          final cards = <Widget>[
-            if (n?.members case final members?)
-              TgcgMetricCard(
-                width: width,
-                label: 'Registered members',
-                value: '$members',
-                detail: 'In your areas',
-                icon: Icons.groups_2_outlined,
-                tone: TgcgMetricTone.info,
-              ),
-            if (n?.analysis?.exco case final exco?)
-              TgcgMetricCard(
-                width: width,
-                label: 'Exco',
-                value: formatCount(exco.people),
-                detail: '${formatCount(exco.appointments)} posts · '
-                    '${formatCount(exco.fullyVerified)} fully verified',
-                icon: Icons.account_tree_outlined,
-                tone: TgcgMetricTone.ai,
-                onTap: _open(TgcgModule.membershipNetwork),
-              ),
-            if (coverage != null)
-              TgcgMetricCard(
-                width: width,
-                label: 'Agents checked in today',
-                value: '${coverage.checkedIn} of ${coverage.agents}',
-                detail: '${coverage.onDutyNow} on duty now',
-                icon: Icons.badge_outlined,
-                tone: TgcgMetricTone.success,
-                onTap: _open(TgcgModule.agentTracking),
-              ),
-            if (showIncidents)
-              TgcgMetricCard(
-                width: width,
-                label: 'Open incidents',
-                value: '$openIncidents',
-                detail: '$highPriority high / critical',
-                icon: Icons.warning_amber_rounded,
-                tone: openIncidents == 0 ? TgcgMetricTone.success : TgcgMetricTone.warning,
-                onTap: _open(TgcgModule.situationRoom),
-              ),
-            if (n?.results case final received?)
-              TgcgMetricCard(
-                width: width,
-                label: 'Results received',
-                value: '$received',
-                detail: '$awaiting awaiting a decision',
-                icon: Icons.ballot_outlined,
-                tone: TgcgMetricTone.ai,
-                onTap: _open(TgcgModule.resultCapture),
-              ),
-            if (n?.verifiedResults case final verified?)
-              TgcgMetricCard(
-                width: width,
-                label: 'Verified results',
-                value: '$verified',
-                detail: 'Counted in collation',
-                icon: Icons.fact_check_outlined,
-                tone: TgcgMetricTone.success,
-                onTap: _open(TgcgModule.collation),
-              ),
-          ];
-          if (cards.isEmpty) {
-            return loading ? const LinearProgressIndicator(minHeight: 2) : const SizedBox.shrink();
-          }
-          return Wrap(spacing: gap, runSpacing: gap, children: cards);
-        },
-      );
+  Widget build(BuildContext context) {
+    final n = numbers;
+    final coverage = n?.coverage?.total;
+    final cards = <Widget>[
+      if (n?.members case final members?)
+        TgcgMetricCard(
+          label: 'Registered members',
+          value: formatCount(members),
+          detail: 'In your areas',
+          icon: Icons.groups_2_outlined,
+          tone: TgcgMetricTone.info,
+          onTap: _open(TgcgModule.membershipNetwork),
+        ),
+      if (n?.analysis?.exco case final exco?)
+        TgcgMetricCard(
+          label: 'Exco',
+          value: formatCount(exco.people),
+          detail: '${formatCount(exco.appointments)} posts · '
+              '${formatCount(exco.fullyVerified)} fully verified',
+          icon: Icons.account_tree_outlined,
+          tone: TgcgMetricTone.ai,
+          onTap: _open(TgcgModule.membershipNetwork),
+        ),
+      if (coverage != null)
+        TgcgMetricCard(
+          label: 'Agents checked in today',
+          value: '${formatCount(coverage.checkedIn)} of ${formatCount(coverage.agents)}',
+          detail: '${formatCount(coverage.onDutyNow)} on duty now',
+          icon: Icons.badge_outlined,
+          tone: TgcgMetricTone.success,
+          onTap: _open(TgcgModule.agentTracking),
+        ),
+      if (showIncidents)
+        TgcgMetricCard(
+          label: 'Open incidents',
+          value: formatCount(openIncidents),
+          detail: '${formatCount(highPriority)} high / critical',
+          icon: Icons.warning_amber_rounded,
+          tone: openIncidents == 0 ? TgcgMetricTone.success : TgcgMetricTone.warning,
+          onTap: _open(TgcgModule.situationRoom),
+        ),
+      if (n?.results case final received?)
+        TgcgMetricCard(
+          label: 'Results received',
+          value: formatCount(received),
+          detail: awaitingKnown ? '${formatCount(awaiting)} awaiting a decision' : null,
+          icon: Icons.ballot_outlined,
+          tone: TgcgMetricTone.ai,
+          onTap: _open(TgcgModule.resultCapture),
+        ),
+      if (n?.verifiedResults case final verified?)
+        TgcgMetricCard(
+          label: 'Verified results',
+          value: formatCount(verified),
+          detail: 'Counted in collation',
+          icon: Icons.fact_check_outlined,
+          tone: TgcgMetricTone.success,
+          onTap: _open(TgcgModule.collation),
+        ),
+    ];
+    if (cards.isEmpty) {
+      return loading ? const LinearProgressIndicator(minHeight: 2) : const SizedBox.shrink();
+    }
+    return TgcgMetricGrid(cards: cards);
+  }
 }
 
-/// Members and exco in the account's area: exco by level, and the smaller
-/// areas with the most members.
-class _MembersAndExco extends StatelessWidget {
-  const _MembersAndExco({required this.analysis, required this.onOpen});
+/// What needs a decision, beside where to go: one above the other on a phone.
+class _Attention extends StatelessWidget {
+  const _Attention({required this.events, required this.shortcuts});
 
-  final MemberAnalysis analysis;
-  final VoidCallback? onOpen;
+  final Widget? events;
+  final Widget? shortcuts;
 
   @override
   Widget build(BuildContext context) {
-    final members = analysis.members;
-    final exco = analysis.exco;
-    final by = analysis.by;
-    final top = [...analysis.parts]..sort((a, b) => b.members.compareTo(a.members));
-    const muted = TextStyle(color: TgcgColors.muted, fontSize: 11);
-    const strong = TextStyle(color: TgcgColors.ink, fontSize: 11.5, fontWeight: FontWeight.w700);
-    final levels = [
-      for (final level in GeographyLevel.values)
-        if ((exco.byLevel[level.name] ?? 0) > 0) (level, exco.byLevel[level.name]!),
-    ];
-    final panels = <Widget>[
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${formatCount(exco.people)} exco in ${formatCount(exco.appointments)} posts',
-            style: strong,
-          ),
-          const SizedBox(height: 8),
-          for (final (level, count) in levels)
-            ShareBar(label: levelLabel(level), value: count, total: exco.appointments),
-          ShareBar(label: 'Fully verified', value: exco.fullyVerified, total: exco.people),
-          ShareBar(
-            label: 'Signed in to the app',
-            value: exco.profile['signedIn'] ?? 0,
-            total: exco.people,
-          ),
-        ],
-      ),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${formatCount(members.total)} members · +${formatCount(members.new30Days)} '
-            'in 30 days',
-            style: strong,
-          ),
-          const SizedBox(height: 8),
-          ShareBar(
-            label: 'Identity verified',
-            value: members.verification['verified'] ?? 0,
-            total: members.total,
-          ),
-          ShareBar(label: 'Fully verified', value: members.fullyVerified, total: members.total),
-          ShareBar(label: 'Women', value: members.gender['female'] ?? 0, total: members.total),
-          if (by != null && top.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text('Most members', style: strong),
-            const SizedBox(height: 4),
-            for (final part in top.take(5))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(part.area.name, style: muted)),
-                    Text(
-                      '${formatCount(part.members)} · ${formatCount(part.exco)} exco · '
-                      '${share(part.verified, part.members)} verified',
-                      style: muted,
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ],
-      ),
-    ];
-    return TgcgSectionCard(
-      title: 'Members and exco',
-      subtitle: by == null
-          ? null
-          : '${analysis.withExco} of ${analysis.parts.length} '
-              '${levelsLabel(by, inSentence: true)} have exco; ${analysis.withMembers} have '
-              'members.',
-      trailing: onOpen == null
-          ? null
-          : TextButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.groups_2_outlined, size: 17),
-              label: const Text('Members & Exco'),
-            ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 680) {
-            return Column(
-              children: [panels[0], const SizedBox(height: 14), panels[1]],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: panels[0]),
-              const SizedBox(width: 24),
-              Expanded(child: panels[1]),
-            ],
+    final first = events;
+    final second = shortcuts;
+    if (first == null || second == null) return first ?? second ?? const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: TgcgSpacing.lg), second],
           );
-        },
-      ),
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 3, child: first),
+            const SizedBox(width: TgcgSpacing.md),
+            Expanded(flex: 2, child: second),
+          ],
+        );
+      },
     );
   }
 }
 
-/// Today's agent check-ins in the account's area, area by area below it.
-class _CheckInCoverage extends StatelessWidget {
-  const _CheckInCoverage({required this.coverage, required this.onOpen});
-
-  final Coverage coverage;
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = coverage.total;
-    return TgcgSectionCard(
-      title: 'Agent check-ins today',
-      subtitle: '${total.checkedIn} of ${total.agents} agents in ${areaLabel(coverage.scope)} '
-          'checked in; ${total.onSite} at their polling unit.',
-      trailing: onOpen == null
-          ? null
-          : TextButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.share_location_rounded, size: 17),
-              label: const Text('Agents on the Ground'),
-            ),
-      child: coverage.children.isEmpty
-          ? const Text(
-              'There is no smaller area below this one.',
-              style: TextStyle(color: TgcgColors.muted),
-            )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 1100
-                    ? 3
-                    : constraints.maxWidth >= 680
-                        ? 2
-                        : 1;
-                const gap = 10.0;
-                final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-                return Wrap(
-                  spacing: gap,
-                  runSpacing: gap,
-                  children: [
-                    for (final area in coverage.children)
-                      Container(
-                        width: width,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: area.tally.checkedIn > 0
-                              ? TgcgColors.primarySoft
-                              : TgcgColors.surfaceSoft,
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: TgcgColors.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              area.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: TgcgColors.ink,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${area.tally.checkedIn} of ${area.tally.agents} checked in · '
-                              '${area.tally.onSite} on site',
-                              style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value: area.tally.checkedInShare,
-                              minHeight: 5,
-                              color: TgcgColors.success,
-                              backgroundColor: TgcgColors.border,
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-    );
-  }
-}
-
-class _PriorityEventsPanel extends StatelessWidget {
-  const _PriorityEventsPanel({
+class _PriorityEvents extends StatelessWidget {
+  const _PriorityEvents({
     required this.incidents,
     required this.reviewCount,
+    required this.notChecked,
+    required this.stillChecking,
     required this.modules,
     required this.onOpenModule,
   });
 
   final List<FieldIncident> incidents;
   final int reviewCount;
+
+  /// The server could not be asked, so an empty list proves nothing.
+  final bool notChecked;
+
+  /// The first answer has not come yet.
+  final bool stillChecking;
   final Set<TgcgModule> modules;
   final ValueChanged<TgcgModule> onOpenModule;
 
@@ -541,148 +426,72 @@ class _PriorityEventsPanel extends StatelessWidget {
     final sorted = [...incidents]
       ..sort((a, b) {
         final severity =
-            _severityRank(b.severity).compareTo(_severityRank(a.severity));
+            incidentSeverityRank(b.severity).compareTo(incidentSeverityRank(a.severity));
         if (severity != 0) return severity;
         return b.reportedAt.compareTo(a.reportedAt);
       });
 
-    return TgcgSectionCard(
-      title: 'Priority events',
-      subtitle: 'Operational items requiring command attention.',
-      child: Column(
-        children: [
-          if (sorted.isEmpty && reviewCount == 0)
-            const TgcgEmptyState(
-              icon: Icons.task_alt_rounded,
-              title: 'No command exceptions',
-              message: 'No unresolved incidents or result-review items in this scope.',
-            )
-          else ...[
-            ...sorted.take(5).map(
-                  (incident) => _EventRow(
-                    color: _severityColor(incident.severity),
-                    title: incident.title,
-                    subtitle:
-                        '${incident.scope.label} • ${_label(incident.status.name)}',
-                    trailing: _label(incident.severity.name),
-                    onTap: modules.contains(TgcgModule.situationRoom)
-                        ? () => onOpenModule(TgcgModule.situationRoom)
-                        : null,
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const TgcgSectionHeading(title: 'Priority events'),
+        if (sorted.isEmpty && reviewCount == 0)
+          TgcgSectionCard(
+            child: notChecked
+                ? const TgcgEmptyState(
+                    icon: Icons.cloud_off_outlined,
+                    title: 'Could not be checked',
+                    message: 'Incidents and results could not be loaded from the server.',
+                  )
+                : stillChecking
+                    ? const LinearProgressIndicator(minHeight: 2)
+                    : const TgcgEmptyState(
+                        icon: Icons.task_alt_rounded,
+                        title: 'Nothing waiting',
+                        message: 'No open incidents or results awaiting a decision in your areas.',
+                      ),
+          )
+        else
+          TgcgRowGroup(
+            children: [
+              for (final incident in sorted.take(5))
+                TgcgActionRow(
+                  icon: Icons.crisis_alert_outlined,
+                  color: incidentSeverityColor(incident.severity),
+                  title: incident.title,
+                  detail: '${incidentSeverityLabel(incident.severity)} • '
+                      '${incidentStatusLabel(incident.status)} • ${incident.scope.label}',
+                  onTap: modules.contains(TgcgModule.situationRoom)
+                      ? () => onOpenModule(TgcgModule.situationRoom)
+                      : null,
                 ),
-            if (reviewCount > 0)
-              _EventRow(
-                color: TgcgColors.ai,
-                title:
-                    '$reviewCount result${reviewCount == 1 ? '' : 's'} awaiting a decision',
-                subtitle: 'Verify, dispute or reject them in the result workspace',
-                trailing: 'REVIEW',
-                onTap: modules.contains(TgcgModule.resultCapture)
-                    ? () => onOpenModule(TgcgModule.resultCapture)
-                    : null,
-              ),
-          ],
-        ],
-      ),
+              if (reviewCount > 0)
+                TgcgActionRow(
+                  icon: Icons.fact_check_outlined,
+                  color: TgcgColors.ai,
+                  title: '${formatCount(reviewCount)} result${reviewCount == 1 ? '' : 's'} '
+                      'awaiting a decision',
+                  detail: 'Verify, dispute or reject them',
+                  onTap: modules.contains(TgcgModule.resultCapture)
+                      ? () => onOpenModule(TgcgModule.resultCapture)
+                      : null,
+                ),
+            ],
+          ),
+      ],
     );
   }
 }
 
-class _EventRow extends StatelessWidget {
-  const _EventRow({
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-    this.onTap,
-  });
+typedef _Shortcut = ({
+  TgcgModule module,
+  String label,
+  String detail,
+  IconData icon,
+  TgcgMetricTone tone,
+});
 
-  final Color color;
-  final String title;
-  final String subtitle;
-  final String trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .09),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(Icons.crisis_alert_outlined, color: color, size: 19),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: TgcgColors.ink,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: TgcgColors.muted,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                trailing,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (onTap != null)
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: TgcgColors.muted,
-                  size: 18,
-                ),
-            ],
-          ),
-        ),
-      );
-}
-
-class _QuickCommandPanel extends StatelessWidget {
-  const _QuickCommandPanel({
-    required this.modules,
-    required this.onOpenModule,
-  });
-
-  final Set<TgcgModule> modules;
-  final ValueChanged<TgcgModule> onOpenModule;
-
-  @override
-  Widget build(BuildContext context) {
-    final actions = <({
-      TgcgModule module,
-      String label,
-      String detail,
-      IconData icon,
-      TgcgMetricTone tone,
-    })>[
+List<_Shortcut> _quickCommands(Set<TgcgModule> modules) => <_Shortcut>[
       (
         module: TgcgModule.situationRoom,
         label: 'Situation Room',
@@ -727,114 +536,216 @@ class _QuickCommandPanel extends StatelessWidget {
       ),
     ].where((item) => modules.contains(item.module)).toList(growable: false);
 
+class _QuickCommand extends StatelessWidget {
+  const _QuickCommand({required this.actions, required this.onOpenModule});
+
+  final List<_Shortcut> actions;
+  final ValueChanged<TgcgModule> onOpenModule;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TgcgSectionHeading(title: 'Quick command'),
+          TgcgRowGroup(
+            children: [
+              for (final action in actions)
+                TgcgActionRow(
+                  icon: action.icon,
+                  color: tgcgToneColor(action.tone),
+                  title: action.label,
+                  detail: action.detail,
+                  onTap: () => onOpenModule(action.module),
+                ),
+            ],
+          ),
+        ],
+      );
+}
+
+/// Today's agent check-ins in the account's area, area by area below it.
+class _CheckInCoverage extends StatelessWidget {
+  const _CheckInCoverage({required this.coverage, required this.onOpen});
+
+  final Coverage coverage;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = coverage.total;
     return TgcgSectionCard(
-      title: 'Quick command',
-      subtitle: 'Role-aware shortcuts to operational workspaces.',
+      title: 'Agent check-ins today',
+      subtitle: '${formatCount(total.checkedIn)} of ${formatCount(total.agents)} agents in '
+          '${areaLabel(coverage.scope)} checked in; ${formatCount(total.onSite)} at their '
+          'polling unit.',
+      trailing: onOpen == null
+          ? null
+          : TextButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.share_location_rounded, size: 17),
+              label: const Text('Agents on the Ground'),
+            ),
+      child: coverage.children.isEmpty
+          ? const Text('There is no smaller area below this one.', style: TgcgType.support)
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 1100
+                    ? 3
+                    : constraints.maxWidth >= 640
+                        ? 2
+                        : 1;
+                const gap = TgcgSpacing.lg;
+                final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: 14,
+                  children: [
+                    for (final area in coverage.children)
+                      SizedBox(
+                        width: width,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              area.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TgcgType.label,
+                            ),
+                            const SizedBox(height: 5),
+                            TgcgBar(value: area.tally.checkedInShare, color: TgcgColors.success),
+                            const SizedBox(height: 5),
+                            Text(
+                              '${formatCount(area.tally.checkedIn)} of '
+                              '${formatCount(area.tally.agents)} checked in · '
+                              '${formatCount(area.tally.onSite)} on site',
+                              style: TgcgType.caption,
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+    );
+  }
+}
+
+/// Members and exco in the account's area: exco by level, and the smaller
+/// areas with the most members.
+class _MembersAndExco extends StatelessWidget {
+  const _MembersAndExco({required this.analysis, required this.onOpen});
+
+  final MemberAnalysis analysis;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final members = analysis.members;
+    final exco = analysis.exco;
+    final by = analysis.by;
+    final top = [...analysis.parts]..sort((a, b) => b.members.compareTo(a.members));
+    final levels = [
+      for (final level in GeographyLevel.values)
+        if ((exco.byLevel[level.name] ?? 0) > 0) (level, exco.byLevel[level.name]!),
+    ];
+    final panels = <Widget>[
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${formatCount(exco.people)} exco in ${formatCount(exco.appointments)} posts',
+            style: TgcgType.bodyStrong,
+          ),
+          const SizedBox(height: 6),
+          for (final (level, count) in levels)
+            ShareBar(label: levelLabel(level), value: count, total: exco.appointments),
+          ShareBar(label: 'Fully verified', value: exco.fullyVerified, total: exco.people),
+          ShareBar(
+            label: 'Signed in to the app',
+            value: exco.profile['signedIn'] ?? 0,
+            total: exco.people,
+          ),
+        ],
+      ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${formatCount(members.total)} members · +${formatCount(members.new30Days)} '
+            'in 30 days',
+            style: TgcgType.bodyStrong,
+          ),
+          const SizedBox(height: 6),
+          ShareBar(
+            label: 'Identity verified',
+            value: members.verification['verified'] ?? 0,
+            total: members.total,
+          ),
+          ShareBar(label: 'Fully verified', value: members.fullyVerified, total: members.total),
+          ShareBar(label: 'Women', value: members.gender['female'] ?? 0, total: members.total),
+          if (by != null && top.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text('Most members', style: TgcgType.label),
+            const SizedBox(height: 4),
+            for (final part in top.take(5))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(flex: 2, child: Text(part.area.name, style: TgcgType.caption)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        '${formatCount(part.members)} · ${formatCount(part.exco)} exco · '
+                        '${share(part.verified, part.members)} verified',
+                        textAlign: TextAlign.end,
+                        style: TgcgType.caption,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    ];
+    return TgcgSectionCard(
+      title: 'Members and exco',
+      subtitle: by == null
+          ? null
+          : '${analysis.withExco} of ${analysis.parts.length} '
+              '${levelsLabel(by, inSentence: true)} have exco; ${analysis.withMembers} have '
+              'members.',
+      trailing: onOpen == null
+          ? null
+          : TextButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.groups_2_outlined, size: 17),
+              label: const Text('Members & Exco'),
+            ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 980
-              ? 3
-              : constraints.maxWidth >= 620
-                  ? 2
-                  : 1;
-          const gap = 10.0;
-          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: actions.map((action) {
-              final color = tgcgToneColor(action.tone);
-              return SizedBox(
-                width: width,
-                child: InkWell(
-                  onTap: () => onOpenModule(action.module),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: TgcgColors.surfaceSoft,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: TgcgColors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: .09),
-                            borderRadius: BorderRadius.circular(11),
-                          ),
-                          child: Icon(action.icon, color: color, size: 19),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                action.label,
-                                style: const TextStyle(
-                                  color: TgcgColors.ink,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                action.detail,
-                                style: const TextStyle(
-                                  color: TgcgColors.muted,
-                                  fontSize: 9.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          color: TgcgColors.muted,
-                          size: 13,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+          if (constraints.maxWidth < 680) {
+            return Column(
+              children: [panels[0], const SizedBox(height: TgcgSpacing.md), panels[1]],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: panels[0]),
+              const SizedBox(width: TgcgSpacing.lg),
+              Expanded(child: panels[1]),
+            ],
           );
         },
       ),
     );
   }
 }
-
-int _severityRank(IncidentSeverity severity) => switch (severity) {
-      IncidentSeverity.critical => 5,
-      IncidentSeverity.high => 4,
-      IncidentSeverity.medium => 3,
-      IncidentSeverity.low => 2,
-      IncidentSeverity.info => 1,
-    };
-
-Color _severityColor(IncidentSeverity severity) => switch (severity) {
-      IncidentSeverity.critical => TgcgColors.danger,
-      IncidentSeverity.high => const Color(0xFFD92D20),
-      IncidentSeverity.medium => TgcgColors.warning,
-      IncidentSeverity.low => TgcgColors.info,
-      IncidentSeverity.info => TgcgColors.muted,
-    };
-
-String _label(String value) {
-  final spaced = value.replaceAllMapped(
-    RegExp(r'([a-z])([A-Z])'),
-    (match) => '${match.group(1)} ${match.group(2)}',
-  );
-  return spaced.isEmpty
-      ? spaced
-      : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
-}
-
 
 /// Every appointment the signed-in user holds, each with its own areas: the
 /// modules above are what they allow together.
@@ -852,51 +763,42 @@ class _AccessSummary extends StatelessWidget {
           onPressed: () => openMyAccess(context),
           child: const Text('Details'),
         ),
-        child: Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (final grant in grants)
-              Container(
-                constraints: const BoxConstraints(maxWidth: 360),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: TgcgColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: TgcgColors.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      grant.protected
-                          ? Icons.admin_panel_settings_rounded
-                          : grant.source == 'delegation'
-                              ? Icons.call_split_rounded
-                              : Icons.badge_outlined,
-                      color: TgcgColors.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            grant.roleName,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          Text(
-                            grant.areas.map(areaLabel).join('; '),
-                            style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
-                          ),
-                        ],
+        trailingBeside: true,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Wrap(
+            spacing: TgcgSpacing.lg,
+            runSpacing: 12,
+            children: [
+              for (final grant in grants)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TgcgIconBadge(
+                        icon: grant.protected
+                            ? Icons.admin_panel_settings_rounded
+                            : grant.source == 'delegation'
+                                ? Icons.call_split_rounded
+                                : Icons.badge_outlined,
+                        size: 36,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(grant.roleName, style: TgcgType.label),
+                            Text(grant.areas.map(areaLabel).join('; '), style: TgcgType.caption),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       );
 }

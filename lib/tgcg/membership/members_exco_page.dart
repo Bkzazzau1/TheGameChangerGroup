@@ -9,27 +9,8 @@ import '../api/member_admin_repository.dart';
 import '../media/save_download.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import '../ui/tgcg_figures.dart';
 import 'member_search.dart';
-
-/// "12,345".
-String formatCount(int value) {
-  final digits = '${value.abs()}';
-  final grouped = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) grouped.write(',');
-    grouped.write(digits[i]);
-  }
-  return value < 0 ? '-$grouped' : '$grouped';
-}
-
-/// Rounded shares, keeping nonzero and incomplete totals visible at the extremes.
-String share(int part, int total) {
-  if (total == 0) return '0%';
-  final percentage = part * 100 / total;
-  if (percentage > 0 && percentage < 1) return '<1%';
-  if (percentage > 99 && percentage < 100) return '>99%';
-  return '${percentage.round()}%';
-}
 
 String levelLabel(GeographyLevel level) => switch (level) {
   GeographyLevel.country => 'Nigeria',
@@ -187,9 +168,8 @@ class _MembersExcoPageState extends State<MembersExcoPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final padding = constraints.maxWidth < 760 ? 16.0 : 24.0;
         return ListView(
-          padding: EdgeInsets.fromLTRB(padding, 22, padding, 36),
+          padding: tgcgPagePadding(constraints.maxWidth, maxWidth: tgcgCommandWidth, bottom: 36),
           children: [
             TgcgPageHeader(
               eyebrow: 'MEMBERSHIP',
@@ -341,10 +321,7 @@ class _Trail extends StatelessWidget {
         index == trail.length - 1
             ? Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Text(
-                  area.name,
-                  style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w900),
-                ),
+                child: Text(area.name, style: TgcgType.bodyStrong),
               )
             : TextButton(onPressed: () => onTap(index), child: Text(area.name)),
       ],
@@ -681,39 +658,22 @@ class _Tiles extends StatelessWidget {
   final List<_Tile> tiles;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 1180
-          ? 3
-          : constraints.maxWidth >= 500
-          ? 2
-          : 1;
-      const gap = 12.0;
-      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [
-          for (final (label, value, detail, icon, tone, onTap) in tiles)
-            InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(16),
-              child: TgcgMetricCard(
-                width: width,
-                label: label,
-                value: value,
-                detail: detail,
-                icon: icon,
-                tone: tone,
-              ),
-            ),
-        ],
-      );
-    },
+  Widget build(BuildContext context) => TgcgMetricGrid(
+    cards: [
+      for (final (label, value, detail, icon, tone, onTap) in tiles)
+        TgcgMetricCard(
+          label: label,
+          value: value,
+          detail: detail,
+          icon: icon,
+          tone: tone,
+          onTap: onTap,
+        ),
+    ],
   );
 }
 
-/// Cards side by side where there is room, one under another on a phone.
+/// Cards in columns, so short ones leave no holes: one column on a phone.
 class _Cards extends StatelessWidget {
   const _Cards({required this.cards});
 
@@ -728,82 +688,30 @@ class _Cards extends StatelessWidget {
           ? 2
           : 1;
       const gap = 12.0;
-      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [for (final card in cards) SizedBox(width: width, child: card)],
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var column = 0; column < columns; column++) ...[
+            if (column > 0) const SizedBox(width: gap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (index, card) in cards.indexed)
+                    if (index % columns == column)
+                      Padding(padding: const EdgeInsets.only(bottom: gap), child: card),
+                ],
+              ),
+            ),
+          ],
+        ],
       );
     },
   );
 }
 
-const _labelStyle = TextStyle(color: TgcgColors.ink, fontSize: 11.5, fontWeight: FontWeight.w700);
-const _valueStyle = TextStyle(color: TgcgColors.muted, fontSize: 11);
-
-/// One bar: [value] out of [total], in a single hue on a pale track.
-class ShareBar extends StatelessWidget {
-  const ShareBar({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.total,
-    this.onTap,
-  });
-
-  final String label;
-  final int value;
-  final int total;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(8),
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(label, style: _labelStyle)),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  '${formatCount(value)} · ${share(value, total)}',
-                  textAlign: TextAlign.end,
-                  style: _valueStyle,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 8,
-              child: Stack(
-                children: [
-                  const Positioned.fill(child: ColoredBox(color: TgcgColors.primarySoft)),
-                  FractionallySizedBox(
-                    widthFactor: total == 0 ? 0 : (value / total).clamp(0, 1).toDouble(),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: TgcgColors.primaryMid,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
+const _labelStyle = TgcgType.label;
+const _valueStyle = TgcgType.caption;
 
 class _BarsCard extends StatelessWidget {
   const _BarsCard({
@@ -844,8 +752,10 @@ class _BarsCard extends StatelessWidget {
                 : () => onSelect!(selections[label]!),
           ),
         if (extra != null) extra!,
-        if (footnote != null)
-          Text(footnote!, style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5)),
+        if (footnote != null) ...[
+          const SizedBox(height: 6),
+          Text(footnote!, style: _valueStyle),
+        ],
       ],
     ),
   );
@@ -921,13 +831,7 @@ class _WeeklyCard extends StatelessWidget {
               children: [
                 Expanded(child: Text(formatDay(weekly.first.$1), style: _valueStyle)),
                 const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    'This week: ${formatCount(weekly.last.$2)}',
-                    textAlign: TextAlign.end,
-                    style: _valueStyle,
-                  ),
-                ),
+                Text('This week: ${formatCount(weekly.last.$2)}', style: _valueStyle),
               ],
             ),
         ],
@@ -984,7 +888,7 @@ class _ExcoCard extends StatelessWidget {
             ShareBar(label: 'Women', value: exco.women, total: exco.people),
             if (exco.suspended > 0)
               Text('${formatCount(exco.suspended)} posts suspended.', style: _valueStyle),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             const Text('Positions held most', style: _labelStyle),
             const SizedBox(height: 4),
             for (final (_, name, count) in exco.roles.take(6))
@@ -1099,14 +1003,17 @@ class _AreasListState extends State<_AreasList> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (analysis.breakdowns.length > 1)
-                SegmentedButton<GeographyLevel>(
-                  segments: [
-                    for (final level in analysis.breakdowns)
-                      ButtonSegment(value: level, label: Text(levelsLabel(level))),
-                  ],
-                  selected: {by},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (selected) => widget.onBreakDown(selected.single),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<GeographyLevel>(
+                    segments: [
+                      for (final level in analysis.breakdowns)
+                        ButtonSegment(value: level, label: Text(levelsLabel(level))),
+                    ],
+                    selected: {by},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (selected) => widget.onBreakDown(selected.single),
+                  ),
                 ),
               SizedBox(
                 width: 240,
@@ -1167,9 +1074,9 @@ class _AreaRow extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
     key: ValueKey('area-${part.area.code}'),
     onTap: onOpen,
-    borderRadius: BorderRadius.circular(10),
+    borderRadius: BorderRadius.circular(TgcgRadius.sm),
     child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
       child: Row(
         children: [
           Expanded(
@@ -1179,24 +1086,13 @@ class _AreaRow extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(child: Text(part.area.name, style: _labelStyle)),
+                    const SizedBox(width: 8),
                     Text('${formatCount(part.members)} members', style: _labelStyle),
                   ],
                 ),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: SizedBox(
-                    height: 6,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: most == 0 ? 0 : part.members / most,
-                        child: const ColoredBox(color: TgcgColors.primaryMid),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
+                TgcgBar(value: most == 0 ? 0 : part.members / most),
+                const SizedBox(height: 5),
                 Text(
                   [
                     '${formatCount(part.exco)} exco posts',
@@ -1340,12 +1236,7 @@ class _ExcoListState extends State<_ExcoList> {
             padding: const EdgeInsets.fromLTRB(2, 12, 2, 4),
             child: Text(
               '${post.areaName} ${levelLabel(post.area.level)}'.toUpperCase(),
-              style: const TextStyle(
-                color: TgcgColors.primaryMid,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .8,
-              ),
+              style: TgcgType.eyebrow,
             ),
           ),
         );
@@ -1381,8 +1272,8 @@ class _ExcoListState extends State<_ExcoList> {
                 ),
               ),
               if (widget.roles.isNotEmpty)
-                SizedBox(
-                  width: 300,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
                   child: DropdownButton<String?>(
                     isExpanded: true,
                     value: _role,
@@ -1511,9 +1402,9 @@ class _ExcoRow extends StatelessWidget {
     final holder = post.holder;
     return InkWell(
       onTap: () => showMemberDetails(context, holder.membershipNumber),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(TgcgRadius.sm),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1521,14 +1412,7 @@ class _ExcoRow extends StatelessWidget {
               spacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(
-                  post.roleName,
-                  style: const TextStyle(
-                    color: TgcgColors.primaryMid,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                Text(post.roleName, style: _roleStyle),
                 if (post.state != 'active')
                   TgcgStatusPill(
                     label: post.state == 'suspended' ? 'Post suspended' : 'Starts later',
@@ -1538,7 +1422,7 @@ class _ExcoRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            Text(holder.fullName, style: _labelStyle),
+            Text(holder.fullName, style: TgcgType.bodyStrong),
             Text(
               [
                 holder.membershipNumber,
@@ -1568,6 +1452,8 @@ class _ExcoRow extends StatelessWidget {
 }
 
 // --- members ------------------------------------------------------------------------
+
+final _roleStyle = TgcgType.label.copyWith(color: TgcgColors.primaryMid);
 
 const _memberFilters = [
   _everyone,
@@ -1740,13 +1626,13 @@ class _MemberRow extends StatelessWidget {
     final age = ageOn(member.dateOfBirth, DateTime.now());
     return InkWell(
       onTap: () => showMemberDetails(context, member.membershipNumber, member: member),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(TgcgRadius.sm),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(member.displayName, style: _labelStyle),
+            Text(member.displayName, style: TgcgType.bodyStrong),
             Text(
               [
                 member.membershipNumber,
@@ -1758,14 +1644,7 @@ class _MemberRow extends StatelessWidget {
               style: _valueStyle,
             ),
             if (member.roles.isNotEmpty)
-              Text(
-                member.roles.join(', '),
-                style: const TextStyle(
-                  color: TgcgColors.primaryMid,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              Text(member.roles.join(', '), style: _roleStyle),
             const SizedBox(height: 4),
             Wrap(
               spacing: 6,

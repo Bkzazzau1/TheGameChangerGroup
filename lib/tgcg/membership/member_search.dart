@@ -10,7 +10,8 @@ import '../api/member_repository.dart' show disabilityText;
 import '../api/reference_repository.dart' show RegistrationPlace;
 import '../session.dart';
 import '../ui/tgcg_design.dart';
-import 'members_exco_page.dart' show ageOn, formatCount, levelLabel, standingChips;
+import '../ui/tgcg_figures.dart' show formatCount;
+import 'members_exco_page.dart' show ageOn, levelLabel, standingChips;
 
 /// The status choices: (label, show, verification status, membership state).
 const memberStatusFilters = <(String, String?, String?, String?)>[
@@ -648,7 +649,7 @@ class MemberCard extends StatelessWidget {
                       [member.membershipNumber, ?member.phoneNumber].join(' · '),
                       style: const TextStyle(
                         color: TgcgColors.muted,
-                        fontSize: 11.5,
+                        fontSize: 12,
                         fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -662,7 +663,7 @@ class MemberCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               place,
-                              style: const TextStyle(color: TgcgColors.muted, fontSize: 11.5),
+                              style: TgcgType.caption,
                             ),
                           ),
                         ],
@@ -717,8 +718,8 @@ class _PostChip extends StatelessWidget {
         active ? postLabel(post) : '${postLabel(post)} (${post.state})',
         style: TextStyle(
           color: active ? TgcgColors.primary : TgcgColors.accentDeep,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -994,12 +995,7 @@ class _Section extends StatelessWidget {
       children: [
         Text(
           title.toUpperCase(),
-          style: const TextStyle(
-            color: TgcgColors.primaryMid,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
-            letterSpacing: .9,
-          ),
+          style: TgcgType.eyebrow,
         ),
         const SizedBox(height: 6),
         ...children,

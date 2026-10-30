@@ -11,6 +11,7 @@ import 'package:tgcg_emcop/tgcg/api/member_admin_repository.dart' show AreaRef;
 import 'package:tgcg_emcop/tgcg/domain/models.dart' show GeographyLevel;
 import 'package:tgcg_emcop/tgcg/membership/members_exco_page.dart';
 import 'package:tgcg_emcop/tgcg/ui/tgcg_design.dart' show TgcgSectionCard;
+import 'package:tgcg_emcop/tgcg/ui/tgcg_figures.dart' show ShareBar, formatCount, share;
 
 // Names and numbers here are made up.
 http.Response _json(Object body, [int status = 200]) =>

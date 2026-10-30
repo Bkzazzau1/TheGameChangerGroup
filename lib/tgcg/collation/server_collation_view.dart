@@ -11,6 +11,7 @@ import '../session.dart';
 import '../ui/app_on_screen.dart';
 import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
+import '../ui/tgcg_figures.dart';
 
 /// The server's unofficial collation of verified results: one election, one
 /// area at a time, with the areas below it. It never replaces INEC's
@@ -141,8 +142,9 @@ class _ServerCollationViewState extends State<ServerCollationView> {
     final elections = _elections;
     final collation = _collation;
     final scope = collation == null ? TgcgSession.of(context).scope : collation.scope;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+    return TgcgPageList(
+      maxWidth: tgcgCommandWidth,
+      bottomPadding: 36,
       children: [
         TgcgPageHeader(
           eyebrow: 'VERIFIED-ONLY AGGREGATION',
@@ -158,15 +160,9 @@ class _ServerCollationViewState extends State<ServerCollationView> {
                 color: TgcgColors.warning,
                 icon: Icons.info_outline_rounded,
               ),
-              IconButton(
-                tooltip: 'Load again',
-                onPressed: _loading || _election == null ? null : () => _loadCollation(),
-                icon: _loading
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded),
+              TgcgReloadButton(
+                loading: _loading,
+                onPressed: _election == null ? null : () => _loadCollation(),
               ),
             ],
           ),
@@ -196,13 +192,15 @@ class _ServerCollationViewState extends State<ServerCollationView> {
           else if (collation == null)
             const _Loading()
           else ...[
+            _CountBand(collation: collation),
+            const SizedBox(height: 12),
             _Numbers(collation: collation),
-            const SizedBox(height: 16),
+            const SizedBox(height: TgcgSpacing.md),
             LayoutBuilder(
               builder: (context, constraints) {
                 final parties = _PartyTotals(collation: collation, election: _election!);
                 final areas = _Breakdown(collation: collation, onOpen: _open);
-                if (constraints.maxWidth < 1000) {
+                if (constraints.maxWidth < 860) {
                   return Column(children: [parties, const SizedBox(height: 14), areas]);
                 }
                 return Row(
@@ -267,24 +265,27 @@ class _ElectionPicker extends StatelessWidget {
   final ValueChanged<ServerElection> onChanged;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 460,
-        child: DropdownButtonFormField<String>(
-          key: ValueKey(selected?.code),
-          initialValue: selected?.code,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Election'),
-          items: [
-            for (final election in elections)
-              DropdownMenuItem(
-                value: election.code,
-                child: Text(
-                  '${election.name} (${election.status})',
-                  overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: DropdownButtonFormField<String>(
+            key: ValueKey(selected?.code),
+            initialValue: selected?.code,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Election'),
+            items: [
+              for (final election in elections)
+                DropdownMenuItem(
+                  value: election.code,
+                  child: Text(
+                    '${election.name} (${election.status})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-          ],
-          onChanged: (code) => onChanged(elections.firstWhere((e) => e.code == code)),
+            ],
+            onChanged: (code) => onChanged(elections.firstWhere((e) => e.code == code)),
+          ),
         ),
       );
 }
@@ -297,19 +298,103 @@ class _Breadcrumbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 4,
-        runSpacing: 4,
+        spacing: 2,
+        runSpacing: 2,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           for (var index = 0; index < path.length; index++) ...[
             if (index > 0) const Icon(Icons.chevron_right_rounded, size: 18, color: TgcgColors.muted),
-            ActionChip(
-              label: Text(path[index].label ?? 'Your areas'),
-              onPressed: index == path.length - 1 ? null : () => onSelect(index),
-            ),
+            if (index == path.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(path[index].label ?? 'Your areas', style: TgcgType.bodyStrong),
+              )
+            else
+              TextButton(
+                onPressed: () => onSelect(index),
+                child: Text(path[index].label ?? 'Your areas'),
+              ),
           ],
         ],
       );
+}
+
+/// How far the count has come: the one thing everyone here asks first.
+class _CountBand extends StatelessWidget {
+  const _CountBand({required this.collation});
+
+  final ServerCollation collation;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = collation;
+    return TgcgNavyPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'UNOFFICIAL COUNT',
+            style: TgcgType.eyebrow.copyWith(color: TgcgColors.accentBright),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${c.completionPercent.toStringAsFixed(1)}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 38,
+                  height: 1.05,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.5,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Flexible(
+                child: Text(
+                  'counted',
+                  style: TextStyle(
+                    color: TgcgColors.onNavyMuted,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TgcgBar(
+            value: c.completionPercent / 100,
+            color: TgcgColors.accentBright,
+            track: Colors.white.withValues(alpha: .16),
+            height: 8,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${formatCount(c.verifiedPollingUnits)} of ${formatCount(c.expectedPollingUnits)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Text(
+                'polling units verified',
+                style: TextStyle(color: TgcgColors.onNavyMuted, fontSize: 14),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Numbers extends StatelessWidget {
@@ -318,66 +403,42 @@ class _Numbers extends StatelessWidget {
   final ServerCollation collation;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1050
-              ? 5
-              : constraints.maxWidth >= 640
-                  ? 3
-                  : constraints.maxWidth >= 420
-                      ? 2
-                      : 1;
-          const gap = 12.0;
-          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-          final c = collation;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              TgcgMetricCard(
-                width: width,
-                label: 'Verified units',
-                value: '${c.verifiedPollingUnits} of ${c.expectedPollingUnits}',
-                detail: '${c.completionPercent.toStringAsFixed(1)}% counted',
-                icon: Icons.verified_outlined,
-                tone: TgcgMetricTone.success,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Reported units',
-                value: '${c.reportedPollingUnits}',
-                detail: 'With any result sent',
-                icon: Icons.ballot_outlined,
-                tone: TgcgMetricTone.info,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Under review',
-                value: '${c.underReview}',
-                detail: 'Flagged, not yet counted',
-                icon: Icons.fact_check_outlined,
-                tone: TgcgMetricTone.ai,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Disputed',
-                value: '${c.disputed}',
-                detail: 'Contested, not counted',
-                icon: Icons.flag_outlined,
-                tone: c.disputed == 0 ? TgcgMetricTone.neutral : TgcgMetricTone.danger,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Still to count',
-                value: '${c.missingPollingUnits}',
-                detail: 'Units without a verified result',
-                icon: Icons.hourglass_bottom_rounded,
-                tone: TgcgMetricTone.warning,
-              ),
-            ],
-          );
-        },
-      );
+  Widget build(BuildContext context) {
+    final c = collation;
+    return TgcgMetricGrid(
+      across: const [2, 4, 4],
+      cards: [
+        TgcgMetricCard(
+          label: 'Reported units',
+          value: formatCount(c.reportedPollingUnits),
+          detail: 'With any result sent',
+          icon: Icons.ballot_outlined,
+          tone: TgcgMetricTone.info,
+        ),
+        TgcgMetricCard(
+          label: 'Under review',
+          value: formatCount(c.underReview),
+          detail: 'Flagged, not yet counted',
+          icon: Icons.fact_check_outlined,
+          tone: TgcgMetricTone.ai,
+        ),
+        TgcgMetricCard(
+          label: 'Disputed',
+          value: formatCount(c.disputed),
+          detail: 'Contested, not counted',
+          icon: Icons.flag_outlined,
+          tone: c.disputed == 0 ? TgcgMetricTone.neutral : TgcgMetricTone.danger,
+        ),
+        TgcgMetricCard(
+          label: 'Still to count',
+          value: formatCount(c.missingPollingUnits),
+          detail: 'Units without a verified result',
+          icon: Icons.hourglass_bottom_rounded,
+          tone: TgcgMetricTone.warning,
+        ),
+      ],
+    );
+  }
 }
 
 class _PartyTotals extends StatelessWidget {
@@ -394,8 +455,9 @@ class _PartyTotals extends StatelessWidget {
     final anyVotes = collation.partyVotes.values.any((votes) => votes > 0);
     return TgcgSectionCard(
       title: 'Party totals',
-      subtitle: 'Verified votes only. Valid ${collation.totalValidVotes}, '
-          'rejected ${collation.rejectedVotes}, accredited ${collation.accreditedVoters}.',
+      subtitle: 'Unofficial. Verified votes only. Valid ${formatCount(total)}, '
+          'rejected ${formatCount(collation.rejectedVotes)}, '
+          'accredited ${formatCount(collation.accreditedVoters)}.',
       trailing: TgcgStatusPill(
         label: !anyVotes
             ? 'NO VERIFIED RESULTS'
@@ -409,7 +471,7 @@ class _PartyTotals extends StatelessWidget {
         children: [
           for (final entry in collation.partyVotes.entries)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -418,22 +480,19 @@ class _PartyTotals extends StatelessWidget {
                       Expanded(
                         child: Text(
                           names[entry.key] == null ? entry.key : '${entry.key} · ${names[entry.key]}',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w800),
+                          style: TgcgType.label,
                         ),
                       ),
-                      Text(
-                        '${entry.value}',
-                        style: const TextStyle(color: TgcgColors.ink, fontWeight: FontWeight.w900),
-                      ),
+                      const SizedBox(width: 8),
+                      Text(formatCount(entry.value), style: TgcgType.label),
+                      const SizedBox(width: 6),
+                      Text(share(entry.value, total), style: TgcgType.caption),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  LinearProgressIndicator(
+                  const SizedBox(height: 5),
+                  TgcgBar(
                     value: total == 0 ? 0 : entry.value / total,
-                    minHeight: 6,
                     color: entry.key == leader ? TgcgColors.primary : TgcgColors.primaryMid,
-                    backgroundColor: TgcgColors.border,
                   ),
                 ],
               ),
@@ -476,66 +535,67 @@ class _Breakdown extends StatelessWidget {
             )
           : Column(
               children: [
-                for (final area in areas)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Material(
-                      color: TgcgColors.surfaceSoft,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => onOpen(area),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      area.name,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: TgcgColors.ink,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ),
-                                  if (area.leadingParty != null)
-                                    TgcgStatusPill(
-                                      label: area.leadingParty!,
-                                      color: TgcgColors.primary,
-                                      compact: true,
-                                    ),
-                                  const Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: TgcgColors.muted,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${area.code} · ${area.verifiedPollingUnits} of '
-                                '${area.expectedPollingUnits} units verified · '
-                                '${area.reportedPollingUnits} reported',
-                                style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
-                              ),
-                              const SizedBox(height: 6),
-                              LinearProgressIndicator(
-                                value: area.completionPercent / 100,
-                                minHeight: 5,
-                                color: TgcgColors.success,
-                                backgroundColor: TgcgColors.border,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                for (final (index, area) in areas.indexed) ...[
+                  if (index > 0) const Divider(height: 1),
+                  _AreaRow(area: area, onTap: () => onOpen(area)),
+                ],
               ],
             ),
     );
   }
+}
+
+class _AreaRow extends StatelessWidget {
+  const _AreaRow({required this.area, required this.onTap});
+
+  final CollationArea area;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(TgcgRadius.sm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            area.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: TgcgType.bodyStrong,
+                          ),
+                        ),
+                        if (area.leadingParty != null)
+                          TgcgStatusPill(
+                            label: area.leadingParty!,
+                            color: TgcgColors.primary,
+                            compact: true,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    TgcgBar(value: area.completionPercent / 100, color: TgcgColors.success),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${formatCount(area.verifiedPollingUnits)} of '
+                      '${formatCount(area.expectedPollingUnits)} units verified · '
+                      '${formatCount(area.reportedPollingUnits)} reported',
+                      style: TgcgType.caption,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded, color: TgcgColors.muted),
+            ],
+          ),
+        ),
+      );
 }

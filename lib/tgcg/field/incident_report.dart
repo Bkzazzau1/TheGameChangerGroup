@@ -59,30 +59,20 @@ class IncidentReportCard extends StatelessWidget {
       title: title,
       subtitle: item.id,
       trailing: TgcgStatusPill(
-        label: _label(item.severity.name),
+        label: incidentSeverityLabel(item.severity),
         color: color,
         compact: true,
       ),
+      trailingBeside: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            item.title,
-            style: const TextStyle(
-              color: TgcgColors.ink,
-              fontSize: 15,
-              height: 1.3,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          Text(item.title, style: TgcgType.section),
+          const SizedBox(height: 6),
           Text(
             item.summary ?? 'No additional incident summary was supplied.',
-            style: const TextStyle(
-              color: TgcgColors.muted,
-              fontSize: 11,
-              height: 1.45,
-            ),
+            style: TgcgType.support,
           ),
           const SizedBox(height: 14),
           _InspectorLine(
@@ -120,19 +110,12 @@ class IncidentReportCard extends StatelessWidget {
           Row(
             children: [
               TgcgStatusPill(
-                label: _label(item.status.name),
+                label: incidentStatusLabel(item.status),
                 color: TgcgColors.primaryMid,
                 compact: true,
               ),
               const Spacer(),
-              Text(
-                '${item.evidence.length} evidence',
-                style: const TextStyle(
-                  color: TgcgColors.muted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              Text('${item.evidence.length} evidence', style: TgcgType.caption),
             ],
           ),
           const SizedBox(height: 12),
@@ -142,12 +125,12 @@ class IncidentReportCard extends StatelessWidget {
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
                 color: TgcgColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(TgcgRadius.md),
                 border: Border.all(color: TgcgColors.border),
               ),
               child: const Text(
                 'No linked media evidence for this incident.',
-                style: TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+                style: TgcgType.caption,
               ),
             )
           else
@@ -202,27 +185,16 @@ class IncidentReportLine extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          incident.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: TgcgColors.ink,
-                            fontSize: 12.5,
-                          ),
-                        ),
+                        Text(incident.title, style: TgcgType.label),
                         const SizedBox(height: 3),
                         Text(
                           '${incident.severity.name.toUpperCase()} • '
-                          '${_label(incident.status.name)} • '
+                          '${incidentStatusLabel(incident.status)} • '
                           '${formatMoment(incident.reportedAt.toLocal())}'
                           '${incident.evidence.isEmpty ? '' : ' • ${incident.evidence.length} evidence'}',
-                          style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+                          style: TgcgType.caption,
                         ),
-                        if (showPlace)
-                          Text(
-                            incident.scope.label,
-                            style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
-                          ),
+                        if (showPlace) Text(incident.scope.label, style: TgcgType.caption),
                       ],
                     ),
                   ),
@@ -254,23 +226,8 @@ class _InspectorLine extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: TgcgColors.muted),
             const SizedBox(width: 8),
-            SizedBox(
-              width: 86,
-              child: Text(
-                label,
-                style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                value,
-                style: const TextStyle(
-                  color: TgcgColors.ink,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+            SizedBox(width: 92, child: Text(label, style: TgcgType.caption)),
+            Expanded(child: Text(value, style: TgcgType.label)),
           ],
         ),
       );
@@ -287,6 +244,14 @@ int incidentSeverityRank(IncidentSeverity severity) => switch (severity) {
       IncidentSeverity.medium => 3,
       IncidentSeverity.low => 2,
       IncidentSeverity.info => 1,
+    };
+
+String incidentSeverityLabel(IncidentSeverity severity) => switch (severity) {
+      IncidentSeverity.critical => 'Critical',
+      IncidentSeverity.high => 'High',
+      IncidentSeverity.medium => 'Medium',
+      IncidentSeverity.low => 'Low',
+      IncidentSeverity.info => 'Info',
     };
 
 Color incidentSeverityColor(IncidentSeverity severity) => switch (severity) {
@@ -306,10 +271,3 @@ IconData _evidenceIcon(EvidenceType type) => switch (type) {
       EvidenceType.location => Icons.location_on_outlined,
     };
 
-String _label(String value) {
-  final spaced = value.replaceAllMapped(
-    RegExp(r'([a-z])([A-Z])'),
-    (match) => '${match.group(1)} ${match.group(2)}',
-  );
-  return spaced.isEmpty ? spaced : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
-}

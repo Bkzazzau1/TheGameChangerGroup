@@ -407,7 +407,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Demo data'), findsNothing);
-      expect(find.text('1234'), findsOneWidget);
+      expect(find.text('1,234'), findsOneWidget);
       expect(find.text('3 of 4'), findsOneWidget);
       expect(find.text('Agent check-ins today'), findsOneWidget);
       expect(find.text('Kaduna North'), findsOneWidget);

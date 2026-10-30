@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../access/access_widgets.dart' show formatMoment;
 import '../geography/geography_registry.dart';
 import '../geography/nigeria_map.dart';
 import '../geography/state_lga_map_dialog.dart';
@@ -10,6 +12,7 @@ import '../session.dart';
 import '../sync/server_records.dart';
 import '../ui/server_feed.dart';
 import '../ui/tgcg_design.dart';
+import '../ui/tgcg_figures.dart';
 import 'field_operations_store.dart';
 import 'incident_actions.dart';
 import 'incident_report.dart';
@@ -27,6 +30,19 @@ class _SituationRoomPageState extends State<SituationRoomPage> with ServerAutoRe
       [FieldOperations.of(context, listen: false)];
 
   String? selectedIncidentId;
+  final _inspector = GlobalKey();
+
+  /// Selects an incident; [reveal] brings its details into view when they
+  /// may be off screen, so that the tap visibly does something.
+  void _select(String id, {bool reveal = true}) {
+    setState(() => selectedIncidentId = id);
+    if (!reveal) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _inspector.currentContext;
+      if (!mounted || target == null) return;
+      unawaited(Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 250)));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,16 +50,10 @@ class _SituationRoomPageState extends State<SituationRoomPage> with ServerAutoRe
     final store = FieldOperations.of(context);
     final incidents = store.incidentsForScope(session.scope);
     final reports = store.reportsForScope(session.scope);
-    final open = incidents
-        .where(
-          (item) =>
-              item.status != IncidentStatus.resolved &&
-              item.status != IncidentStatus.closed,
-        )
-        .toList(growable: false)
+    final open = incidents.where(isOpenIncident).toList(growable: false)
       ..sort((a, b) {
         final severity =
-            _severityRank(b.severity).compareTo(_severityRank(a.severity));
+            incidentSeverityRank(b.severity).compareTo(incidentSeverityRank(a.severity));
         if (severity != 0) return severity;
         return b.reportedAt.compareTo(a.reportedAt);
       });
@@ -70,112 +80,145 @@ class _SituationRoomPageState extends State<SituationRoomPage> with ServerAutoRe
       (total, item) => total + item.evidence.length,
     );
 
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    return TgcgPageList(
+      maxWidth: tgcgCommandWidth,
+      bottomPadding: 36,
       children: [
         TgcgPageHeader(
           eyebrow: 'Live command centre',
           title: 'Situation Room',
-          subtitle:
-              '${session.scope.label}: real-time incident command, evidence review and field coordination.',
+          subtitle: '${session.scope.label}: open incidents, evidence and response.',
           trailing: const FieldFeedStatus(),
         ),
         const FieldLoadNotice(),
-        const SizedBox(height: 20),
-        _MetricsStrip(
-          open: open.length,
-          critical: critical,
-          high: high,
-          unassigned: unassigned,
-          reports: reports.length,
-          evidence: evidence,
-        ),
-        const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final priorityRail = _PriorityRail(
-              incidents: open,
-              selectedIncidentId: selectedIncidentId,
-              onSelect: (id) => setState(() => selectedIncidentId = id),
-            );
-            final geography = MembershipOperations.of(context).geography;
-            final map = _CommandMap(
-              scope: session.scope,
-              focusStateIds: _focusStateIds(session.scope, geography.states),
-              stateNames: {
-                for (final state in geography.states) state.id: state.name,
-              },
-              onOpenState: (stateId) {
-                final state = geography.state(stateId);
-                if (state == null) return;
-                showStateLgaMap(
-                  context,
-                  state: state,
-                  lgas: geography.lgasForState(stateId),
-                  incidents: incidents,
-                );
-              },
-              incidents: open,
-              selectedIncidentId: selectedIncidentId,
-              onSelect: (id) => setState(() => selectedIncidentId = id),
-            );
-            final inspector = _IncidentInspector(incident: selected);
+        const SizedBox(height: TgcgSpacing.md),
+        // Zeros and "no incidents" are only ever what the server said.
+        if (!store.recordsKnown && incidents.isEmpty) ...[
+          _NotKnownYet(store: store),
+        ] else ...[
+          _MetricsStrip(
+            open: open.length,
+            critical: critical,
+            high: high,
+            unassigned: unassigned,
+            reports: reports.length,
+            evidence: evidence,
+          ),
+          const SizedBox(height: TgcgSpacing.md),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final sideBySide = constraints.maxWidth >= 760;
+              final priorityRail = _PriorityRail(
+                incidents: open,
+                selectedIncidentId: selectedIncidentId,
+                onSelect: (id) => _select(id, reveal: !sideBySide),
+              );
+              final geography = MembershipOperations.of(context).geography;
+              final map = _CommandMap(
+                scope: session.scope,
+                focusStateIds: _focusStateIds(session.scope, geography.states),
+                stateNames: {
+                  for (final state in geography.states) state.id: state.name,
+                },
+                onOpenState: (stateId) {
+                  final state = geography.state(stateId);
+                  if (state == null) return;
+                  showStateLgaMap(
+                    context,
+                    state: state,
+                    lgas: geography.lgasForState(stateId),
+                    incidents: incidents,
+                  );
+                },
+                incidents: open,
+                selectedIncidentId: selectedIncidentId,
+                onSelect: _select,
+              );
+              final inspector = KeyedSubtree(
+                key: _inspector,
+                child: _IncidentInspector(incident: selected),
+              );
 
-            // The map takes the full width; queue and inspector sit below it.
-            return Column(
-              children: [
-                map,
-                const SizedBox(height: 14),
-                if (constraints.maxWidth >= 760)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: priorityRail),
-                      const SizedBox(width: 14),
-                      Expanded(child: inspector),
-                    ],
-                  )
-                else ...[
-                  priorityRail,
-                  const SizedBox(height: 14),
-                  inspector,
-                ],
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final timeline = _ActivityTimeline(
-              incidents: incidents,
-              reports: reports,
-              onIncidentSelected: (id) =>
-                  setState(() => selectedIncidentId = id),
-            );
-            final ownership = _ResponseOwnership(incidents: open);
-            if (constraints.maxWidth < 900) {
+              // The map takes the full width; queue and inspector sit below it.
               return Column(
                 children: [
-                  timeline,
+                  map,
                   const SizedBox(height: 14),
-                  ownership,
+                  if (sideBySide)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: priorityRail),
+                        const SizedBox(width: 14),
+                        Expanded(child: inspector),
+                      ],
+                    )
+                  else ...[
+                    priorityRail,
+                    const SizedBox(height: 14),
+                    inspector,
+                  ],
                 ],
               );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 7, child: timeline),
-                const SizedBox(width: 14),
-                Expanded(flex: 4, child: ownership),
-              ],
-            );
-          },
-        ),
+            },
+          ),
+          const SizedBox(height: TgcgSpacing.lg),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final timeline = _ActivityTimeline(
+                incidents: incidents,
+                reports: reports,
+                onIncidentSelected: _select,
+              );
+              final ownership = _ResponseOwnership(incidents: open);
+              if (constraints.maxWidth < 860) {
+                return Column(
+                  children: [
+                    timeline,
+                    const SizedBox(height: TgcgSpacing.lg),
+                    ownership,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 7, child: timeline),
+                  const SizedBox(width: TgcgSpacing.md),
+                  Expanded(flex: 4, child: ownership),
+                ],
+              );
+            },
+          ),
+        ],
       ],
     );
   }
+}
+
+/// In place of the figures until the server has answered once.
+class _NotKnownYet extends StatelessWidget {
+  const _NotKnownYet({required this.store});
+
+  final FieldOperationsController store;
+
+  @override
+  Widget build(BuildContext context) => TgcgSectionCard(
+        child: store.loadError == null
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: TgcgSpacing.xl),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : TgcgEmptyState(
+                icon: Icons.cloud_off_outlined,
+                title: 'Incidents could not be loaded',
+                message: 'Nothing is shown here until the server answers.',
+                action: OutlinedButton(
+                  onPressed: () => unawaited(store.refresh()),
+                  child: const Text('Try again'),
+                ),
+              ),
+      );
 }
 
 class _MetricsStrip extends StatelessWidget {
@@ -196,73 +239,51 @@ class _MetricsStrip extends StatelessWidget {
   final int evidence;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1180
-              ? 6
-              : constraints.maxWidth >= 760
-                  ? 3
-                  : constraints.maxWidth >= 480
-                      ? 2
-                      : 1;
-          const gap = 12.0;
-          final width =
-              (constraints.maxWidth - gap * (columns - 1)) / columns;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              TgcgMetricCard(
-                width: width,
-                label: 'Open incidents',
-                value: '$open',
-                detail: 'Unresolved events in scope',
-                icon: Icons.warning_amber_rounded,
-                tone: TgcgMetricTone.warning,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Critical',
-                value: '$critical',
-                detail: 'Immediate command attention',
-                icon: Icons.crisis_alert_rounded,
-                tone: TgcgMetricTone.danger,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'High priority',
-                value: '$high',
-                detail: 'High-severity active incidents',
-                icon: Icons.priority_high_rounded,
-                tone: TgcgMetricTone.danger,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Unassigned',
-                value: '$unassigned',
-                detail: 'Awaiting response ownership',
-                icon: Icons.person_off_outlined,
-                tone: TgcgMetricTone.warning,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Field reports',
-                value: '$reports',
-                detail: 'Structured operational updates',
-                icon: Icons.feed_outlined,
-                tone: TgcgMetricTone.info,
-              ),
-              TgcgMetricCard(
-                width: width,
-                label: 'Evidence retained',
-                value: '$evidence',
-                detail: 'Linked media/provenance records',
-                icon: Icons.perm_media_outlined,
-                tone: TgcgMetricTone.success,
-              ),
-            ],
-          );
-        },
+  Widget build(BuildContext context) => TgcgMetricGrid(
+        cards: [
+          TgcgMetricCard(
+            label: 'Open incidents',
+            value: formatCount(open),
+            detail: 'Unresolved in your areas',
+            icon: Icons.warning_amber_rounded,
+            tone: open == 0 ? TgcgMetricTone.success : TgcgMetricTone.warning,
+          ),
+          TgcgMetricCard(
+            label: 'Critical',
+            value: formatCount(critical),
+            detail: 'Immediate attention',
+            icon: Icons.crisis_alert_rounded,
+            tone: critical == 0 ? TgcgMetricTone.neutral : TgcgMetricTone.danger,
+          ),
+          TgcgMetricCard(
+            label: 'High priority',
+            value: formatCount(high),
+            detail: 'High severity, still open',
+            icon: Icons.priority_high_rounded,
+            tone: high == 0 ? TgcgMetricTone.neutral : TgcgMetricTone.danger,
+          ),
+          TgcgMetricCard(
+            label: 'Unassigned',
+            value: formatCount(unassigned),
+            detail: 'No response team yet',
+            icon: Icons.person_off_outlined,
+            tone: unassigned == 0 ? TgcgMetricTone.neutral : TgcgMetricTone.warning,
+          ),
+          TgcgMetricCard(
+            label: 'Field reports',
+            value: formatCount(reports),
+            detail: 'From the field',
+            icon: Icons.feed_outlined,
+            tone: TgcgMetricTone.info,
+          ),
+          TgcgMetricCard(
+            label: 'Evidence retained',
+            value: formatCount(evidence),
+            detail: 'Linked media records',
+            icon: Icons.perm_media_outlined,
+            tone: TgcgMetricTone.success,
+          ),
+        ],
       );
 }
 
@@ -285,7 +306,7 @@ class _PriorityRail extends StatelessWidget {
             ? const TgcgEmptyState(
                 icon: Icons.task_alt_rounded,
                 title: 'No active incidents',
-                message: 'There are no unresolved incidents in this scope.',
+                message: 'There are no unresolved incidents in your areas.',
               )
             : Column(
                 children: incidents
@@ -314,36 +335,29 @@ class _PriorityItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _severityColor(incident.severity);
+    final color = incidentSeverityColor(incident.severity);
+    final radius = BorderRadius.circular(TgcgRadius.md);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: selected ? color.withValues(alpha: .06) : TgcgColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(14),
+        color: selected ? color.withValues(alpha: .06) : TgcgColors.surface,
+        borderRadius: radius,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: radius,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: radius,
               border: Border.all(
-                color: selected ? color.withValues(alpha: .45) : TgcgColors.border,
+                color: selected ? color.withValues(alpha: .5) : TgcgColors.border,
               ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: .1),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Icon(Icons.crisis_alert_outlined, color: color, size: 19),
-                ),
-                const SizedBox(width: 10),
+                TgcgIconBadge(icon: Icons.crisis_alert_outlined, color: color, size: 38),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,44 +366,29 @@ class _PriorityItem extends StatelessWidget {
                         incident.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: TgcgColors.ink,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11.5,
-                          height: 1.25,
-                        ),
+                        style: TgcgType.bodyStrong,
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        incident.scope.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: TgcgColors.muted,
-                          fontSize: 9.5,
-                        ),
-                      ),
-                      if (incident.isLive) ...[
-                        const SizedBox(height: 5),
-                        const TgcgStatusPill(
-                          label: 'LIVE',
-                          color: TgcgColors.danger,
-                          icon: Icons.live_tv_rounded,
-                          compact: true,
-                        ),
-                      ],
+                      const SizedBox(height: 2),
+                      Text(incident.scope.label, style: TgcgType.caption),
                       const SizedBox(height: 8),
                       Wrap(
-                        spacing: 5,
-                        runSpacing: 5,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
+                          if (incident.isLive)
+                            const TgcgStatusPill(
+                              label: 'LIVE',
+                              color: TgcgColors.danger,
+                              icon: Icons.live_tv_rounded,
+                              compact: true,
+                            ),
                           TgcgStatusPill(
-                            label: _label(incident.severity.name),
+                            label: incidentSeverityLabel(incident.severity),
                             color: color,
                             compact: true,
                           ),
                           TgcgStatusPill(
-                            label: _label(incident.status.name),
+                            label: incidentStatusLabel(incident.status),
                             color: TgcgColors.primaryMid,
                             compact: true,
                           ),
@@ -439,7 +438,7 @@ class _CommandMap extends StatelessWidget {
       if (id == null) continue;
       final current = result[id];
       if (current == null ||
-          _severityRank(incident.severity) > _severityRank(current)) {
+          incidentSeverityRank(incident.severity) > incidentSeverityRank(current)) {
         result[id] = incident.severity;
       }
     }
@@ -502,157 +501,144 @@ class _CommandMap extends StatelessWidget {
         selectedLast(a.incident).compareTo(selectedLast(b.incident)));
 
     final size = projection.size;
-    const half = _MapIncidentNode.pinSize / 2;
-    return [
-      for (final item in placed)
+    const half = _MapIncidentNode.touchSize / 2;
+    const wide = _MapIncidentNode.selectedWidth;
+    final pins = <Widget>[];
+    for (final item in placed) {
+      final selected = item.incident.id == selectedIncidentId;
+      // A pin marks a place: near the right edge a selected pin's label runs
+      // to the left of it, so that the pin itself does not move.
+      final labelLeft = selected && item.point.dx - half + wide > size.width;
+      final left = labelLeft ? item.point.dx + half - wide : item.point.dx - half;
+      final width = selected ? wide : _MapIncidentNode.touchSize;
+      pins.add(
         Positioned(
-          left: (item.point.dx - half)
-              .clamp(4.0, math.max(4.0, size.width - 150))
-              .toDouble(),
+          left: left.clamp(0.0, math.max(0.0, size.width - width)).toDouble(),
           top: (item.point.dy - half)
-              .clamp(4.0, math.max(4.0, size.height - 30))
+              .clamp(0.0, math.max(0.0, size.height - _MapIncidentNode.touchSize))
               .toDouble(),
           child: _MapIncidentNode(
             incident: item.incident,
-            color: _severityColor(item.incident.severity),
-            selected: item.incident.id == selectedIncidentId,
+            color: incidentSeverityColor(item.incident.severity),
+            selected: selected,
+            labelLeft: labelLeft,
             exact: item.exact,
             onTap: () => onSelect(item.incident.id),
           ),
         ),
-    ];
+      );
+    }
+    return pins;
   }
 
   @override
   Widget build(BuildContext context) => TgcgSectionCard(
         title: 'Live operational map',
-        subtitle:
-            'Open incidents plotted on Nigerian state boundaries. States are shaded by their most severe open incident.',
-        trailing: const TgcgStatusPill(
-          label: 'STATE GIS',
-          color: TgcgColors.info,
+        subtitle: 'States are shaded by their most severe open incident.',
+        trailing: TgcgStatusPill(
+          label: '${formatCount(incidents.length)} OPEN',
+          color: incidents.isEmpty ? TgcgColors.success : TgcgColors.warning,
           icon: Icons.map_outlined,
           compact: true,
         ),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+        trailingBeside: true,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 10),
             LayoutBuilder(
               // Nigeria is ~1.27x wider than tall; size the map to fill the width.
               builder: (context, constraints) => Container(
-              height: (constraints.maxWidth / 1.3).clamp(440.0, 860.0),
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: TgcgColors.primaryDark,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: GeoShapeMapView(
-                      source: GeoShapeSet.nigeriaStates(),
-                      style: GeoMapStyle.dark,
-                      padding: 48,
-                      focusIds: focusStateIds,
-                      onTap: onOpenState,
-                      isInteractive: (id) =>
-                          focusStateIds.isEmpty || focusStateIds.contains(id),
-                      fillFor: (id) {
-                        final severity = worstByState[id];
-                        if (severity == null) return null;
-                        return Color.alphaBlend(
-                          _severityColor(severity).withValues(alpha: .42),
-                          GeoMapStyle.dark.mutedFill,
-                        );
-                      },
-                      labelFor: (id) => id,
-                      tooltipFor: (id) {
-                        final name = stateNames[id] ?? id;
-                        final count = openByState[id] ?? 0;
-                        return '$name'
-                            '${count == 0 ? '' : ' • $count open incident${count == 1 ? '' : 's'}'}'
-                            ' • click for LGA map';
-                      },
-                      overlayBuilder: _incidentMarkers,
+                height: (constraints.maxWidth / 1.3).clamp(260.0, 720.0),
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: TgcgColors.primaryDark,
+                  borderRadius: BorderRadius.circular(TgcgRadius.lg),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GeoShapeMapView(
+                        source: GeoShapeSet.nigeriaStates(),
+                        style: GeoMapStyle.dark,
+                        padding: constraints.maxWidth < 560 ? 14 : 44,
+                        focusIds: focusStateIds,
+                        onTap: onOpenState,
+                        isInteractive: (id) =>
+                            focusStateIds.isEmpty || focusStateIds.contains(id),
+                        fillFor: (id) {
+                          final severity = worstByState[id];
+                          if (severity == null) return null;
+                          return Color.alphaBlend(
+                            incidentSeverityColor(severity).withValues(alpha: .42),
+                            GeoMapStyle.dark.mutedFill,
+                          );
+                        },
+                        labelFor: (id) => id,
+                        tooltipFor: (id) {
+                          final name = stateNames[id] ?? id;
+                          final count = openByState[id] ?? 0;
+                          return '$name'
+                              '${count == 0 ? '' : ' • $count open incident${count == 1 ? '' : 's'}'}'
+                              ' • click for LGA map';
+                        },
+                        overlayBuilder: _incidentMarkers,
+                      ),
                     ),
-                  ),
-                  Positioned(
-                    left: 18,
-                    top: 16,
-                    child: TgcgStatusPill(
-                      label: scope.label.toUpperCase(),
-                      color: TgcgColors.accent,
-                      icon: Icons.location_on_outlined,
-                      compact: true,
-                    ),
-                  ),
-                  const Positioned(
-                    right: 18,
-                    top: 16,
-                    child: Wrap(
-                      spacing: 10,
-                      children: [
-                        _MapLegend(label: 'Critical / high', color: TgcgColors.danger),
-                        _MapLegend(label: 'Medium', color: TgcgColors.warning),
-                        _MapLegend(label: 'Low / info', color: TgcgColors.info),
-                      ],
-                    ),
-                  ),
-                  if (incidents.isEmpty)
-                    const Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 40,
-                      child: IgnorePointer(
-                        child: Center(
-                          child: Text(
-                            'No active incident markers in this scope',
-                            style: TextStyle(
-                              color: Color(0xFFB8BFCE),
-                              fontWeight: FontWeight.w700,
+                    if (constraints.maxWidth >= 560)
+                      Positioned(
+                        left: 12,
+                        top: 12,
+                        child: TgcgStatusPill(
+                          label: scope.label.toUpperCase(),
+                          color: TgcgColors.accentBright,
+                          icon: Icons.location_on_outlined,
+                          compact: true,
+                        ),
+                      ),
+                    if (incidents.isEmpty)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 22,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: TgcgColors.primaryDark.withValues(alpha: .88),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'No open incidents in your areas',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  const Positioned(
-                    left: 18,
-                    bottom: 14,
-                    child: IgnorePointer(
-                      child: Row(
-                        children: [
-                          Icon(Icons.layers_outlined, color: Color(0xFFB8BFCE), size: 16),
-                          SizedBox(width: 6),
-                          Text(
-                            'State boundaries  •  Incidents',
-                            style: TextStyle(
-                              color: Color(0xFFB8BFCE),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            ),
             const SizedBox(height: 12),
-            Row(
+            const Wrap(
+              spacing: 16,
+              runSpacing: 6,
               children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: TgcgColors.muted),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    '${incidents.length} active incident marker${incidents.length == 1 ? '' : 's'} in the authorized scope. Solid pins use reported GPS coordinates; ringed pins have no GPS fix and are placed inside their reported state.',
-                    style: const TextStyle(
-                      color: TgcgColors.muted,
-                      fontSize: 10.5,
-                      height: 1.4,
-                    ),
-                  ),
+                _MapLegend(label: 'Critical / high', color: TgcgColors.danger),
+                _MapLegend(label: 'Medium', color: TgcgColors.warning),
+                _MapLegend(label: 'Low / info', color: TgcgColors.info),
+                _MapLegend(label: 'GPS fix', icon: Icons.location_on_rounded),
+                _MapLegend(
+                  label: 'No GPS fix: placed in its state',
+                  icon: Icons.location_searching_rounded,
                 ),
               ],
             ),
@@ -666,15 +652,24 @@ class _MapIncidentNode extends StatelessWidget {
     required this.incident,
     required this.color,
     required this.selected,
+    required this.labelLeft,
     required this.exact,
     required this.onTap,
   });
 
   static const pinSize = 24.0;
 
+  /// Pins sit close: the touch area reaches a little past each one.
+  static const touchSize = 36.0;
+  static const _labelWidth = 136.0;
+  static const selectedWidth = _labelWidth + touchSize - pinSize;
+
   final FieldIncident incident;
   final Color color;
   final bool selected;
+
+  /// The selected pin's label runs to its left, for a pin near the right edge.
+  final bool labelLeft;
   final bool exact;
   final VoidCallback onTap;
 
@@ -685,86 +680,91 @@ class _MapIncidentNode extends StatelessWidget {
             '${exact ? '' : ' (no GPS fix)'}',
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(pinSize / 2),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: selected ? 146 : pinSize,
-            height: pinSize,
-            padding: EdgeInsets.only(
-              left: selected ? 3 : 0,
-              right: selected ? 8 : 0,
-            ),
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color(0xFF0C1D46)
-                  : exact
-                      ? color
-                      : TgcgColors.primaryDark,
-              borderRadius: BorderRadius.circular(pinSize / 2),
-              border: Border.all(
-                color: selected || !exact ? color : Colors.white,
-                width: selected || !exact ? 2.4 : 1.6,
+          borderRadius: BorderRadius.circular(touchSize / 2),
+          child: Padding(
+            padding: const EdgeInsets.all((touchSize - pinSize) / 2),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: selected ? _labelWidth : pinSize,
+              height: pinSize,
+              padding: EdgeInsets.only(
+                left: !selected ? 0 : (labelLeft ? 8 : 3),
+                right: !selected ? 0 : (labelLeft ? 3 : 8),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: .45),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
+              decoration: BoxDecoration(
+                color: selected
+                    ? TgcgColors.primaryDark
+                    : exact
+                        ? color
+                        : TgcgColors.primaryDark,
+                borderRadius: BorderRadius.circular(pinSize / 2),
+                border: Border.all(
+                  color: selected || !exact ? color : Colors.white,
+                  width: selected || !exact ? 2.4 : 1.6,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment:
-                  selected ? MainAxisAlignment.start : MainAxisAlignment.center,
-              children: [
-                Icon(
-                  exact
-                      ? Icons.location_on_rounded
-                      : Icons.location_searching_rounded,
-                  color: exact || selected ? Colors.white : color,
-                  size: 14,
-                ),
-                if (selected) ...[
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      incident.scope.lgaName ?? incident.scope.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 9.5,
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: .45),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
                   ),
                 ],
-              ],
+              ),
+              child: Row(
+                textDirection: labelLeft ? TextDirection.rtl : TextDirection.ltr,
+                mainAxisAlignment: selected ? MainAxisAlignment.start : MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    exact ? Icons.location_on_rounded : Icons.location_searching_rounded,
+                    color: exact || selected ? Colors.white : color,
+                    size: 14,
+                  ),
+                  if (selected) ...[
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        incident.scope.lgaName ?? incident.scope.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: labelLeft ? TextAlign.end : TextAlign.start,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
       );
 }
 
+/// What a colour or a pin on the map means.
 class _MapLegend extends StatelessWidget {
-  const _MapLegend({required this.label, required this.color});
+  const _MapLegend({required this.label, this.color, this.icon});
+
   final String label;
-  final Color color;
+  final Color? color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(color: Color(0xFFB8BFCE), fontSize: 9.5),
-          ),
+          if (icon case final shape?)
+            Icon(shape, size: 14, color: TgcgColors.muted)
+          else
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+          const SizedBox(width: 6),
+          Flexible(child: Text(label, style: TgcgType.caption)),
         ],
       );
 }
@@ -809,11 +809,10 @@ class _ActivityTimeline extends StatelessWidget {
       ...incidents.map(
         (incident) => _ActivityEvent(
           title: incident.title,
-          subtitle:
-              '${incident.scope.label} • ${_label(incident.status.name)}',
+          subtitle: '${incident.scope.label} • ${incidentStatusLabel(incident.status)}',
           timestamp: incident.reportedAt,
           icon: Icons.crisis_alert_outlined,
-          color: _severityColor(incident.severity),
+          color: incidentSeverityColor(incident.severity),
           incidentId: incident.id,
         ),
       ),
@@ -829,80 +828,34 @@ class _ActivityTimeline extends StatelessWidget {
       ),
     ]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    return TgcgSectionCard(
-      title: 'Live event stream',
-      subtitle: 'Latest incidents and structured field reports in this scope.',
-      child: events.isEmpty
-          ? const TgcgEmptyState(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const TgcgSectionHeading(title: 'Live event stream'),
+        if (events.isEmpty)
+          const TgcgSectionCard(
+            child: TgcgEmptyState(
               icon: Icons.timeline_outlined,
               title: 'No activity yet',
               message: 'New incidents and field reports will appear here.',
-            )
-          : Column(
-              children: events.take(8).map((event) {
-                return InkWell(
+            ),
+          )
+        else
+          TgcgRowGroup(
+            children: [
+              for (final event in events.take(8))
+                TgcgActionRow(
+                  icon: event.icon,
+                  color: event.color,
+                  title: event.title,
+                  detail: '${event.subtitle}\n${formatMoment(event.timestamp.toLocal())}',
                   onTap: event.incidentId == null
                       ? null
                       : () => onIncidentSelected(event.incidentId!),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: event.color.withValues(alpha: .09),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(event.icon, color: event.color, size: 17),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                event.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: TgcgColors.ink,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                event.subtitle,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: TgcgColors.muted,
-                                  fontSize: 9.5,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _timeLabel(event.timestamp),
-                          style: const TextStyle(
-                            color: TgcgColors.muted,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+                ),
+            ],
+          ),
+      ],
     );
   }
 }
@@ -919,83 +872,33 @@ class _ResponseOwnership extends StatelessWidget {
       final key = incident.assignedTeam ?? 'Unassigned';
       groups[key] = (groups[key] ?? 0) + 1;
     }
-    final entries = groups.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final entries = groups.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
-    return TgcgSectionCard(
-      title: 'Response ownership',
-      subtitle: 'Open incidents by current response desk.',
-      child: entries.isEmpty
-          ? const TgcgEmptyState(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const TgcgSectionHeading(title: 'Response ownership'),
+        if (entries.isEmpty)
+          const TgcgSectionCard(
+            child: TgcgEmptyState(
               icon: Icons.groups_2_outlined,
               title: 'No active ownership',
-              message: 'There are no open incidents assigned in this scope.',
-            )
-          : Column(
-              children: entries.map((entry) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 9),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: TgcgColors.surfaceSoft,
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: TgcgColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 35,
-                        height: 35,
-                        decoration: BoxDecoration(
-                          color: TgcgColors.primarySoft,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.groups_2_outlined,
-                          color: TgcgColors.primary,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          entry.key,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: TgcgColors.ink,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 30,
-                        height: 30,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: entry.key == 'Unassigned'
-                              ? TgcgColors.warning.withValues(alpha: .09)
-                              : TgcgColors.primarySoft,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${entry.value}',
-                          style: TextStyle(
-                            color: entry.key == 'Unassigned'
-                                ? TgcgColors.warning
-                                : TgcgColors.primary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+              message: 'There are no open incidents assigned in your areas.',
             ),
+          )
+        else
+          TgcgRowGroup(
+            children: [
+              for (final entry in entries)
+                TgcgActionRow(
+                  icon: Icons.groups_2_outlined,
+                  color: entry.key == 'Unassigned' ? TgcgColors.warning : TgcgColors.primary,
+                  title: entry.key,
+                  trailing: Text(formatCount(entry.value), style: TgcgType.section),
+                ),
+            ],
+          ),
+      ],
     );
   }
 }
@@ -1034,39 +937,6 @@ List<String> _focusStateIds(
   }
   final stateId = scope.stateId;
   return stateId == null ? const [] : [stateId];
-}
-
-int _severityRank(IncidentSeverity severity) => switch (severity) {
-      IncidentSeverity.critical => 5,
-      IncidentSeverity.high => 4,
-      IncidentSeverity.medium => 3,
-      IncidentSeverity.low => 2,
-      IncidentSeverity.info => 1,
-    };
-
-Color _severityColor(IncidentSeverity severity) => switch (severity) {
-      IncidentSeverity.critical => TgcgColors.danger,
-      IncidentSeverity.high => const Color(0xFFD92D20),
-      IncidentSeverity.medium => TgcgColors.warning,
-      IncidentSeverity.low => TgcgColors.info,
-      IncidentSeverity.info => TgcgColors.muted,
-    };
-
-String _timeLabel(DateTime value) {
-  final local = value.toLocal();
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$hour:$minute';
-}
-
-String _label(String value) {
-  final spaced = value.replaceAllMapped(
-    RegExp(r'([a-z])([A-Z])'),
-    (match) => '${match.group(1)} ${match.group(2)}',
-  );
-  return spaced.isEmpty
-      ? spaced
-      : '${spaced[0].toUpperCase()}${spaced.substring(1)}';
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

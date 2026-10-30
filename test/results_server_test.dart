@@ -547,7 +547,7 @@ void main() {
       await pump(tester, const CollationPage());
 
       expect(find.text('UNOFFICIAL: NOT INEC'), findsOneWidget);
-      expect(find.text('1 of 8012'), findsOneWidget);
+      expect(find.text('1 of 8,012'), findsOneWidget);
       expect(find.text('AHEAD: APC'), findsOneWidget);
       expect(find.text('APC · All Progressives Congress'), findsOneWidget);
       expect(find.text('Senatorial district breakdown'), findsOneWidget);

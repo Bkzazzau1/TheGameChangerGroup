@@ -88,6 +88,12 @@ class TgcgType {
     height: 1.35,
     fontWeight: FontWeight.w700,
   );
+  static const label = TextStyle(
+    color: TgcgColors.ink,
+    fontSize: 13,
+    height: 1.3,
+    fontWeight: FontWeight.w700,
+  );
   static const support = TextStyle(color: TgcgColors.muted, fontSize: 13, height: 1.4);
   static const caption = TextStyle(color: TgcgColors.muted, fontSize: 12, height: 1.35);
   static const eyebrow = TextStyle(
@@ -253,6 +259,9 @@ class TgcgBarMenu extends StatelessWidget {
   }
 }
 
+/// The widest a command page's content runs: maps and tables need the room.
+const tgcgCommandWidth = 1320.0;
+
 /// How far a page's content stands from the edges at [width]: phones use the
 /// whole width, wider screens keep a readable column in the middle.
 EdgeInsets tgcgPagePadding(
@@ -261,7 +270,8 @@ EdgeInsets tgcgPagePadding(
   double top = TgcgSpacing.md,
   double bottom = TgcgSpacing.lg,
 }) {
-  final side = math.max(TgcgSpacing.md, (width - maxWidth) / 2);
+  final gutter = width < 760 ? TgcgSpacing.md : TgcgSpacing.lg;
+  final side = math.max(gutter, (width - maxWidth) / 2);
   return EdgeInsets.fromLTRB(side, top, side, bottom);
 }
 
@@ -549,6 +559,60 @@ class TgcgRowGroup extends StatelessWidget {
       );
 }
 
+/// The one navy panel a page leads with: white text, gold edge.
+class TgcgNavyPanel extends StatelessWidget {
+  const TgcgNavyPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(18, 16, 18, 16),
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: padding,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(TgcgRadius.lg),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [TgcgColors.primaryDark, TgcgColors.primary],
+          ),
+          border: Border.all(color: TgcgColors.accent.withValues(alpha: .45)),
+        ),
+        child: child,
+      );
+}
+
+/// Loads a page's figures again; shows that it is doing so.
+class TgcgReloadButton extends StatelessWidget {
+  const TgcgReloadButton({
+    super.key,
+    required this.loading,
+    required this.onPressed,
+    this.color,
+  });
+
+  final bool loading;
+  final VoidCallback? onPressed;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        tooltip: 'Load again',
+        onPressed: loading ? null : onPressed,
+        icon: loading
+            ? SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            : Icon(Icons.refresh_rounded, color: color),
+      );
+}
+
 /// A short message inside a page: something to know, or to do.
 class TgcgNotice extends StatelessWidget {
   const TgcgNotice({
@@ -633,24 +697,22 @@ class TgcgMetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Text(
-            value,
-            style: const TextStyle(
-              color: TgcgColors.ink,
-              fontWeight: FontWeight.w800,
-              fontSize: 26,
-              letterSpacing: -.4,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                color: TgcgColors.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 26,
+                letterSpacing: -.4,
+              ),
             ),
           ),
           const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(
-              color: TgcgColors.ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(label, style: TgcgType.label),
           if (detail != null) ...[
             const SizedBox(height: 4),
             Text(
@@ -671,6 +733,47 @@ class TgcgMetricCard extends StatelessWidget {
       child: body,
     );
   }
+}
+
+/// Figures in rows of equal height, two across on a phone.
+class TgcgMetricGrid extends StatelessWidget {
+  const TgcgMetricGrid({super.key, required this.cards, this.across = const [2, 3, 6]});
+
+  final List<Widget> cards;
+
+  /// How many stand across on a phone, at a middling width and on a wide page.
+  final List<int> across;
+
+  static const _gap = 12.0;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final wanted = across[width < 560 ? 0 : (width < 1180 ? 1 : 2)];
+          final columns = math.max(1, math.min(wanted, cards.length));
+          return Column(
+            children: [
+              for (var start = 0; start < cards.length; start += columns) ...[
+                if (start > 0) const SizedBox(height: _gap),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var index = start; index < start + columns; index++) ...[
+                        if (index > start) const SizedBox(width: _gap),
+                        Expanded(
+                          child: index < cards.length ? cards[index] : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      );
 }
 
 class TgcgStatusPill extends StatelessWidget {

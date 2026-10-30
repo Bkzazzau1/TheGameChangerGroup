@@ -82,6 +82,10 @@ mixin ServerRecords<S> on ChangeNotifier {
   /// When the server's records were last loaded.
   DateTime? get loadedAt => _loadedAt;
 
+  /// False until a server session's first load succeeds: until then an empty
+  /// list says nothing about what the server holds.
+  bool get recordsKnown => !_connected || _loadedAt != null;
+
   /// Starts showing the server's records, loaded for [account] (the
   /// signed-in access ID, which uploads also carry).
   @protected

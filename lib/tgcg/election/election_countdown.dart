@@ -11,6 +11,9 @@ enum ElectionCountdownSize {
 
   /// One quiet row, for the agent's home, where the day's work comes first.
   compact,
+
+  /// White on navy, inside the command band of the operations dashboard.
+  band,
 }
 
 /// The days to an election, from the central calendar: no network, and it
@@ -86,9 +89,23 @@ class _ElectionCountdownState extends State<ElectionCountdown> with WidgetsBindi
       container: true,
       label: '$sentence. ${election.fullDate}. Date from ${election.source}.',
       child: ExcludeSemantics(
-        child: widget.size == ElectionCountdownSize.full
-            ? _FullCountdown(election: election, status: status, headline: headline)
-            : _CompactCountdown(election: election, status: status, sentence: sentence),
+        child: switch (widget.size) {
+          ElectionCountdownSize.full => _FullCountdown(
+            election: election,
+            status: status,
+            headline: headline,
+          ),
+          ElectionCountdownSize.compact => _CompactCountdown(
+            election: election,
+            status: status,
+            sentence: sentence,
+          ),
+          ElectionCountdownSize.band => _BandCountdown(
+            election: election,
+            status: status,
+            headline: headline,
+          ),
+        },
       ),
     );
   }
@@ -104,18 +121,7 @@ class _FullCountdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final upcoming = status.phase == ElectionPhase.upcoming;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(TgcgRadius.lg),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [TgcgColors.primaryDark, TgcgColors.primary],
-        ),
-        border: Border.all(color: TgcgColors.accent.withValues(alpha: .45)),
-      ),
+    return TgcgNavyPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -168,6 +174,63 @@ class _FullCountdown extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BandCountdown extends StatelessWidget {
+  const _BandCountdown({required this.election, required this.status, required this.headline});
+
+  final ScheduledElection election;
+  final ElectionStatus status;
+  final String headline;
+
+  @override
+  Widget build(BuildContext context) {
+    final upcoming = status.phase == ElectionPhase.upcoming;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          headline,
+          style: TextStyle(
+            color: TgcgColors.accentBright,
+            fontSize: upcoming ? 34 : 20,
+            height: 1.05,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.4,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                upcoming
+                    ? '${status.daysLeft == 1 ? 'day' : 'days'} to the '
+                          '${election.name.toLowerCase()}'
+                    : election.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                status.phase == ElectionPhase.completed
+                    ? 'Held on ${election.fullDate}'
+                    : election.fullDate,
+                style: const TextStyle(color: TgcgColors.onNavyMuted, fontSize: 12, height: 1.3),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

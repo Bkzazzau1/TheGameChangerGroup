@@ -147,6 +147,31 @@ void main() {
       expect(find.textContaining('Held on Saturday, 16 January 2027'), findsOneWidget);
     });
 
+    testWidgets('the command band says the same, without the words on a card', (tester) async {
+      var now = DateTime.parse('2026-10-30T12:00:00Z');
+      await _pump(tester, () => now, size: ElectionCountdownSize.band);
+      expect(find.text('78'), findsOneWidget);
+      expect(find.text('days to the presidential election'), findsOneWidget);
+      expect(find.text('Saturday, 16 January 2027'), findsOneWidget);
+
+      now = DateTime.parse('2027-01-15T09:00:00Z');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('day to the presidential election'), findsOneWidget);
+
+      now = DateTime.parse('2027-01-16T09:00:00Z');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('Election Day'), findsOneWidget);
+      expect(find.text('Presidential election'), findsOneWidget);
+
+      now = DateTime.parse('2027-01-20T09:00:00Z');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('Held'), findsOneWidget);
+      expect(find.text('Held on Saturday, 16 January 2027'), findsOneWidget);
+    });
+
     testWidgets('moves on by itself at midnight in Nigeria', (tester) async {
       var now = DateTime.parse('2027-01-15T22:59:00Z');
       await _pump(tester, () => now);

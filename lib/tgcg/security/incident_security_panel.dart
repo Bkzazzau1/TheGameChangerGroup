@@ -142,7 +142,7 @@ class _IncidentSecurityPanelState extends State<IncidentSecurityPanel> {
             Expanded(
               child: Text(
                 'Security officers could not be loaded. ${failureMessage(_error!)}',
-                style: const TextStyle(color: TgcgColors.muted, fontSize: 10.5),
+                style: TgcgType.caption,
               ),
             ),
             TextButton(onPressed: _load, child: const Text('Retry')),
@@ -164,10 +164,7 @@ class _IncidentSecurityPanelState extends State<IncidentSecurityPanel> {
         children: [
           Row(
             children: [
-              const Text(
-                'Security officer',
-                style: TextStyle(color: TgcgColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
-              ),
+              const Text('Security officer', style: TgcgType.label),
               if (_busy) ...[
                 const SizedBox(width: 10),
                 const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -210,7 +207,7 @@ class _DispatchLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const small = TextStyle(color: TgcgColors.muted, fontSize: 9.5, height: 1.35);
+    const small = TgcgType.caption;
     final phone = dispatch.officerPhone;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -226,10 +223,7 @@ class _DispatchLine extends StatelessWidget {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(
-                      dispatch.officerName,
-                      style: const TextStyle(color: TgcgColors.ink, fontSize: 10.5, fontWeight: FontWeight.w900),
-                    ),
+                    Text(dispatch.officerName, style: TgcgType.label),
                     TgcgStatusPill(
                       label: securityStepLabel(dispatch.status),
                       color: securityStepColor(dispatch.status),

@@ -217,10 +217,7 @@ class _IncidentCommandPanelState extends State<IncidentCommandPanel> {
       children: [
         Row(
           children: [
-            const Text(
-              'Command actions',
-              style: TextStyle(color: TgcgColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
-            ),
+            const Text('Command actions', style: TgcgType.label),
             if (_busy) ...[
               const SizedBox(width: 10),
               const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -282,10 +279,7 @@ class _IncidentHistoryPanelState extends State<IncidentHistoryPanel> {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'History',
-            style: TextStyle(color: TgcgColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
-          ),
+          const Text('History', style: TgcgType.label),
           const SizedBox(height: 8),
           FutureBuilder<List<IncidentHistoryEntry>>(
             future: _history,
@@ -349,22 +343,12 @@ class _HistoryLine extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _title,
-                    style: const TextStyle(
-                      color: TgcgColors.ink,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+                  Text(_title, style: TgcgType.label),
                   if (entry.note.isNotEmpty)
-                    Text(
-                      entry.note,
-                      style: const TextStyle(color: TgcgColors.ink, fontSize: 10, height: 1.35),
-                    ),
+                    Text(entry.note, style: TgcgType.caption.copyWith(color: TgcgColors.ink)),
                   Text(
                     [entry.actor ?? 'System', formatMoment(entry.at.toLocal())].join(' · '),
-                    style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
+                    style: TgcgType.caption,
                   ),
                 ],
               ),
@@ -583,17 +567,13 @@ class EvidenceRow extends StatelessWidget {
                         evidence.fileName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: TgcgColors.ink,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: TgcgType.label,
                       ),
                       Text(
                         onDevice
                             ? 'On this device; uploads after the incident.'
                             : 'By ${evidence.uploaderId}',
-                        style: const TextStyle(color: TgcgColors.muted, fontSize: 9.5),
+                        style: TgcgType.caption,
                       ),
                     ],
                   ),
@@ -610,10 +590,9 @@ class EvidenceRow extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         viewable ? 'View' : 'Play',
-                        style: const TextStyle(
+                        style: TgcgType.caption.copyWith(
                           color: TgcgColors.primaryMid,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
