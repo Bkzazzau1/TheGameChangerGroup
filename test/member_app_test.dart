@@ -61,6 +61,14 @@ Map<String, dynamic> _card({String verification = 'verified'}) => {
 
 Map<String, dynamic> _session() => {'access': 'A', 'refresh': 'R', 'member': _card()};
 
+/// From the member's home to the page with their card and details.
+Future<void> _openCard(WidgetTester tester) async {
+  await tester.tap(find.text('Account'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Membership card'));
+  await tester.pumpAndSettle();
+}
+
 /// A fake TGCG server. Records every request; [respond] answers by path.
 class _Server {
   _Server(this.respond);
@@ -822,7 +830,10 @@ void main() {
     await _pump(tester, backend, const MemberShell(), member: true);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Change PIN'));
+    // On a phone the bar keeps it behind More.
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change PIN'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Current PIN or password'), '08030000001');
     await tester.enterText(find.widgetWithText(TextField, 'New 6-digit PIN'), '482915');
@@ -921,16 +932,38 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Card.
+    // Home: who they are, their standing, their unit and the latest news.
     expect(find.text('Musa Bello'), findsOneWidget);
     expect(find.text('TGCG-000123'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Identity checked'), findsOneWidget);
+    expect(find.text('PVC on record'), findsOneWidget);
+    // The election countdown, from the central date.
+    expect(find.text('PRESIDENTIAL ELECTION'), findsOneWidget);
+    expect(find.text('Saturday, 16 January 2027'), findsOneWidget);
+    // Any member may register others, from the bar's menu on a phone.
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    for (final item in ['Register members', 'Change PIN', 'Sign out']) {
+      expect(find.text(item), findsOneWidget, reason: item);
+    }
+    await tester.tapAt(const Offset(5, 300));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('UNG. ASKA I/ L.E.A. ANGUWAN KAHU'), 200);
+    await tester.scrollUntilVisible(find.text('Ward meeting on Saturday'), 200);
+
+    // The card and its signed code, one tap from home.
+    await tester.drag(find.byType(ListView), const Offset(0, 2000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View membership card'));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('membership-qr')), findsOneWidget);
     expect(find.text('PVC on record'), findsOneWidget);
-    // Any member may register others.
-    expect(find.byTooltip('Register members'), findsOneWidget);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
 
     // My polling unit, with directions from INEC's location.
-    await tester.tap(find.text('My unit'));
+    await tester.tap(find.text('My Unit'));
     await tester.pumpAndSettle();
     expect(find.text('UNG. ASKA I/ L.E.A. ANGUWAN KAHU'), findsOneWidget);
     expect(find.text('12'), findsOneWidget);
@@ -939,13 +972,15 @@ void main() {
     await tester.pump();
     expect(launched.single.queryParameters['destination'], '11.0539,7.712955');
 
-    // News.
-    await tester.tap(find.text('News'));
+    // Updates.
+    await tester.tap(find.text('Updates'));
     await tester.pumpAndSettle();
     expect(find.text('Ward meeting on Saturday'), findsOneWidget);
 
     // Volunteering is for party work; nothing here is about becoming an agent.
-    await tester.tap(find.text('Volunteer'));
+    await tester.tap(find.text('Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Volunteering'));
     await tester.pumpAndSettle();
     expect(find.textContaining('agent'), findsNothing);
     await tester.tap(find.text('Offer to help'));
@@ -1018,6 +1053,7 @@ void main() {
         member: true,
       );
       await tester.pumpAndSettle();
+      await _openCard(tester);
       expect(find.text('Not added'), findsNWidgets(3)); // email, occupation and the selfie
 
       await tester.tap(action('Occupation'));
@@ -1052,6 +1088,7 @@ void main() {
           });
       await _pump(tester, server.connect(), const MemberShell(), member: true);
       await tester.pumpAndSettle();
+      await _openCard(tester);
       expect(find.text('Same as phone'), findsOneWidget);
 
       await tester.tap(action('WhatsApp'));
@@ -1095,6 +1132,7 @@ void main() {
           member: true,
         );
         await tester.pumpAndSettle();
+        await _openCard(tester);
         await tester.tap(action('Your PVC'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Take a photo of the card'));
@@ -1139,6 +1177,7 @@ void main() {
         member: true,
       );
       await tester.pumpAndSettle();
+      await _openCard(tester);
       expect(find.text('Not scanned'), findsOneWidget);
 
       await tester.tap(action('Your PVC'));
@@ -1200,6 +1239,7 @@ void main() {
         member: true,
       );
       await tester.pumpAndSettle();
+      await _openCard(tester);
 
       await tester.tap(action('Your PVC'));
       await tester.pumpAndSettle();
@@ -1237,6 +1277,7 @@ void main() {
           });
       await _pump(tester, server.connect(), const MemberShell(), member: true);
       await tester.pumpAndSettle();
+      await _openCard(tester);
 
       await tester.tap(action('Gender'));
       await tester.pumpAndSettle();
@@ -1267,6 +1308,7 @@ void main() {
           });
       await _pump(tester, server.connect(), const MemberShell(), member: true);
       await tester.pumpAndSettle();
+      await _openCard(tester);
       expect(find.text('None given'), findsOneWidget);
 
       // Not from the PVC, so still the member's own after the identity check.
@@ -1306,6 +1348,7 @@ void main() {
           });
       await _pump(tester, server.connect(), const MemberShell(), member: true);
       await tester.pumpAndSettle();
+      await _openCard(tester);
       for (final onRecord in ['Photo of you', 'Gender', 'Date of birth']) {
         expect(action(onRecord), findsNothing, reason: onRecord);
       }
@@ -1359,7 +1402,7 @@ void main() {
     await _pump(tester, server.connect(), const MemberShell(), member: true);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('My unit'));
+    await tester.tap(find.text('My Unit'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FloatingActionButton, 'Ask Me'));
     await tester.pumpAndSettle();
@@ -1465,9 +1508,8 @@ void main() {
       await signIn(tester, user(membershipNumber: 'TGCG-000123'));
       expect(find.text('TGCG Member'), findsOneWidget);
       expect(find.textContaining('You are listed as a polling unit agent.'), findsOneWidget);
-      expect(find.text('Membership'), findsOneWidget);
       expect(find.text('Active'), findsOneWidget);
-      expect(find.text('ID check'), findsNothing);
+      expect(find.text('Identity not checked yet'), findsOneWidget);
     });
 
     testWidgets('an agent account that belongs to no member cannot sign in', (tester) async {
@@ -1519,7 +1561,7 @@ void main() {
       member: true,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('My unit'));
+    await tester.tap(find.text('My Unit'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(find.text('Ask to change my polling unit'), 200);
@@ -1563,6 +1605,7 @@ void main() {
         member: true,
       );
       await tester.pumpAndSettle();
+      await _openCard(tester);
 
       await tester.tap(find.text('Download card (PDF)'));
       await tester.pumpAndSettle();
@@ -1580,6 +1623,7 @@ void main() {
       );
       await _pump(tester, server.connect(), const MemberShell(), member: true);
       await tester.pumpAndSettle();
+      await _openCard(tester);
 
       final button = find.widgetWithText(FilledButton, 'Download card (PDF)');
       expect(tester.widget<FilledButton>(button).onPressed, isNull);
@@ -1604,6 +1648,7 @@ void main() {
         member: true,
       );
       await tester.pumpAndSettle();
+      await _openCard(tester);
 
       await tester.tap(find.text('Download card (PDF)'));
       await tester.pumpAndSettle();

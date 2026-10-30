@@ -22,6 +22,7 @@ import '../ui/tgcg_design.dart';
 import 'member_registration_page.dart'
     show ScanPvc, TakeSelfie, readScanOnServer, scanPvcWithDevice, takeSelfieWithDevice;
 import 'disability_picker.dart';
+import 'member_home_page.dart';
 import 'membership_card_view.dart';
 import 'referral.dart';
 import 'pvc_scan_page.dart';
@@ -29,9 +30,9 @@ import 'registered_members_page.dart';
 import 'selfie_check.dart';
 import 'wallet_page.dart';
 
-/// The member app: membership card, polling unit, announcements, the Social
-/// Forum, volunteering and the member's own appointments, with Ask Me on
-/// every tab.
+/// The member app: a home dashboard, the polling unit, announcements, the
+/// Social Forum and the account (card, details, wallet, referrals, registered
+/// members, volunteering, appointments, PIN), with Ask Me on every tab.
 class MemberShell extends StatefulWidget {
   const MemberShell({
     super.key,
@@ -102,62 +103,89 @@ class _MemberShellState extends State<MemberShell> {
     refreshOwnAccess(context);
   }
 
+  /// Opens a page of the account; what it changed shows on return.
+  Future<void> _open(Widget page) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    if (mounted) setState(_reloadAll);
+  }
+
+  void _openCard() => _open(
+        MyMembershipCardPage(
+          accountLinks: false,
+          scanPvc: widget.scanPvc,
+          takeSelfie: widget.takeSelfie,
+          checkSelfie: widget.checkSelfie,
+          saveCard: widget.saveCard,
+        ),
+      );
+
+  void _openVolunteering() => _open(const _VolunteerPage());
+
+  void _openInvite() => _open(const _InvitePage());
+
+  void _openRoles() => _open(const _RolesPage());
+
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 12,
-        title: const Row(
-          children: [
-            TgcgLogo(size: 30),
-            SizedBox(width: 10),
-            // Shrinks rather than overflow beside the buttons on a narrow phone.
-            Flexible(
-              child: Text(
-                'TGCG Member',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ],
-        ),
+      backgroundColor: TgcgColors.canvas,
+      appBar: TgcgBrandBar(
+        title: 'TGCG Member',
+        subtitle: 'The Game Changer Group',
         actions: [
           IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
           const InboxButton(),
-          const RegisterMembersButton(),
-          IconButton(
-            tooltip: 'Change PIN',
-            onPressed: () => showChangePin(context),
-            icon: const Icon(Icons.password_rounded),
-          ),
-          IconButton(
-            tooltip: 'Sign out',
-            onPressed: session.signOut,
-            icon: const Icon(Icons.logout_rounded),
+          TgcgBarMenu(
+            actions: [
+              TgcgBarAction(
+                label: 'Register members',
+                icon: Icons.person_add_alt_1_rounded,
+                onPressed: () => _open(const RegisteredMembersPage()),
+              ),
+              TgcgBarAction(
+                label: 'Change PIN',
+                icon: Icons.password_rounded,
+                onPressed: () => showChangePin(context),
+              ),
+              TgcgBarAction(
+                label: 'Sign out',
+                icon: Icons.logout_rounded,
+                onPressed: session.signOut,
+              ),
+            ],
           ),
         ],
       ),
       body: SafeArea(
         child: switch (_tab) {
-          0 => _CardTab(
+          0 => MemberHomePage(
               card: _card!,
-              onChanged: _refresh,
-              scanPvc: widget.scanPvc,
-              takeSelfie: widget.takeSelfie,
-              checkSelfie: widget.checkSelfie,
-              saveCard: widget.saveCard,
+              unit: _unit!,
+              news: _news!,
+              volunteering: _volunteering!,
+              launch: widget.launch,
+              onRefresh: _refresh,
+              onOpenCard: _openCard,
+              onOpenUnit: () => setState(() => _tab = 1),
+              onOpenUpdates: () => setState(() => _tab = 2),
+              onOpenVolunteering: _openVolunteering,
+              onOpenInvite: _openInvite,
+              onOpenRoles: _openRoles,
+              bottomPadding: _belowAskMe,
             ),
           1 => _UnitTab(unit: _unit!, launch: widget.launch, scanPvc: widget.scanPvc),
           2 => _NewsTab(news: _news!),
           3 => const DiscussionRoomPage(bottomPadding: _belowAskMe),
-          4 => _VolunteerTab(
-              offers: _volunteering!,
-              onChanged: () => setState(() {
-                _volunteering = _members.volunteering();
-              }),
+          _ => _AccountTab(
+              card: _card!,
+              onOpenCard: _openCard,
+              onOpenInvite: _openInvite,
+              onOpenVolunteering: _openVolunteering,
+              onOpenRoles: _openRoles,
+              onOpenWallet: () => _open(const MyWalletPage()),
+              onOpenRegistered: () => _open(const RegisteredMembersPage()),
             ),
-          _ => const MyAccessPage(showHeader: false, bottomPadding: _belowAskMe),
         },
       ),
       // Ask Me, from every tab.
@@ -173,29 +201,51 @@ class _MemberShellState extends State<MemberShell> {
         selectedIndex: _tab,
         onDestinationSelected: (index) => setState(() => _tab = index),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.badge_outlined), label: 'Card'),
-          NavigationDestination(icon: Icon(Icons.how_to_vote_outlined), label: 'My unit'),
-          NavigationDestination(icon: Icon(Icons.campaign_outlined), label: 'News'),
-          NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Social'),
-          NavigationDestination(icon: Icon(Icons.volunteer_activism_outlined), label: 'Volunteer'),
-          NavigationDestination(icon: Icon(Icons.assignment_ind_outlined), label: 'Roles'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.how_to_vote_outlined),
+            selectedIcon: Icon(Icons.how_to_vote_rounded),
+            label: 'My Unit',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.campaign_outlined),
+            selectedIcon: Icon(Icons.campaign_rounded),
+            label: 'Updates',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.forum_outlined),
+            selectedIcon: Icon(Icons.forum_rounded),
+            label: 'Social',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Account',
+          ),
         ],
       ),
     );
   }
 }
 
-/// The member's card, details and photos, as in the member app's Card tab,
-/// for members who use another app: agents, executives and coordinators.
+/// The member's card, details and photos. Members reach it from their
+/// account; agents, executives and coordinators from their own apps, where
+/// [accountLinks] adds the wallet and referral code.
 class MyMembershipCardPage extends StatefulWidget {
   const MyMembershipCardPage({
     super.key,
+    this.accountLinks = true,
     this.scanPvc = scanPvcWithDevice,
     this.takeSelfie = takeSelfieWithDevice,
     this.checkSelfie = checkSelfieOnDevice,
     this.saveCard = saveDownload,
   });
 
+  final bool accountLinks;
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
   final CheckSelfie checkSelfie;
@@ -235,6 +285,7 @@ class _MyMembershipCardPageState extends State<MyMembershipCardPage> {
         body: SafeArea(
           child: _CardTab(
             card: _card!,
+            accountLinks: widget.accountLinks,
             onChanged: () => setState(() {
               _card = _load();
             }),
@@ -531,7 +582,6 @@ class _RegisteredCard extends StatelessWidget {
 /// Room at the bottom of each tab's list, so its last item scrolls clear of
 /// the Ask Me button.
 const _belowAskMe = 96.0;
-const _tabPadding = EdgeInsets.fromLTRB(16, 16, 16, _belowAskMe);
 
 class _Loaded<T> extends StatelessWidget {
   const _Loaded({required this.future, required this.builder});
@@ -566,6 +616,7 @@ class _Loaded<T> extends StatelessWidget {
 class _CardTab extends StatelessWidget {
   const _CardTab({
     required this.card,
+    required this.accountLinks,
     required this.onChanged,
     required this.scanPvc,
     required this.takeSelfie,
@@ -573,6 +624,7 @@ class _CardTab extends StatelessWidget {
     required this.saveCard,
   });
   final Future<(MemberCard, Uint8List?)> card;
+  final bool accountLinks;
   final VoidCallback onChanged;
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
@@ -584,26 +636,19 @@ class _CardTab extends StatelessWidget {
         future: card,
         builder: (data) {
           final (card, photo) = data;
-          final waitingRole = TgcgSession.of(context).waitingRole;
           final edits = _Edits(
             profile: TgcgBackend.of(context)!.member.own,
             onChanged: onChanged,
             takeSelfie: takeSelfie,
             checkSelfie: checkSelfie,
           );
-          return ListView(
-            padding: _tabPadding,
+          return TgcgPageList(
             children: [
-              if (waitingRole != null) ...[
-                _WaitingRoleNote(role: waitingRole),
-                const SizedBox(height: 14),
-              ],
               Center(child: MembershipCardView(card: card, photo: photo)),
               const SizedBox(height: 12),
               _CardDownload(card: card, save: saveCard),
               const SizedBox(height: 18),
-              const _WalletRow(),
-              const ReferralCard(),
+              if (accountLinks) ...[const _WalletRow(), const ReferralCard()],
               TgcgSectionCard(
                 title: 'My details',
                 child: Column(
@@ -1030,8 +1075,8 @@ class _UnitTab extends StatelessWidget {
               ),
             );
           }
-          return ListView(
-            padding: _tabPadding,
+          return TgcgPageList(
+            bottomPadding: _belowAskMe,
             children: [
               TgcgSectionCard(
                 title: unit.name,
@@ -1052,7 +1097,7 @@ class _UnitTab extends StatelessWidget {
               const Text(
                 'Vote at this polling unit on election day. Bring your PVC.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: TgcgColors.muted, fontSize: 12.5),
+                style: TgcgType.support,
               ),
               const SizedBox(height: 16),
               _PollingUnitChanges(scanPvc: scanPvc),
@@ -1082,31 +1127,229 @@ class _NewsTab extends StatelessWidget {
               ),
             );
           }
-          return ListView.separated(
-            padding: _tabPadding,
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final date = item.publishedAt;
-              return TgcgSectionCard(
-                title: item.title,
-                subtitle: [
-                  if (item.author.isNotEmpty) item.author,
-                  if (date != null) _date(date),
-                ].join(' · '),
-                child: Text(item.body, style: const TextStyle(height: 1.4)),
-              );
-            },
+          return LayoutBuilder(
+            builder: (context, constraints) => ListView.separated(
+              padding: tgcgPagePadding(constraints.maxWidth, bottom: _belowAskMe),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final date = item.publishedAt;
+                return TgcgSectionCard(
+                  title: item.title,
+                  subtitle: [
+                    if (item.author.isNotEmpty) item.author,
+                    if (date != null) _date(date),
+                  ].join(' · '),
+                  child: Text(item.body, style: TgcgType.body),
+                );
+              },
+            ),
           );
         },
       );
 }
 
+/// The account: who the member is, and everything that is theirs. Each row
+/// opens its own page. It works from what the session knows, so signing out
+/// and changing the PIN never depend on the card loading.
+class _AccountTab extends StatelessWidget {
+  const _AccountTab({
+    required this.card,
+    required this.onOpenCard,
+    required this.onOpenInvite,
+    required this.onOpenVolunteering,
+    required this.onOpenRoles,
+    required this.onOpenWallet,
+    required this.onOpenRegistered,
+  });
+
+  final Future<(MemberCard, Uint8List?)> card;
+  final VoidCallback onOpenCard;
+  final VoidCallback onOpenInvite;
+  final VoidCallback onOpenVolunteering;
+  final VoidCallback onOpenRoles;
+  final VoidCallback onOpenWallet;
+  final VoidCallback onOpenRegistered;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = TgcgSession.of(context);
+    return TgcgPageList(
+      bottomPadding: _belowAskMe,
+      children: [
+        FutureBuilder<(MemberCard, Uint8List?)>(
+          future: card,
+          builder: (context, snapshot) {
+            final card = snapshot.data?.$1;
+            final photo = snapshot.data?.$2;
+            return TgcgSectionCard(
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: TgcgColors.primary,
+                    foregroundImage: photo == null ? null : MemoryImage(photo),
+                    child: const Icon(Icons.person_rounded, color: TgcgColors.accentBright),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(session.operatorName, style: TgcgType.section),
+                        const SizedBox(height: 2),
+                        Text(
+                          session.membershipNumber ?? session.accessId,
+                          style: TgcgType.support,
+                        ),
+                        if (card != null) ...[
+                          const SizedBox(height: 6),
+                          TgcgStatusPill(
+                            compact: true,
+                            label: card.identityChecked
+                                ? 'Identity checked'
+                                : 'Identity not checked yet',
+                            color: card.identityChecked ? TgcgColors.success : TgcgColors.muted,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        const TgcgSectionHeading(title: 'Membership'),
+        TgcgRowGroup(
+          children: [
+            TgcgActionRow(
+              icon: Icons.badge_outlined,
+              title: 'Membership card',
+              detail: 'Your card, details, photo and PVC',
+              onTap: onOpenCard,
+            ),
+            TgcgActionRow(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'My wallet',
+              detail: 'Balance, TGC tokens and payout account',
+              onTap: onOpenWallet,
+            ),
+            TgcgActionRow(
+              icon: Icons.group_add_outlined,
+              title: 'Invite with your code',
+              detail: 'Your referral code and link',
+              onTap: onOpenInvite,
+            ),
+            TgcgActionRow(
+              icon: Icons.person_add_alt_1_rounded,
+              title: 'Registered members',
+              detail: 'Members you registered, and registering more',
+              onTap: onOpenRegistered,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        const TgcgSectionHeading(title: 'Taking part'),
+        TgcgRowGroup(
+          children: [
+            TgcgActionRow(
+              icon: Icons.volunteer_activism_outlined,
+              title: 'Volunteering',
+              detail: 'Your offers to help',
+              onTap: onOpenVolunteering,
+            ),
+            TgcgActionRow(
+              icon: Icons.assignment_ind_outlined,
+              title: 'Roles and access',
+              detail: 'Your appointments',
+              onTap: onOpenRoles,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        const TgcgSectionHeading(title: 'Security'),
+        TgcgRowGroup(
+          children: [
+            TgcgActionRow(
+              icon: Icons.password_rounded,
+              title: 'Change PIN',
+              onTap: () => showChangePin(context),
+            ),
+            TgcgActionRow(
+              icon: Icons.logout_rounded,
+              title: 'Sign out',
+              color: TgcgColors.danger,
+              onTap: session.signOut,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The member's referral code and link.
+class _InvitePage extends StatelessWidget {
+  const _InvitePage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: TgcgColors.canvas,
+        appBar: AppBar(title: const Text('Invite with your code')),
+        body: const SafeArea(child: TgcgPageList(children: [ReferralCard()])),
+      );
+}
+
+/// The member's own appointments.
+class _RolesPage extends StatelessWidget {
+  const _RolesPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: TgcgColors.canvas,
+        appBar: AppBar(title: const Text('Roles and access')),
+        body: const SafeArea(child: MyAccessPage(showHeader: false)),
+      );
+}
+
 /// Volunteering for party work. It is not a route to becoming an agent:
 /// coordinators accredit agents separately.
-class _VolunteerTab extends StatelessWidget {
-  const _VolunteerTab({required this.offers, required this.onChanged});
+class _VolunteerPage extends StatefulWidget {
+  const _VolunteerPage();
+
+  @override
+  State<_VolunteerPage> createState() => _VolunteerPageState();
+}
+
+class _VolunteerPageState extends State<_VolunteerPage> {
+  Future<List<VolunteerOffer>>? _offers;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _offers ??= TgcgBackend.of(context)!.member.volunteering();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: TgcgColors.canvas,
+        appBar: AppBar(title: const Text('Volunteering')),
+        body: SafeArea(
+          child: _VolunteerList(
+            offers: _offers!,
+            onChanged: () => setState(() {
+              _offers = TgcgBackend.of(context)!.member.volunteering();
+            }),
+          ),
+        ),
+      );
+}
+
+class _VolunteerList extends StatelessWidget {
+  const _VolunteerList({required this.offers, required this.onChanged});
   final Future<List<VolunteerOffer>> offers;
   final VoidCallback onChanged;
 
@@ -1115,8 +1358,7 @@ class _VolunteerTab extends StatelessWidget {
         future: offers,
         builder: (items) {
           final open = items.where((offer) => offer.isOpen).firstOrNull;
-          return ListView(
-            padding: _tabPadding,
+          return TgcgPageList(
             children: [
               TgcgSectionCard(
                 title: 'Volunteer for party work',
@@ -1134,7 +1376,7 @@ class _VolunteerTab extends StatelessWidget {
                       const Text(
                         'Your offer is with your coordinators. Withdraw it below to send a '
                         'different one.',
-                        style: TextStyle(color: TgcgColors.muted),
+                        style: TgcgType.support,
                       ),
                   ],
                 ),
@@ -1221,7 +1463,7 @@ class _OfferTile extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               offer.decisionReason,
-              style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
+              style: TgcgType.support,
             ),
           ],
           if (onWithdraw != null)
@@ -1498,37 +1740,6 @@ class _TextPromptState extends State<_TextPrompt> {
       );
 }
 
-/// For a member listed as an agent or observer whose identity is not checked
-/// yet: why they see the member app, and what happens next.
-class _WaitingRoleNote extends StatelessWidget {
-  const _WaitingRoleNote({required this.role});
-  final String role;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: TgcgColors.primarySoft,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.hourglass_top_rounded, color: TgcgColors.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'You are listed as a $role. That work starts once a coordinator has checked '
-                'your identity; then tap refresh at the top. Until then, you have everything '
-                'members have.',
-                style: const TextStyle(height: 1.4),
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
 class _Detail extends StatelessWidget {
   const _Detail(this.label, this.value, {this.action});
   final String label;
@@ -1542,11 +1753,11 @@ class _Detail extends StatelessWidget {
           children: [
             Expanded(
               flex: 2,
-              child: Text(label, style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5)),
+              child: Text(label, style: TgcgType.support),
             ),
             Expanded(
               flex: 3,
-              child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(value, style: TgcgType.bodyStrong),
             ),
             ?action,
           ],

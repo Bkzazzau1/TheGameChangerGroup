@@ -22,7 +22,7 @@ class MembershipCardView extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(TgcgRadius.lg),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -52,18 +52,18 @@ class MembershipCardView extends StatelessWidget {
                         'THE GAME CHANGER GROUP',
                         style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12.5,
-                          letterSpacing: .8,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          letterSpacing: .7,
                         ),
                       ),
                       Text(
                         'MEMBERSHIP CARD',
                         style: TextStyle(
                           color: TgcgColors.accentBright,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10.5,
-                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11.5,
+                          letterSpacing: 1.4,
                         ),
                       ),
                     ],
@@ -86,7 +86,7 @@ class MembershipCardView extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                           height: 1.15,
                         ),
                       ),
@@ -96,8 +96,8 @@ class MembershipCardView extends StatelessWidget {
                         style: const TextStyle(
                           color: TgcgColors.accentBright,
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -106,7 +106,7 @@ class MembershipCardView extends StatelessWidget {
                           '${unit.name}\n${unit.ward}, ${unit.lga}',
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Color(0xFFC9D3EC), fontSize: 11.5),
+                          style: const TextStyle(color: TgcgColors.onNavyMuted, fontSize: 12.5),
                         ),
                     ],
                   ),
@@ -130,12 +130,12 @@ class MembershipCardView extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         card.hasPvc ? 'PVC on record' : 'No PVC on record',
-                        style: const TextStyle(color: Color(0xFFC9D3EC), fontSize: 11.5),
+                        style: const TextStyle(color: TgcgColors.onNavyMuted, fontSize: 12.5),
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         'TGCG staff scan the code to check this card.',
-                        style: TextStyle(color: Color(0xFF9FB0D6), fontSize: 10.5),
+                        style: TextStyle(color: TgcgColors.onNavyMuted, fontSize: 12),
                       ),
                     ],
                   ),

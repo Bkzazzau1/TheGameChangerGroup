@@ -374,6 +374,7 @@ class TgcgSectionCard extends StatelessWidget {
     this.trailing,
     this.padding = const EdgeInsets.all(18),
     this.backgroundColor = TgcgColors.surface,
+    this.trailingBeside = false,
   });
 
   final Widget child;
@@ -382,6 +383,9 @@ class TgcgSectionCard extends StatelessWidget {
   final Widget? trailing;
   final EdgeInsets padding;
   final Color backgroundColor;
+
+  /// Keeps a short [trailing] ("See all") beside the title on a phone too.
+  final bool trailingBeside;
 
   Widget _heading() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,7 +414,7 @@ class TgcgSectionCard extends StatelessWidget {
               if (title != null || trailing != null) ...[
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    if (constraints.maxWidth < 540 && trailing != null) {
+                    if (constraints.maxWidth < 540 && trailing != null && !trailingBeside) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
