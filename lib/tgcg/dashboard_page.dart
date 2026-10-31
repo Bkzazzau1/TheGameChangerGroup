@@ -684,7 +684,6 @@ class _MembersAndExco extends StatelessWidget {
             total: members.total,
           ),
           ShareBar(label: 'Fully verified', value: members.fullyVerified, total: members.total),
-          ShareBar(label: 'Women', value: members.gender['female'] ?? 0, total: members.total),
           if (by != null && top.isNotEmpty) ...[
             const SizedBox(height: 10),
             const Text('Most members', style: TgcgType.label),
@@ -712,6 +711,30 @@ class _MembersAndExco extends StatelessWidget {
         ],
       ),
     ];
+    final jobs = members.occupationRows(limit: 6);
+    final columns = <Widget>[
+      ...panels,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Gender', style: TgcgType.bodyStrong),
+          const SizedBox(height: 6),
+          ShareBar(label: 'Men', value: members.gender['male'] ?? 0, total: members.total),
+          ShareBar(label: 'Women', value: members.gender['female'] ?? 0, total: members.total),
+          ShareBar(label: 'Not given', value: members.gender[''] ?? 0, total: members.total),
+        ],
+      ),
+      if (jobs.isNotEmpty)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Profession', style: TgcgType.bodyStrong),
+            const SizedBox(height: 6),
+            for (final (label, count) in jobs)
+              ShareBar(label: label, value: count, total: members.total),
+          ],
+        ),
+    ];
     return TgcgSectionCard(
       title: 'Members and exco',
       subtitle: by == null
@@ -730,15 +753,30 @@ class _MembersAndExco extends StatelessWidget {
         builder: (context, constraints) {
           if (constraints.maxWidth < 680) {
             return Column(
-              children: [panels[0], const SizedBox(height: TgcgSpacing.md), panels[1]],
+              children: [
+                for (final (index, column) in columns.indexed) ...[
+                  if (index > 0) const SizedBox(height: TgcgSpacing.md),
+                  column,
+                ],
+              ],
             );
           }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Two across; Gender and Profession stand under Exco and Members.
+          return Column(
             children: [
-              Expanded(child: panels[0]),
-              const SizedBox(width: TgcgSpacing.lg),
-              Expanded(child: panels[1]),
+              for (var row = 0; row < columns.length; row += 2) ...[
+                if (row > 0) const SizedBox(height: TgcgSpacing.md),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: columns[row]),
+                    const SizedBox(width: TgcgSpacing.lg),
+                    Expanded(
+                      child: row + 1 < columns.length ? columns[row + 1] : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ],
             ],
           );
         },

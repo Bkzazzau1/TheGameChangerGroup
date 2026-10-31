@@ -55,6 +55,15 @@ Map<String, dynamic> _analysis({required bool national}) => {
     'verification_sources': {'automatic': 100, 'chapter': 450, 'person': 50},
     'standing': {'active': 1192, 'suspended': 5, 'deactivated': 3},
     'gender': {'female': 480, 'male': 600, '': 120},
+    'occupations': {
+      'top': [
+        {'name': 'Students', 'count': 300},
+        {'name': 'Farmers', 'count': 250},
+        {'name': 'Housewives', 'count': 200},
+      ],
+      'other': 50,
+      'not_given': 400,
+    },
     'channel': {'self': 700, 'import': 400, 'referred': 100},
     'age': {
       'under18': 0,
@@ -116,6 +125,7 @@ Map<String, dynamic> _analysis({required bool national}) => {
     'verified': 140,
     'fully_verified': 12,
     'women': 40,
+    'men': 95,
     'profile': {'signedIn': 70},
     'by_level': {'state': 26, 'lga': 60, 'ward': 40, 'pollingUnit': 20},
     'roles': [
@@ -209,6 +219,14 @@ Map<String, dynamic> _member(String number, String name) => {
   'roles': <Map<String, dynamic>>[],
   'gaps': ['vin'],
 };
+
+/// [_analysis] as the server sends it before it counts men and occupations.
+Map<String, dynamic> _olderAnalysis() {
+  final analysis = _analysis(national: true);
+  (analysis['members'] as Map<String, dynamic>).remove('occupations');
+  (analysis['exco'] as Map<String, dynamic>).remove('men');
+  return analysis;
+}
 
 Map<String, dynamic> _emptyAnalysis() => {
   'scope': _scope('state', state: 'KD', stateName: 'Kaduna'),
@@ -346,6 +364,7 @@ void main() {
 
     expect(find.text('1,200'), findsOneWidget); // members
     expect(find.text('+310 in 30 days · +40 in 7'), findsOneWidget);
+    expect(find.text('600'), findsNWidgets(2)); // the men's tile, and identity verified
     expect(find.text('146 posts · 2 of 2 states'), findsOneWidget);
     expect(find.text('Women'), findsWidgets);
     expect(find.text('25-34'), findsOneWidget);
@@ -502,8 +521,23 @@ void main() {
     expect(identity[1].label, 'Verified profile incomplete');
 
     final gender = _barsIn(tester, 'Gender');
-    expect(gender.map((bar) => bar.label), orderedEquals(['Women', 'Men', 'Not given']));
-    expect(gender.map((bar) => bar.value), orderedEquals([480, 600, 120]));
+    expect(gender.map((bar) => bar.label), orderedEquals(['Men', 'Women', 'Not given']));
+    expect(gender.map((bar) => bar.value), orderedEquals([600, 480, 120]));
+
+    // Profession: the groups, then the rest, and every member is on a row.
+    final jobs = _barsIn(tester, 'Profession');
+    expect(
+      jobs.map((bar) => bar.label),
+      orderedEquals(['Students', 'Farmers', 'Housewives', 'Other', 'Not given']),
+    );
+    expect(jobs.map((bar) => bar.value), orderedEquals([300, 250, 200, 50, 400]));
+    expect(jobs.fold(0, (sum, bar) => sum + bar.value), 1200);
+    expect(jobs.map((bar) => bar.total), everyElement(1200));
+
+    // Exco are counted both ways too.
+    final exco = _barsIn(tester, 'Exco');
+    expect(exco.firstWhere((bar) => bar.label == 'Men').value, 95);
+    expect(exco.firstWhere((bar) => bar.label == 'Women').value, 40);
     expect(
       _barsIn(tester, 'Age').map((bar) => bar.label),
       containsAll(['Under 18', '25-34', 'Not given']),
@@ -756,6 +790,20 @@ void main() {
       listPdfName(const AreaRef(GeographyLevel.lga, 'KD-KADUNA-NORTH', 'Kaduna North'), day),
       'tgcg-members-and-exco-kaduna-north-lga-2026-10-09.pdf',
     );
+  });
+
+  testWidgets('a server that does not count these yet shows no false zero', (tester) async {
+    final server = _Server()
+      ..answer = (key, query) => switch (key) {
+        'GET members/analysis/' => _json(_olderAnalysis()),
+        'GET members/exco/' || 'GET members/' => _json(_page([])),
+        _ => null,
+      };
+    await _pumpPage(tester, server);
+
+    expect(find.text('Profession'), findsNothing);
+    expect(_barsIn(tester, 'Exco').where((bar) => bar.label == 'Men'), isEmpty);
+    expect(find.textContaining('% men'), findsNothing);
   });
 
   test('numbers are grouped and shares rounded', () {

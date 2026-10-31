@@ -46,6 +46,8 @@ class AreaRef {
 
 int _int(Object? value) => (value as num?)?.toInt() ?? 0;
 
+Map<String, dynamic> _map(Object? value) => value as Map<String, dynamic>? ?? const {};
+
 Map<String, int> _counts(Object? value) => {
   for (final MapEntry(:key, :value) in ((value as Map<String, dynamic>?) ?? const {}).entries)
     key: _int(value),
@@ -114,6 +116,9 @@ class MembersFigures {
     this.verification = const {},
     this.standing = const {},
     this.gender = const {},
+    this.occupations = const [],
+    this.otherOccupations = 0,
+    this.occupationNotGiven = 0,
     this.channel = const {},
     this.age = const {},
     this.profile = const {},
@@ -140,6 +145,28 @@ class MembersFigures {
 
   /// male, female, and '' (not given).
   final Map<String, int> gender;
+
+  /// What members do, the largest groups first: the server gathers the ways
+  /// people type the same work. Empty when it does not count them.
+  final List<(String, int)> occupations;
+
+  /// Members in the groups too small to list.
+  final int otherOccupations;
+
+  /// Members who gave no occupation.
+  final int occupationNotGiven;
+
+  /// The rows of a chart: the [limit] largest groups, then the rest and those
+  /// who gave none, so that the rows always add up to the members.
+  List<(String, int)> occupationRows({int? limit}) {
+    final shown = limit == null ? occupations : occupations.take(limit).toList();
+    final left = occupations.skip(shown.length).fold(0, (sum, row) => sum + row.$2);
+    return [
+      ...shown,
+      if (otherOccupations + left > 0) ('Other', otherOccupations + left),
+      if (occupationNotGiven > 0) ('Not given', occupationNotGiven),
+    ];
+  }
 
   /// self, assisted, ussd, import, referred.
   final Map<String, int> channel;
@@ -175,6 +202,12 @@ class MembersFigures {
     verification: _counts(json['verification']),
     standing: _counts(json['standing']),
     gender: _counts(json['gender']),
+    occupations: [
+      for (final row in (_map(json['occupations'])['top'] as List<dynamic>? ?? const []))
+        ((row as Map<String, dynamic>)['name'] as String, _int(row['count'])),
+    ],
+    otherOccupations: _int(_map(json['occupations'])['other']),
+    occupationNotGiven: _int(_map(json['occupations'])['not_given']),
     channel: _counts(json['channel']),
     age: _counts(json['age']),
     profile: _counts(json['profile']),
@@ -198,6 +231,7 @@ class ExcoFigures {
     this.verified = 0,
     this.fullyVerified = 0,
     this.women = 0,
+    this.men,
     this.profile = const {},
     this.byLevel = const {},
     this.roles = const [],
@@ -214,6 +248,9 @@ class ExcoFigures {
   final int verified;
   final int fullyVerified;
   final int women;
+
+  /// Null from a server that does not count them: not the same as none.
+  final int? men;
   final Map<String, int> profile;
 
   /// Posts at each level (state, senatorialDistrict, lga, ward, pollingUnit).
@@ -230,6 +267,7 @@ class ExcoFigures {
     verified: _int(json['verified']),
     fullyVerified: _int(json['fully_verified']),
     women: _int(json['women']),
+    men: json['men'] == null ? null : _int(json['men']),
     profile: _counts(json['profile']),
     byLevel: _counts(json['by_level']),
     roles: [
@@ -251,6 +289,7 @@ class AreaFigures {
     this.verified = 0,
     this.fullyVerified = 0,
     this.women = 0,
+    this.men,
     this.new30Days = 0,
     this.exco = 0,
     this.excoPeople = 0,
@@ -261,6 +300,9 @@ class AreaFigures {
   final int verified;
   final int fullyVerified;
   final int women;
+
+  /// Null from a server that does not count them: not the same as none.
+  final int? men;
   final int new30Days;
 
   /// Exco posts in the area, and the people holding them.
@@ -321,6 +363,7 @@ class MemberAnalysis {
               verified: _int(part['verified']),
               fullyVerified: _int(part['fully_verified']),
               women: _int(part['women']),
+              men: part['men'] == null ? null : _int(part['men']),
               new30Days: _int(part['new_30_days']),
               exco: _int(part['exco']),
               excoPeople: _int(part['exco_people']),

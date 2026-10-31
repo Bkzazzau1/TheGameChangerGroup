@@ -404,18 +404,18 @@ class _Analysis extends StatelessWidget {
                   onMembers(const _MemberSelection('Identity verified', verification: 'verified')),
             ),
             (
-              'Women',
-              formatCount(members.gender['female'] ?? 0),
-              '${share(members.gender['female'] ?? 0, total)} of members',
-              Icons.woman_outlined,
+              'Men',
+              formatCount(members.gender['male'] ?? 0),
+              '${share(members.gender['male'] ?? 0, total)} of members',
+              Icons.man_outlined,
               TgcgMetricTone.neutral,
               null,
             ),
             (
-              'VIN on record',
-              formatCount(members.profile['vin'] ?? 0),
-              '${share(members.profile['vin'] ?? 0, total)} gave a VIN',
-              Icons.badge_outlined,
+              'Women',
+              formatCount(members.gender['female'] ?? 0),
+              '${share(members.gender['female'] ?? 0, total)} of members',
+              Icons.woman_outlined,
               TgcgMetricTone.neutral,
               null,
             ),
@@ -446,13 +446,15 @@ class _Analysis extends StatelessWidget {
               title: 'Gender',
               total: total,
               rows: [
-                for (final gender in const ['female', 'male', ''])
+                for (final gender in const ['male', 'female', ''])
                   (_genderLabel(gender), members.gender[gender] ?? 0),
               ],
               footnote: members.withDisability == 0
                   ? null
                   : '${formatCount(members.withDisability)} told us of a disability.',
             ),
+            if (members.occupationRows().isNotEmpty)
+              _BarsCard(title: 'Profession', total: total, rows: members.occupationRows()),
             _BarsCard(
               title: 'How they joined',
               total: total,
@@ -885,6 +887,8 @@ class _ExcoCard extends StatelessWidget {
               value: exco.profile['signedIn'] ?? 0,
               total: exco.people,
             ),
+            if (exco.men case final men?)
+              ShareBar(label: 'Men', value: men, total: exco.people),
             ShareBar(label: 'Women', value: exco.women, total: exco.people),
             if (exco.suspended > 0)
               Text('${formatCount(exco.suspended)} posts suspended.', style: _valueStyle),
@@ -1097,6 +1101,7 @@ class _AreaRow extends StatelessWidget {
                   [
                     '${formatCount(part.exco)} exco posts',
                     '${share(part.verified, part.members)} verified',
+                    if (part.men case final men?) '${share(men, part.members)} men',
                     '${share(part.women, part.members)} women',
                     '+${formatCount(part.new30Days)} in 30 days',
                   ].join(' · '),

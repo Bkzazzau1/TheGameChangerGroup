@@ -34,6 +34,18 @@ void main() {
       expect(find.text('248,310'), findsOneWidget);
       expect(find.text('339 results awaiting a decision'), findsOneWidget);
 
+      // Men as well as women, and what members do: six groups, then the rest.
+      expect(find.text('Gender'), findsOneWidget);
+      expect(find.text('Men'), findsOneWidget);
+      expect(find.text('131,000 · 53%'), findsOneWidget);
+      expect(find.text('Women'), findsOneWidget);
+      expect(find.text('Profession'), findsOneWidget);
+      expect(find.text('Students'), findsOneWidget);
+      expect(find.text('41,200 · 17%'), findsOneWidget);
+      expect(find.text('Artisans'), findsNothing);
+      expect(find.text('20,510 · 8%'), findsOneWidget); // Other: 9,110 + 7,100 + 4,300
+      expect(find.text('66,200 · 27%'), findsOneWidget); // Not given
+
       await openModule(tester, 'Situation Room', width);
       expect(find.text('LIVE FROM SERVER'), findsOneWidget);
       expect(find.text('Ballot box snatched'), findsWidgets);
@@ -50,6 +62,10 @@ void main() {
       expect(find.text('Download list (PDF)'), findsOneWidget);
       expect(find.text('120,450'), findsOneWidget);
       expect(find.text('Positions held most'), findsOneWidget);
+      expect(find.text('131,000'), findsOneWidget); // the men's tile
+      expect(find.text('Profession'), findsOneWidget);
+      expect(find.text('Artisans'), findsOneWidget); // all the groups here
+      expect(find.textContaining('50% men · 40% women'), findsWidgets);
 
       await finish(tester);
     });
@@ -73,6 +89,7 @@ void main() {
 
     await openModule(tester, 'Members & Exco', width);
     expect(find.text('No exco here yet.'), findsOneWidget);
+    expect(find.text('Profession'), findsNothing);
 
     await finish(tester);
   });

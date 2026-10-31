@@ -156,6 +156,7 @@ Map<String, dynamic> _part(String code, String name, int members, int exco) => {
   'verified': members ~/ 2,
   'fully_verified': members ~/ 10,
   'women': members * 2 ~/ 5,
+  'men': members ~/ 2,
   'new_30_days': members ~/ 12,
   'exco': exco,
   'exco_people': exco - 2,
@@ -184,6 +185,22 @@ Map<String, dynamic> fakeAnalysis({bool empty = false}) {
       'verification_sources': {'automatic': n(18200), 'chapter': n(96100), 'person': n(6150)},
       'standing': {'active': n(247900), 'suspended': n(300), 'deactivated': n(110)},
       'gender': {'female': n(98300), 'male': n(131000), '': n(19010)},
+      'occupations': {
+        'top': empty
+            ? <Object>[]
+            : [
+                {'name': 'Students', 'count': 41200},
+                {'name': 'Farmers', 'count': 38900},
+                {'name': 'Traders and business', 'count': 31200},
+                {'name': 'Housewives', 'count': 28400},
+                {'name': 'Civil servants', 'count': 12100},
+                {'name': 'Teachers', 'count': 9800},
+                {'name': 'Artisans', 'count': 7100},
+                {'name': 'Drivers', 'count': 4300},
+              ],
+        'other': n(9110),
+        'not_given': n(66200),
+      },
       'channel': {
         'self': n(101200),
         'import': n(118300),
@@ -248,6 +265,7 @@ Map<String, dynamic> fakeAnalysis({bool empty = false}) {
       'verified': n(5210),
       'fully_verified': n(1840),
       'women': n(1520),
+      'men': n(4210),
       'profile': {'signedIn': n(3880)},
       'by_level': {'country': n(38), 'state': n(620), 'lga': n(2210), 'ward': n(3542)},
       'roles': empty
