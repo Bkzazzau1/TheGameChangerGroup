@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `82a304be9f293023f6f45fa327d2bf21e239dd5e`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `2fdd6628e497ebc855f69b458b96c02c9c318f1d`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261030-162004-32435077cb2d` (release directory timestamps use UTC).
-- Frontend build source: `3c20011` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261026-135340-9b5f6c72d92e` (lighter refreshes, `d27eef9`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261031-083347-1dda3b99ec8b` (release directory timestamps use UTC).
+- Frontend build source: `4fe79e0` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261030-162004-32435077cb2d` (premium redesign, `3c20011`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `32435077cb2dbc5559d5e13daa05ee11e00be7794c7d9c9bfa4f21903bebb233`.
-- Build: 856 files, 59,351,565 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `1dda3b99ec8b49c808ade15ccb3cf69eaa5e5f1f700f55549f096173e4c0d39c`.
+- Build: 856 files, 59,353,711 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,20 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Men and professions in the member figures (31 October 2026)
+
+From the live dashboard the owner saw women but not men, and asked for a profession summary. Backend `2fdd6628e497ebc855f69b458b96c02c9c318f1d` went live over `82a304b`, and the web build followed from frontend `4fe79e0`. There are no migrations, dependency or setting changes, and no APK: Android stays on version 5.
+
+**Server.** The member analysis now counts men in exco and in each smaller area, and adds `members.occupations`. Occupation is free text, so `apps/membership/occupations.py` gathers the same work typed different ways into groups, including some common Hausa words, and anything else keeps the member's own words. The analysis lists the 12 largest groups, then `other` and `not_given`, so every member is on a row. Words only one member typed stay in `other`, because they could point to that person. The result is shared for `SUMMARY_CACHE_SECONDS` like the rest of the analysis, and permissions are unchanged.
+
+**Web.** The dashboard's Members and exco card gains Gender and Profession columns. Members & Exco gains a Men tile (in place of VIN on record, which stays on the "What their profiles hold" card), a Profession chart, men on the exco card and men in each area's line. From a server that does not send these counts, the rows stay hidden rather than showing a false zero.
+
+**Validation.** **712 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips; the throwaway databases were removed. Locally, 685 passed and 27 were skipped. **431 Flutter tests** passed and analysis was clean. The build scan found no secrets, and all 856 uploaded files matched the local checksums.
+
+**Deployment** (`/opt/tgcg/deployment/release-20261031/`, a systemd job: backup, then `deploy.sh`). The guards required a clean checkout at `82a304b` and no dependency, static or migration changes. The API was stopped for the fast-forward and `check --deploy`, confirmed nothing was pending, restarted within seconds and passed health. The website then moved to `/var/www/tgcg/releases/web-20261031-083347-1dda3b99ec8b` and the frontend checkout to `4fe79e0`.
+
+**After going live.** The app, a referral link, the APK download and the administration login returned 200; anonymous analysis and session calls returned 401; the public JavaScript checksum matched `1dda3b99…`. Chrome drew the live sign-in page at 390 and 320 wide under phone emulation with no page errors. The first 174 requests after the update had no server errors, and the API log showed none. Backups succeeded before and after. No data was changed. The figures themselves were not read on production: the owner checks them when signed in.
 
 ### Premium redesign live, maintenance ended (30 October 2026)
 
