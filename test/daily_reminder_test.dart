@@ -313,7 +313,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(asked, ['me/assignments/']);
+    expect(asked, unorderedEquals(['me/assignments/', 'me/popups/']));
   });
 
   testWidgets('a member waiting for their identity check is told so', (tester) async {

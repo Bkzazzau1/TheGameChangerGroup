@@ -35,6 +35,7 @@ import 'mapping/unit_mapping_page.dart';
 import 'member/registered_members_page.dart';
 import 'messaging/inbox_page.dart';
 import 'messaging/messages_page.dart';
+import 'messaging/popups_page.dart';
 import 'tracking/agents_on_ground_page.dart';
 import 'ui/demo_data_notice.dart';
 import 'projects/project_mode.dart';
@@ -202,6 +203,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.wallets => const WalletPaymentsPage(),
         TgcgModule.projects => const ProjectsPage(),
         TgcgModule.messages => const MessagesPage(),
+        TgcgModule.popups => const PopupsPage(),
         TgcgModule.askMe => const AskMeHubPage(),
       };
 }
@@ -238,6 +240,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.communications, 'Communications', Icons.forum_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.bulkCommunications, 'Bulk Communications', Icons.send_to_mobile_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.messages, 'Messages', Icons.campaign_outlined, _NavGroup.coordination),
+  _Destination(TgcgModule.popups, 'Pop-up Messages', Icons.add_comment_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.discussionRoom, 'Social Forum', Icons.dynamic_feed_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.askMe, 'Ask Me', Icons.record_voice_over_outlined, _NavGroup.coordination),
   _Destination(TgcgModule.meetingRoom, 'Meeting Room', Icons.video_camera_front_outlined, _NavGroup.coordination),
@@ -616,6 +619,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.wallets => 'Wallets',
       TgcgModule.projects => 'Projects',
       TgcgModule.messages => 'Messages',
+      TgcgModule.popups => 'Pop-up Messages',
       TgcgModule.askMe => 'Ask Me',
     };
 

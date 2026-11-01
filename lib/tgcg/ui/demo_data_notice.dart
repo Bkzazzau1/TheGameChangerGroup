@@ -103,6 +103,7 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.wallets ||
     TgcgModule.projects ||
     TgcgModule.messages ||
+    TgcgModule.popups ||
     TgcgModule.unitMapping ||
     TgcgModule.agentTracking ||
     TgcgModule.situationRoom ||

@@ -38,6 +38,7 @@ enum TgcgModule {
   wallets,
   projects,
   messages,
+  popups,
   askMe,
 }
 
@@ -61,6 +62,7 @@ const liveModules = {
   TgcgModule.wallets,
   TgcgModule.projects,
   TgcgModule.messages,
+  TgcgModule.popups,
   TgcgModule.askMe,
 };
 
@@ -411,6 +413,7 @@ Set<TgcgModule> allowedModulesFor(
   ])) {
     modules.add(TgcgModule.messages);
   }
+  if (can(TgcgCapability.postPopups)) modules.add(TgcgModule.popups);
   // Wallets: payments to members, withdrawals and credit rates, for finance
   // staff in their areas and the administrators who set the rates.
   if (any(const [

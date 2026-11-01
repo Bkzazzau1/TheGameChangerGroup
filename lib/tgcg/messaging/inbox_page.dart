@@ -4,6 +4,7 @@ import '../access/access_widgets.dart' show failureMessage, formatMoment;
 import '../api/backend.dart';
 import '../api/messaging_repository.dart';
 import '../ui/tgcg_design.dart';
+import 'popup_post_dialog.dart';
 
 /// Messages sent to the signed-in member, on any channel, newest first.
 class InboxPage extends StatefulWidget {
@@ -68,7 +69,13 @@ class _InboxPageState extends State<InboxPage> {
             return TgcgSectionCard(
               title: message.title.isEmpty ? 'TGCG' : message.title,
               subtitle: message.createdAt == null ? null : formatMoment(message.createdAt!),
-              child: SelectableText(message.body, style: const TextStyle(height: 1.4)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (message.popup case final popup?) PopupPicture(id: popup),
+                  SelectableText(message.body, style: const TextStyle(height: 1.4)),
+                ],
+              ),
             );
           },
         );

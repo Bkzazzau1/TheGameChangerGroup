@@ -33,6 +33,22 @@ String formatMoment(DateTime value) =>
     '${formatDay(value)}, ${value.hour.toString().padLeft(2, '0')}:'
     '${value.minute.toString().padLeft(2, '0')}';
 
+/// A date and time from today on; null if the person backs out.
+Future<DateTime?> pickMoment(BuildContext context, DateTime? current) async {
+  final now = DateTime.now();
+  final initial = current ?? now.add(const Duration(hours: 1));
+  final day = await showDatePicker(
+    context: context,
+    firstDate: DateTime(now.year, now.month, now.day),
+    lastDate: DateTime(now.year + 2),
+    initialDate: initial.isBefore(now) ? now : initial,
+  );
+  if (day == null || !context.mounted) return null;
+  final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+  if (time == null) return null;
+  return DateTime(day.year, day.month, day.day, time.hour, time.minute);
+}
+
 /// An area as people say it; national areas read "Nigeria (nationwide)".
 String areaLabel(GeographicScope scope) =>
     scope.level == GeographyLevel.country ? 'Nigeria (nationwide)' : scope.label;

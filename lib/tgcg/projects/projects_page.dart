@@ -621,21 +621,6 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
     super.dispose();
   }
 
-  Future<DateTime?> _pickMoment(DateTime? current) async {
-    final now = DateTime.now();
-    final initial = current ?? now.add(const Duration(hours: 1));
-    final day = await showDatePicker(
-      context: context,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 2),
-      initialDate: initial.isBefore(now) ? now : initial,
-    );
-    if (day == null || !mounted) return null;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
-    if (time == null) return null;
-    return DateTime(day.year, day.month, day.day, time.hour, time.minute);
-  }
-
   Future<void> _addArea() async {
     final area = await pickArea(
       context,
@@ -715,7 +700,7 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
             ? null
             : TextButton(
                 onPressed: () async {
-                  final moment = await _pickMoment(value);
+                  final moment = await pickMoment(context, value);
                   if (moment != null) setState(() => picked(moment));
                 },
                 child: const Text('Choose'),

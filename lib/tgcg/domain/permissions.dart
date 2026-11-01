@@ -93,6 +93,8 @@ enum TgcgCapability {
   sendSms,
   sendWhatsApp,
   sendPushNotifications,
+  // Pop-up messages to everyone, held nationwide.
+  postPopups,
   // Security officers answer the incidents the Situation Room sends them.
   respondToSecurity,
   // Ask Me: reviewers draft its library and review answers; a National

@@ -169,18 +169,28 @@ class SavedList {
 }
 
 class InboxMessage {
-  const InboxMessage({required this.id, required this.body, this.title = '', this.createdAt});
+  const InboxMessage({
+    required this.id,
+    required this.body,
+    this.title = '',
+    this.createdAt,
+    this.popup,
+  });
 
   final String id;
   final String title;
   final String body;
   final DateTime? createdAt;
 
+  /// The pop-up whose picture goes with this message, if it has one.
+  final String? popup;
+
   factory InboxMessage.fromJson(Map<String, dynamic> json) => InboxMessage(
     id: json['id'] as String,
     title: json['title'] as String? ?? '',
     body: json['body'] as String,
     createdAt: _date(json['created_at']),
+    popup: json['popup'] as String?,
   );
 }
 

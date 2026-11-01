@@ -9,12 +9,15 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
+import 'package:tgcg_emcop/tgcg/api/popups_repository.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/election/daily_reminder.dart';
 import 'package:tgcg_emcop/tgcg/election/election_countdown.dart';
 import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_profile.dart';
+import 'package:tgcg_emcop/tgcg/messaging/popup_post_dialog.dart';
+import 'package:tgcg_emcop/tgcg/messaging/popups_page.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 import 'package:tgcg_emcop/tgcg/ui/tgcg_design.dart';
 import 'package:tgcg_emcop/tgcg/ui/tgcg_theme.dart';
@@ -240,6 +243,49 @@ void main() {
       );
       await tester.pumpAndSettle();
       await _shot(tester, 'daily-reminder-$tag');
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+
+    testWidgets('pop-up messages at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, size);
+      final picture = File('assets/brand/login_poster.webp').readAsBytesSync();
+      const post = PopupPost(
+        id: 'p1',
+        title: 'Rally at Murtala Square on Saturday',
+        body: 'All members are invited. Come with your membership card, and bring a neighbour.',
+        frequency: 'daily',
+        linkUrl: 'https://tgcg.online/rally',
+        linkLabel: 'Read more',
+      );
+      await tester.pumpWidget(
+        _framed(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: tgcgTheme(),
+            home: Scaffold(
+              backgroundColor: Colors.black54,
+              body: Center(child: PopupPostDialog(post: post, picture: picture)),
+            ),
+          ),
+        ),
+      );
+      await tester.runAsync(
+        () => precacheImage(MemoryImage(picture), tester.element(find.byType(PopupPostDialog))),
+      );
+      await tester.pump();
+      await _shot(tester, 'popup-post-$tag');
+
+      await tester.pumpWidget(
+        _framed(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: tgcgTheme(),
+            home: const Scaffold(backgroundColor: Colors.black54, body: PopupFormDialog()),
+          ),
+        ),
+      );
+      await _shot(tester, 'popup-form-$tag');
       debugDisableShadows = true;
     }, skip: !_enabled);
 

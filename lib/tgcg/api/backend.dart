@@ -13,6 +13,7 @@ import 'meetings_repository.dart';
 import 'overview_repository.dart';
 import 'member_repository.dart';
 import 'messaging_repository.dart';
+import 'popups_repository.dart';
 import 'projects_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
@@ -39,6 +40,7 @@ class BackendServices {
         wallets = WalletRepository(client),
         projects = ProjectsRepository(client),
         messaging = MessagingRepository(client),
+        popups = PopupsRepository(client),
         security = SecurityRepository(client);
 
   factory BackendServices.connect(
@@ -97,6 +99,9 @@ class BackendServices {
 
   /// Bulk messages, saved lists, the inbox and phones for app notifications.
   final MessagingRepository messaging;
+
+  /// Messages that pop up for everyone.
+  final PopupsRepository popups;
 
   /// Incidents the Situation Room sends to security officers, and their answers.
   final SecurityRepository security;
