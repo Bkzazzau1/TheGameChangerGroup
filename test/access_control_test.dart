@@ -290,6 +290,16 @@ void main() {
                 },
               ],
             }),
+          'members/TGCG-000300/' => _json({
+              'membership_number': 'TGCG-000300',
+              'full_name': 'Bala Musa',
+              'verification_status': status,
+              'membership_state': 'active',
+              'scope': _kaduna,
+              'phone_number': null,
+              'sensitive_visible': false,
+              'roles': <Object>[],
+            }),
           'members/TGCG-000300/verification/' => _json(verification()),
           'members/TGCG-000300/verification/approve/' => () {
               status = 'verified';
@@ -318,11 +328,11 @@ void main() {
     expect(find.text('No authoritative INEC source is connected.'), findsOneWidget);
     expect(find.byIcon(Icons.help_outline_rounded), findsNWidgets(2)); // not available
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Confirm identity'));
+    await tester.tap(find.text('Approve'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'Compared the PVC with Bala in person.');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Confirm identity').last);
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve').last);
     await tester.pumpAndSettle();
 
     expect(jsonDecode(server.bodies['POST members/TGCG-000300/verification/approve/']!), {
@@ -348,6 +358,16 @@ void main() {
                   'roles': <Object>[],
                 },
               ],
+            }),
+          'members/TGCG-000301/' => _json({
+              'membership_number': 'TGCG-000301',
+              'full_name': 'Hauwa Sani',
+              'verification_status': 'verified',
+              'membership_state': 'active',
+              'scope': _kaduna,
+              'phone_number': null,
+              'sensitive_visible': false,
+              'roles': <Object>[],
             }),
           'members/TGCG-000301/verification/' => _json({
               'membership_number': 'TGCG-000301',

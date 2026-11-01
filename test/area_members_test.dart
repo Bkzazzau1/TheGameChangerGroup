@@ -139,6 +139,7 @@ void main() {
             _member('TGCG-000202', 'Ada Sani'),
           ],
         }),
+        'GET members/TGCG-000201/' => _json(_member('TGCG-000201', 'Musa Bello')),
         _ => null,
       };
     await tester.runAsync(() => LgaWards.load('KD-ZARIA'));
@@ -181,17 +182,17 @@ void main() {
     await tester.tap(find.text('Musa Bello'));
     await tester.pumpAndSettle();
     for (final (label, value) in [
-      ('Roles', 'PU Organising Officer'),
-      ('Phone', '+2348030000001 (not confirmed)'),
-      ('Gender', 'Male'),
-      ('Date of birth', '1 May 1990'),
+      ('Phone', '+2348030000001'),
+      ('Phone confirmed', 'No'),
+      ('Gender', 'Man'),
       ('Occupation', 'Trader'),
-      ('Joined through', "A chapter's list"),
-      ('PVC', 'Not added'),
+      ('How they joined', "From a chapter's list"),
+      ('Voter card', 'No VIN'),
     ]) {
-      expect(find.text(label), findsOneWidget, reason: label);
-      expect(find.text(value), findsOneWidget, reason: value);
+      expect(find.text(label), findsWidgets, reason: label);
+      expect(find.text(value), findsWidgets, reason: value);
     }
+    expect(find.textContaining('1 May 1990'), findsOneWidget);
   });
 
   testWidgets('without member access a ward lists its polling units only', (tester) async {

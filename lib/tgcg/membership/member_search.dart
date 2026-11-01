@@ -3,15 +3,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../access/access_widgets.dart' show failureMessage, formatDay, formatMoment;
+import '../access/access_widgets.dart' show failureMessage;
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
-import '../api/member_repository.dart' show disabilityText;
 import '../api/reference_repository.dart' show RegistrationPlace;
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import '../ui/tgcg_figures.dart' show formatCount;
-import 'members_exco_page.dart' show ageOn, levelLabel, standingChips;
+import 'member_profile.dart';
+import 'members_exco_page.dart' show levelLabel, standingChips;
 
 /// The status choices: (label, show, verification status, membership state).
 const memberStatusFilters = <(String, String?, String?, String?)>[
@@ -49,7 +49,7 @@ String postLabel(MemberPost post) {
   return where.isEmpty ? post.roleName : '${post.roleName} · $where';
 }
 
-Color _standingColor(String verification, bool complete, String membershipState) {
+Color standingColor(String verification, bool complete, String membershipState) {
   if (membershipState != 'active') return TgcgColors.danger;
   return switch (verification) {
     'verified' => complete ? TgcgColors.success : TgcgColors.info,
@@ -411,7 +411,7 @@ class _MemberSearchState extends State<MemberSearch> {
                   ? OutlinedButton(onPressed: _clear, child: const Text('Clear all'))
                   : null,
             ),
-          _ResultGrid(members: _members),
+          _ResultGrid(members: _members, onChanged: () => unawaited(_load())),
           if (_loading) const LinearProgressIndicator(minHeight: 2),
           if (_more && !_loading)
             Center(
@@ -571,9 +571,12 @@ class _ChoiceMenu extends StatelessWidget {
 }
 
 class _ResultGrid extends StatelessWidget {
-  const _ResultGrid({required this.members});
+  const _ResultGrid({required this.members, required this.onChanged});
 
   final List<StaffMember> members;
+
+  /// After a decision on one of them from their profile.
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -592,7 +595,7 @@ class _ResultGrid extends StatelessWidget {
           for (final member in members)
             SizedBox(
               width: width,
-              child: MemberCard(member: member),
+              child: MemberCard(member: member, onChanged: onChanged),
             ),
         ],
       );
@@ -602,14 +605,17 @@ class _ResultGrid extends StatelessWidget {
 
 /// One member in search results: who, where, their posts and their standing.
 class MemberCard extends StatelessWidget {
-  const MemberCard({super.key, required this.member});
+  const MemberCard({super.key, required this.member, this.onChanged});
 
   final StaffMember member;
+
+  /// After a decision on this member from their profile.
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
     final place = placeOf(member.scope);
-    final color = _standingColor(
+    final color = standingColor(
       member.verificationStatus,
       member.gaps.isEmpty,
       member.membershipState,
@@ -620,7 +626,7 @@ class MemberCard extends StatelessWidget {
       child: InkWell(
         key: ValueKey('member-${member.membershipNumber}'),
         borderRadius: BorderRadius.circular(16),
-        onTap: () => showMemberDetails(context, member.membershipNumber, member: member),
+        onTap: () => showMemberDetails(context, member.membershipNumber, onChanged: onChanged),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -721,324 +727,6 @@ class _PostChip extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
-      ),
-    );
-  }
-}
-
-// --- one member's profile -----------------------------------------------------------
-
-/// Everything on record about a member that this account may see.
-Future<void> showMemberDetails(BuildContext context, String number, {StaffMember? member}) =>
-    showDialog<void>(
-      context: context,
-      builder: (_) => _MemberProfile(number: number),
-    );
-
-class _MemberProfile extends StatefulWidget {
-  const _MemberProfile({required this.number});
-
-  final String number;
-
-  @override
-  State<_MemberProfile> createState() => _MemberProfileState();
-}
-
-class _MemberProfileState extends State<_MemberProfile> {
-  Future<StaffMember>? _member;
-  Future<Uint8List>? _photo;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final backend = TgcgBackend.of(context)!;
-    _member ??= backend.members.member(widget.number);
-  }
-
-  Future<Uint8List>? _photoOf(StaffMember member) {
-    if (!member.sensitiveVisible || member.photoUrl == null) return null;
-    return _photo ??= TgcgBackend.of(context)!.members.photo(member.membershipNumber);
-  }
-
-  @override
-  Widget build(BuildContext context) => Dialog(
-    insetPadding: const EdgeInsets.all(16),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 560),
-      child: FutureBuilder<StaffMember>(
-        future: _member,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                failureMessage(snapshot.error!),
-                style: const TextStyle(color: TgcgColors.danger),
-              ),
-            );
-          }
-          final member = snapshot.data;
-          if (member == null) {
-            return const Padding(
-              padding: EdgeInsets.all(24),
-              child: LinearProgressIndicator(minHeight: 2),
-            );
-          }
-          return _ProfileBody(member: member, photo: _photoOf(member));
-        },
-      ),
-    ),
-  );
-}
-
-class _ProfileBody extends StatelessWidget {
-  const _ProfileBody({required this.member, required this.photo});
-
-  final StaffMember member;
-  final Future<Uint8List>? photo;
-
-  @override
-  Widget build(BuildContext context) {
-    final age = ageOn(member.dateOfBirth, DateTime.now());
-    final color = _standingColor(
-      member.verificationStatus,
-      member.gaps.isEmpty,
-      member.membershipState,
-    );
-    final scope = member.scope;
-    String place(String? name, String? code) => [
-      if (name != null && name.isNotEmpty) name,
-      if (code != null && code.isNotEmpty && code != name) code,
-    ].join(' · ');
-    String assigned(String? name, String? code) {
-      final value = place(name, code);
-      return value.isEmpty ? 'Not assigned' : value;
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              FutureBuilder<Uint8List>(
-                future: photo,
-                builder: (context, snapshot) => MemberAvatar(
-                  name: member.displayName,
-                  color: color,
-                  size: 64,
-                  photo: snapshot.data,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member.displayName,
-                      style: const TextStyle(
-                        color: TgcgColors.ink,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SelectableText(
-                      member.membershipNumber,
-                      style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: standingChips(
-              verificationStatus: member.verificationStatus,
-              verifiedHow: member.verifiedHow,
-              gaps: member.gaps,
-              signedIn: member.signedIn,
-              membershipState: member.membershipState,
-            ),
-          ),
-          _Section(
-            title: 'Positions',
-            children: member.posts.isEmpty
-                ? [const _Line('None', 'An ordinary member')]
-                : [
-                    for (final post in member.posts)
-                      _Line(
-                        post.roleName,
-                        [
-                          if (post.areaName.isNotEmpty)
-                            post.areaLevel == null || post.areaLevel == GeographyLevel.country
-                                ? post.areaName
-                                : '${post.areaName} ${levelLabel(post.areaLevel!)}',
-                          if (post.state != 'active') post.state,
-                        ].join(' · '),
-                      ),
-                  ],
-          ),
-          _Section(
-            title: 'Contact',
-            children: [
-              _Line(
-                'Phone',
-                member.sensitiveVisible
-                    ? member.phoneNumber ?? 'Not provided'
-                    : 'Hidden for your role',
-                selectable: member.sensitiveVisible,
-              ),
-              if (member.sensitiveVisible && (member.whatsappNumber ?? '').isNotEmpty)
-                _Line('WhatsApp', member.whatsappNumber!, selectable: true),
-              if (member.sensitiveVisible && (member.email ?? '').isNotEmpty)
-                _Line('Email', member.email!, selectable: true),
-            ],
-          ),
-          _Section(
-            title: 'Registration',
-            children: [
-              if (member.createdAt != null) _Line('Joined', formatDay(member.createdAt!)),
-              if (member.updatedAt != null) _Line('Last updated', formatMoment(member.updatedAt!)),
-              _Line('How they joined', channelLabel(member.registrationChannel)),
-              _Line('Membership', switch (member.membershipState) {
-                'suspended' => 'Suspended',
-                'deactivated' => 'Deactivated',
-                _ => 'Active',
-              }),
-            ],
-          ),
-          _Section(
-            title: 'Registered location',
-            children: [
-              if (scope.zoneId != null) _Line('Zone', place(scope.zoneName, scope.zoneId)),
-              _Line('State', assigned(scope.stateName, scope.stateId)),
-              if (scope.senatorialDistrictId != null)
-                _Line('District', place(scope.senatorialDistrictName, scope.senatorialDistrictId)),
-              _Line('LGA', assigned(scope.lgaName, scope.lgaId)),
-              _Line('Ward', assigned(scope.wardName, scope.wardId)),
-              _Line('Polling unit', assigned(scope.pollingUnitName, scope.pollingUnitId)),
-              if (member.pollingUnitFromList) _Line('Unit selection', 'Chosen from the list'),
-            ],
-          ),
-          _Section(
-            title: 'Identity & profile',
-            children: [
-              _Line('Identity', verificationLabel(member.verificationStatus)),
-              if (member.verifiedAt != null) _Line('Verified on', formatMoment(member.verifiedAt!)),
-              _Line(
-                'Voter card',
-                member.hasPvc
-                    ? member.sensitiveVisible && member.vin != null
-                          ? 'VIN ${member.vin}'
-                          : 'VIN on record'
-                    : 'No VIN',
-              ),
-              if (member.gender.isNotEmpty)
-                _Line('Gender', member.gender == 'female' ? 'Woman' : 'Man'),
-              if (member.sensitiveVisible && member.dateOfBirth != null)
-                _Line(
-                  'Born',
-                  '${formatDay(member.dateOfBirth!)}${age == null ? '' : ' ($age years)'}',
-                ),
-              if (member.occupation.isNotEmpty) _Line('Occupation', member.occupation),
-            ],
-          ),
-          if (member.sensitiveVisible && member.disabilities.isNotEmpty)
-            _Section(
-              title: 'Accessibility',
-              children: [
-                _Line('Disability', disabilityText(member.disabilities, member.disabilityOther)),
-              ],
-            ),
-          _Section(
-            title: 'App',
-            children: [
-              _Line('App account', member.hasAppAccount ? 'Linked' : 'None'),
-              _Line(
-                'Signed in',
-                member.lastSignIn != null
-                    ? 'Last on ${formatMoment(member.lastSignIn!)}'
-                    : member.hasAppAccount
-                    ? 'Never'
-                    : 'No app account',
-              ),
-              _Line('Phone confirmed', member.phoneVerified ? 'Yes' : 'No'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 18),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title.toUpperCase(),
-          style: TgcgType.eyebrow,
-        ),
-        const SizedBox(height: 6),
-        ...children,
-      ],
-    ),
-  );
-}
-
-class _Line extends StatelessWidget {
-  const _Line(this.label, this.value, {this.selectable = false});
-
-  final String label;
-  final String value;
-  final bool selectable;
-
-  @override
-  Widget build(BuildContext context) {
-    const valueStyle = TextStyle(color: TgcgColors.ink, fontSize: 13, fontWeight: FontWeight.w600);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final labelWidget = Text(
-            label,
-            style: const TextStyle(color: TgcgColors.muted, fontSize: 12.5),
-          );
-          final valueWidget = selectable
-              ? SelectableText(value, style: valueStyle)
-              : Text(value, style: valueStyle);
-          if (constraints.maxWidth < 340) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [labelWidget, const SizedBox(height: 2), valueWidget],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: 150, child: labelWidget),
-              Expanded(child: valueWidget),
-            ],
-          );
-        },
       ),
     );
   }

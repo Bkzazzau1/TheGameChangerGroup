@@ -12,6 +12,7 @@ import '../api/member_admin_repository.dart';
 import '../domain/permissions.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'member_profile.dart';
 
 /// Identity review, polling unit changes and membership standing, for the
 /// coordinators the server allows in each member's area.
@@ -275,224 +276,16 @@ class _IdentityReviewTab extends StatelessWidget {
     ],
     initialFilter: 0,
     emptyTitle: 'No identities to review',
-    onOpen: (member) => showDialog<bool>(
-      context: context,
-      builder: (_) => IdentityReviewDialog(member: member),
-    ),
-  );
-}
-
-/// What the system could and could not check, and the reviewer's decision.
-class IdentityReviewDialog extends StatefulWidget {
-  const IdentityReviewDialog({super.key, required this.member});
-
-  final StaffMember member;
-
-  @override
-  State<IdentityReviewDialog> createState() => _IdentityReviewDialogState();
-}
-
-class _IdentityReviewDialogState extends State<IdentityReviewDialog> {
-  late Future<MemberVerification> _verification;
-  Future<Uint8List>? _photo;
-  bool _changed = false;
-  bool _busy = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final members = TgcgBackend.of(context)!.members;
-    _verification = members.verification(widget.member.membershipNumber);
-    if (widget.member.sensitiveVisible && widget.member.photoUrl != null) {
-      _photo ??= members.photo(widget.member.membershipNumber);
-    }
-  }
-
-  Future<void> _run(
-    Future<MemberVerification> Function(MemberAdminRepository members) action,
-    String done,
-  ) async {
-    final members = TgcgBackend.of(context)!.members;
-    setState(() => _busy = true);
-    try {
-      final result = action(members);
-      await result;
-      if (!mounted) return;
-      setState(() {
-        _verification = result;
-        _changed = true;
-      });
-      showDone(context, done);
-    } catch (error) {
-      if (mounted) showFailure(context, error);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _approve() async {
-    final notes = await promptText(
-      context,
-      title: 'Confirm ${widget.member.displayName}\'s identity?',
-      message:
-          'Record what you checked yourself, for example that you compared the PVC with '
-          'the person in front of you. Do not write the VIN or phone number here.',
-      label: 'What you checked and how',
-      action: 'Confirm identity',
-      required: true,
-    );
-    if (notes == null) return;
-    await _run(
-      (members) => members.approveIdentity(widget.member.membershipNumber, notes),
-      'Identity confirmed.',
-    );
-  }
-
-  Future<void> _reject() async {
-    final reason = await promptText(
-      context,
-      title: 'Reject ${widget.member.displayName}\'s identity?',
-      message:
-          'Any appointments they hold stop at once, and they cannot be appointed until '
-          'their identity is confirmed.',
-      label: 'Why it could not be confirmed',
-      action: 'Reject',
-      required: true,
-      destructive: true,
-    );
-    if (reason == null) return;
-    await _run(
-      (members) => members.rejectIdentity(widget.member.membershipNumber, reason),
-      'Identity rejected.',
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.member.displayName),
-    content: SizedBox(
-      width: 560,
-      child: FutureBuilder<MemberVerification>(
-        future: _verification,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Text(failureMessage(snapshot.error!));
-          final verification = snapshot.data;
-          if (verification == null) return const LinearProgressIndicator();
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_photo != null)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 14),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: FutureBuilder<Uint8List>(
-                            future: _photo,
-                            builder: (context, photo) => photo.hasData
-                                ? Image.memory(
-                                    photo.data!,
-                                    width: 96,
-                                    height: 96,
-                                    fit: BoxFit.cover,
-                                  )
-                                : const SizedBox(width: 96, height: 96),
-                          ),
-                        ),
-                      ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.member.membershipNumber),
-                          Text(
-                            areaLabel(widget.member.scope),
-                            style: const TextStyle(color: TgcgColors.muted),
-                          ),
-                          const SizedBox(height: 6),
-                          verificationPill(verification.status),
-                          if (verification.reviewedBy != null)
-                            Text(
-                              'Last decision by ${verification.reviewedBy}',
-                              style: const TextStyle(color: TgcgColors.muted, fontSize: 12),
-                            )
-                          else if (verification.verifiedAutomatically)
-                            const Text(
-                              'Verified automatically',
-                              style: TextStyle(color: TgcgColors.muted, fontSize: 12),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Text('Checks', style: TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                for (final check in verification.checks)
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      switch (check.result) {
-                        'passed' => Icons.check_circle_rounded,
-                        'failed' => Icons.cancel_rounded,
-                        'pending' => Icons.hourglass_top_rounded,
-                        _ => Icons.help_outline_rounded,
-                      },
-                      color: switch (check.result) {
-                        'passed' => TgcgColors.success,
-                        'failed' => TgcgColors.danger,
-                        'pending' => TgcgColors.warning,
-                        _ => TgcgColors.muted,
-                      },
-                    ),
-                    title: Text(checkLabel(check.kind)),
-                    subtitle: Text(check.detail),
-                  ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Checks marked as not available were not performed: no authoritative INEC '
-                  'source, liveness detection or trusted reference photo is connected. '
-                  'Confirm those in person.',
-                  style: TextStyle(color: TgcgColors.muted, fontSize: 12.5, height: 1.4),
-                ),
-                if (verification.hasFailedCheck)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'A failed check must be resolved (for example by adding the PVC) '
-                      'before the identity can be confirmed.',
-                      style: TextStyle(color: TgcgColors.danger, fontSize: 12.5),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: _busy
-            ? null
-            : () => _run(
-                (members) => members.runChecks(widget.member.membershipNumber),
-                'Checks run again.',
-              ),
-        child: const Text('Run checks again'),
-      ),
-      TextButton(
-        onPressed: _busy ? null : _reject,
-        style: TextButton.styleFrom(foregroundColor: TgcgColors.danger),
-        child: const Text('Reject'),
-      ),
-      FilledButton(onPressed: _busy ? null : _approve, child: const Text('Confirm identity')),
-      TextButton(onPressed: () => Navigator.pop(context, _changed), child: const Text('Close')),
-    ],
+    onOpen: (member) async {
+      var changed = false;
+      await showMemberDetails(
+        context,
+        member.membershipNumber,
+        reviewAny: true,
+        onChanged: () => changed = true,
+      );
+      return changed;
+    },
   );
 }
 

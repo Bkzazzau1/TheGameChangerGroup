@@ -4,7 +4,9 @@ import '../access/access_widgets.dart';
 import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/member_repository.dart';
-import '../session.dart' show GeographicScope, GeographyLevel;
+import '../domain/permissions.dart';
+import '../membership/member_profile.dart';
+import '../session.dart' show GeographicScope, GeographyLevel, TgcgSession;
 import '../ui/tgcg_design.dart';
 import 'member_shell.dart' show RegisteredMemberPage;
 
@@ -107,6 +109,11 @@ class _RegisteredMembersPageState extends State<RegisteredMembersPage> {
     }
   }
 
+  /// A registrar who also decides identities can decide this one from here.
+  bool _reviews(RegisteredMember member) =>
+      member.verificationStatus == 'pendingReview' &&
+      (TgcgSession.maybeOf(context)?.can(TgcgCapability.verifyMemberIdentity) ?? false);
+
   Future<void> _open(RegisteredMember member) async {
     if (!member.canComplete) {
       showDone(context, 'Their identity has been checked, so only they or a coordinator change it.');
@@ -202,7 +209,16 @@ class _RegisteredMembersPageState extends State<RegisteredMembersPage> {
                       if (member.place.level != GeographyLevel.country) areaLabel(member.place),
                     ].join(' · '),
                   ),
-                  trailing: _statusPill(member),
+                  trailing: _reviews(member)
+                      ? TextButton(
+                          onPressed: () => showMemberDetails(
+                            context,
+                            member.membershipNumber,
+                            onChanged: _load,
+                          ),
+                          child: const Text('Review'),
+                        )
+                      : _statusPill(member),
                   onTap: () => _open(member),
                 ),
               ),

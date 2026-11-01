@@ -523,6 +523,9 @@ class MemberAdminRepository {
 
   Future<Uint8List> photo(String number) => client.getBytes('members/$number/photo/');
 
+  /// The photo of the member's voter card, for whoever decides their identity.
+  Future<Uint8List> cardPhoto(String number) => client.getBytes('members/$number/card-photo/');
+
   Future<ApiPage<PollingUnitChange>> pollingUnitChanges({String? status, int offset = 0}) async =>
       ApiPage.fromJson(
         await client.get(

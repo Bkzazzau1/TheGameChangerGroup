@@ -10,6 +10,7 @@ import '../media/save_download.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
 import '../ui/tgcg_figures.dart';
+import 'member_profile.dart';
 import 'member_search.dart';
 
 String levelLabel(GeographyLevel level) => switch (level) {
@@ -1246,7 +1247,7 @@ class _ExcoListState extends State<_ExcoList> {
           ),
         );
       }
-      rows.add(_ExcoRow(post: post));
+      rows.add(_ExcoRow(post: post, onChanged: _load));
     }
     return TgcgSectionCard(
       padding: const EdgeInsets.all(16),
@@ -1398,15 +1399,18 @@ List<Widget> standingChips({
 }
 
 class _ExcoRow extends StatelessWidget {
-  const _ExcoRow({required this.post});
+  const _ExcoRow({required this.post, required this.onChanged});
 
   final ExcoPost post;
+
+  /// After a decision on this person from their profile.
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
     final holder = post.holder;
     return InkWell(
-      onTap: () => showMemberDetails(context, holder.membershipNumber),
+      onTap: () => showMemberDetails(context, holder.membershipNumber, onChanged: onChanged),
       borderRadius: BorderRadius.circular(TgcgRadius.sm),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
@@ -1605,7 +1609,7 @@ class _MembersListState extends State<_MembersList> {
             padding: EdgeInsets.symmetric(vertical: 14),
             child: Text('No members found.', style: _valueStyle),
           ),
-        for (final member in _members) _MemberRow(member: member),
+        for (final member in _members) _MemberRow(member: member, onChanged: _load),
         if (_loading) const LinearProgressIndicator(minHeight: 2),
         if (_more && !_loading)
           TextButton(onPressed: () => _load(more: true), child: const Text('Show more')),
@@ -1622,15 +1626,18 @@ int? ageOn(DateTime? born, DateTime today) {
 }
 
 class _MemberRow extends StatelessWidget {
-  const _MemberRow({required this.member});
+  const _MemberRow({required this.member, required this.onChanged});
 
   final StaffMember member;
+
+  /// After a decision on this member from their profile.
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
     final age = ageOn(member.dateOfBirth, DateTime.now());
     return InkWell(
-      onTap: () => showMemberDetails(context, member.membershipNumber, member: member),
+      onTap: () => showMemberDetails(context, member.membershipNumber, onChanged: onChanged),
       borderRadius: BorderRadius.circular(TgcgRadius.sm),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),

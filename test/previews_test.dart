@@ -12,11 +12,13 @@ import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
+import 'package:tgcg_emcop/tgcg/membership/member_profile.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
 import 'package:tgcg_emcop/tgcg/ui/tgcg_theme.dart';
 
 import 'support/command_fixtures.dart';
 import 'support/redesign_fixtures.dart';
+import 'support/review_fixtures.dart';
 
 const _enabled = bool.fromEnvironment('TGCG_PREVIEWS');
 const _frame = ValueKey('preview-frame');
@@ -173,6 +175,45 @@ void main() {
       await openModule(tester, 'Members & Exco', width);
       await _shot(tester, 'command-members-$tag');
       await tester.pumpWidget(const SizedBox());
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+  }
+
+  for (final size in const [Size(360, 740), Size(390, 844), Size(1200, 860)]) {
+    final tag = size.width.round();
+
+    testWidgets('member under review at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, size);
+      // Placeholders with a person's and a card's proportions, not real people.
+      final server = ReviewServer(
+        selfie: File('assets/brand/login_poster.webp').readAsBytesSync(),
+        card: File('assets/brand/tgcg_logo.png').readAsBytesSync(),
+      );
+      final session = reviewerSession(const {'verifyMemberIdentity', 'viewMemberSensitiveData'});
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        _framed(
+          memberApp(
+            server.connect(),
+            session,
+            Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showMemberDetails(context, reviewedNumber),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      for (var round = 0; round < 6; round++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await _shot(tester, 'review-profile-$tag');
       debugDisableShadows = true;
     }, skip: !_enabled);
   }

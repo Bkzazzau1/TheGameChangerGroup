@@ -89,6 +89,15 @@ BackendServices _backend() => BackendServices.connect(
                 },
               ],
             }),
+          'members/TGCG-000300/' => _json({
+                'membership_number': 'TGCG-000300',
+                'full_name': 'Oluwaseun Adebayo-Mohammed',
+                'verification_status': 'pendingReview',
+                'membership_state': 'active',
+                'scope': _kaduna,
+                'sensitive_visible': false,
+                'roles': <Object>[],
+              }),
           'members/TGCG-000300/verification/' => _json({
               'membership_number': 'TGCG-000300',
               'verification_status': 'pendingReview',

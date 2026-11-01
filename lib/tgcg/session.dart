@@ -273,6 +273,10 @@ class TgcgSession extends InheritedNotifier<TgcgSessionController> {
     required super.child,
   }) : super(notifier: controller);
 
+  /// The session, when the page has one.
+  static TgcgSessionController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<TgcgSession>()?.notifier;
+
   static TgcgSessionController of(BuildContext context, {bool listen = true}) {
     if (listen) {
       final value =
