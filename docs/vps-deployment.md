@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `99f152c74d4085c9ce29355e23dc489df9325a0d`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `0a52d7d72084dfc278aa31639c806d6b8aa5884e`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261101-142918-24a70177e9d5` (release directory timestamps use UTC).
-- Frontend build source: `afa918d` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261101-141351-49c21eae722c` (daily reminder, `cc2533a`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261101-154116-20ecbad5f650` (release directory timestamps use UTC).
+- Frontend build source: `9b2ab40` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261101-142918-24a70177e9d5` (election watch, `afa918d`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `24a70177e9d53b21570abef35bff48ca80fa0baca22b5ab49344655f9dc798c0`.
-- Build: 856 files, 59,385,229 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `20ecbad5f650acab30d7804f058062aa78f7c54291fd655872f2385c6a9c3474`.
+- Build: 856 files, 59,407,420 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -176,6 +176,19 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
+### Pop-up messages, in-app notices and disability figures (1 November 2026)
+
+Backend `0a52d7d` over `99f152c`, and frontend `9b2ab40`, on the owner's word. The owner asked that the National Administrator and National Secretary can post pop-ups to everyone, with a picture, choosing how often people see them, with the daily countdown staying when nothing is posted; and that anyone approved or given a position sees it in the in-app notifications.
+
+- **Posting:** the new `postPopups` power, held for all of Nigeria. A message has a title, words, a picture, a button with an https link and dates, and shows once, every sign-in, daily or weekly. How often is kept per account and device. A posted message can be stopped, not changed or removed; both are audited.
+- **Showing:** a message that is due takes the place of the countdown, with the day's assignments below it. With none due the countdown shows as before.
+- **Notices:** `notify()` saved nothing unless SMS or Firebase was ready, and neither is, so notices had not been reaching the inbox. A notice now always has a delivery on the `app` channel, outside `Channel`, which drives the bulk-send powers. Being approved and being given a position now send one, never by SMS. Members approved or in a position also keep posted pop-ups in their inbox; pop-ups are merged when the inbox is read, not copied to each person.
+- **Not done:** `postPopups` was not added to the National Secretary role. Reading the live roles was refused by this deployment's safeguards, so the name and holders could not be checked. The owner ticks it under Roles & Access, or allows the read. Role sync stayed off, as in every release, so the stored system role does not list the power and an administrator appointed through a role, rather than the legacy `TGCG` account, would need the sync; that account holds it from the code. Neither was confirmed on a signed-in production account.
+
+**747 PostgreSQL tests** passed with 0 skipped in the isolated run at `0a52d7d`, on fresh throwaway databases, and **526 Flutter tests** passed with analysis clean. With the API stopped, `migrate.py` applied exactly `announcements.0002_popups_and_inbox_notices` and `messaging.0003_popups_and_inbox_notices`, with the role-sync receiver disconnected. **Zero migrations are pending.** Fingerprints matched before and after: **92 roles, 2,412 appointments, 129 delegation grants**. A backup preceded the deployment and `20261101T154822Z-ZfXy2g` followed it.
+
+All 856 uploaded files matched the local checksums, the public checksum matched `20ecbad5…`, health passed, and Chrome drew the live sign-in page at 390 and 320 wide. Anonymous `/me/popups/` and `/popups/` return 401. One 502 fell in the seconds the API was stopped; there were no other server errors in the 30 minutes checked. Android stays at version 5.
+
 ### Analogue election watch (1 November 2026)
 
 Web only, the same afternoon, from frontend `afa918d`, at the owner's word to publish: the server stays at `99f152c`. The countdown is now an analogue watch on Nigerian time, whatever time zone a phone is set to: three hands that tick every second, the day count in a window on the dial, and a gold ring that runs down through the day. At midnight in Nigeria the count falls by one and the ring fills again. The member's home and the daily reminder also show what is left of the day in figures; the dashboard band and the agent's home carry smaller watches. The count itself is unchanged: Nigerian calendar days to `nextPresidentialElection`.
@@ -188,7 +201,7 @@ Web only, from frontend `cc2533a`: the server stays at `99f152c`. The owner aske
 
 **The reminder is live on the website.** It comes once in 24 hours per account and device, remembered in the browser, and needs nothing new from the server: it reads each person's own appointments, projects, security dispatches, membership card and, for reviewers, the counts waiting. It lists only what it found, never says that nothing is waiting, and says so when a part could not be checked. It waits for an open page to close, goes on sign-out, and after the election comes only for assignments.
 
-**The disability card waits for the server.** Backend `ee6ac97` (pushed, not deployed; no migration) adds `disability_men` and `disability_women` to the member analysis, for the area and each smaller area. Until it is deployed the page keeps its single line. The figures are counts of members who told us; nothing names anyone, and everyone who can open an area on Members & Exco sees them, as they already saw the total.
+**The disability card waited for the server.** Backend `ee6ac97` adds `disability_men` and `disability_women` to the member analysis, for the area and each smaller area, and went live with `0a52d7d` the same evening. The figures are counts of members who told us; nothing names anyone, and everyone who can open an area on Members & Exco sees them, as they already saw the total.
 
 **498 Flutter tests** passed with analysis clean, and **692 backend tests** passed locally on SQLite with 27 skipped; the PostgreSQL run belongs to the backend deployment. A compiled build in real Chrome showed the reminder on first open and kept it away after a reload, reading the time back from browser storage. All 856 uploaded files matched the local checksums and the public checksum matched `49c21eae…`. The reminder has not been seen by a real account on production by this deployment. Android stays at version 5, without the reminder, the watch or the card.
 
