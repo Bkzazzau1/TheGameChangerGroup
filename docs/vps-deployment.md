@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `2fdd6628e497ebc855f69b458b96c02c9c318f1d`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `99f152c74d4085c9ce29355e23dc489df9325a0d`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261031-083347-1dda3b99ec8b` (release directory timestamps use UTC).
-- Frontend build source: `4fe79e0` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261030-162004-32435077cb2d` (premium redesign, `3c20011`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261101-081716-3a9893e238bb` (release directory timestamps use UTC).
+- Frontend build source: `53ba8c4` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261031-083347-1dda3b99ec8b` (men and professions, `4fe79e0`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `1dda3b99ec8b49c808ade15ccb3cf69eaa5e5f1f700f55549f096173e4c0d39c`.
-- Build: 856 files, 59,353,711 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `3a9893e238bb8a83c1c7e8a5f6dd501c23f87fec55ba4b140ac8404f5cf4bbb6`.
+- Build: 856 files, 59,358,436 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,20 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### One member view: decide and appoint from any profile (1 November 2026)
+
+The owner asked to approve or reject a member under review wherever the member is viewed, with their photo and details large, and to assign a position from any profile. Backend `99f152c74d4085c9ce29355e23dc489df9325a0d` went live over `2fdd662`, and the web build followed from frontend `53ba8c4`. There are no migrations, dependency or setting changes, and no APK: Android stays on version 5.
+
+**Server.** Whoever may decide a member can now see that member's selfie, even without personal data access: polling unit executives hold `verifyMemberIdentity` but not `viewMemberSensitiveData`. New `members/<number>/card-photo/` serves the voter card to whoever may decide that member and nobody else, because it shows the whole VIN. Both pass through `require_reviewer`, so the area, self and National Administrator rules apply. Other personal details stay hidden from a reviewer without that access.
+
+**Web.** `member_profile.dart` replaces the three earlier views. It opens from search, Members & Exco, a polling unit's list and Member Review, and a registrar who also reviews gets a Review button on the people they registered. Photos open full screen to zoom. Approve and Reject sit in a bar that does not scroll, and appear only after the server has answered that this account may decide this member. Outside Member Review they appear only for a member awaiting review. Assign position opens the existing appoint screen with the member chosen, for accounts with `assignRoles`, and never on one's own profile.
+
+**Validation.** **718 backend tests passed on isolated PostgreSQL**, with zero failures and zero skips; the throwaway databases were removed. **461 Flutter tests** passed and analysis was clean. The build scan found no secrets, and all 856 uploaded files matched the local checksums.
+
+**Deployment** (`/opt/tgcg/deployment/release-20261101/`, a systemd job: backup, then `deploy.sh`). The guards required a clean checkout at `2fdd662` and no dependency, static or migration changes. The API restarted within seconds and passed health. The website then moved to `/var/www/tgcg/releases/web-20261101-081716-3a9893e238bb` and the frontend checkout to `53ba8c4`.
+
+**After going live.** The app, a referral link, the APK download and the administration login returned 200; anonymous session and card photo calls returned 401; the public JavaScript checksum matched `3a9893e2…`. Chrome drew the live sign-in page at 390 and 320 wide under phone emulation with no page errors. The first 90 requests after the update had no server errors, and the API log showed none. Backups succeeded before and after. No data was changed. The signed-in view was not exercised on production: the owner checks it with a real member under review.
 
 ### Kebbi LGA coordinators and Kankia LGA executives (1 November 2026)
 
