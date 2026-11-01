@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261101-081716-3a9893e238bb` (release directory timestamps use UTC).
-- Frontend build source: `53ba8c4` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261031-083347-1dda3b99ec8b` (men and professions, `4fe79e0`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261101-085926-c41c79acddb0` (release directory timestamps use UTC).
+- Frontend build source: `ea40a86` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261101-081716-3a9893e238bb` (one member view, `53ba8c4`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `3a9893e238bb8a83c1c7e8a5f6dd501c23f87fec55ba4b140ac8404f5cf4bbb6`.
-- Build: 856 files, 59,358,436 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `c41c79acddb0dc445e91d294df2e244ec2a14204c1ea24b48c0378516d435681`.
+- Build: 856 files, 59,363,199 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,14 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Manage a member from their profile (1 November 2026)
+
+Web only, the same morning, from frontend `ea40a86`: backend `99f152c` was not touched. The owner asked why they could not assign a position, and for everything to be in one profile view.
+
+The nginx log showed `access/roles/` had not been requested that day, so the appoint form had not been opened. A compiled build run in Chrome against a fake server opened it correctly: nothing was broken, but the small text link was easy to miss. The top of the profile now offers Assign position, Suspend or Restore membership and End membership, and each position has a Manage button opening its own screen to suspend, restrict or revoke it. Each button shows only for the power behind it, never on one's own profile, and the server decides each action.
+
+**475 Flutter tests** passed and analysis was clean. The same compiled check confirmed the buttons appear, End membership asks first, and the form opens. All 856 uploaded files matched the local checksums, the public checksum matched `c41c79ac…`, and Chrome drew the live sign-in page at 390 and 320 wide. The buttons have not been used on production by this deployment: the owner does that with real members.
 
 ### One member view: decide and appoint from any profile (1 November 2026)
 
