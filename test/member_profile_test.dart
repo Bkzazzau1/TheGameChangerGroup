@@ -355,7 +355,7 @@ void main() {
 
       expect(find.textContaining('Only a member with a verified identity'), findsOneWidget);
       expect(find.text('Appoint a member'), findsNothing);
-      expect(server.asked('access/assignments/'), isFalse);
+      expect(server.bodies.containsKey('POST access/assignments/'), isFalse);
     });
 
     testWidgets('once approved, the same person can be given a position', (tester) async {
@@ -371,7 +371,147 @@ void main() {
     });
   });
 
+  group('managing the member from the profile', () {
+    const manages = {'assignRoles', 'manageAssignments', 'suspendMembers'};
+
+    Future<void> confirm(WidgetTester tester, String button, String reason) async {
+      await tester.tap(find.widgetWithText(OutlinedButton, button));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, reason);
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('everything is offered at the top, without scrolling', (tester) async {
+      await open(tester, ReviewServer(status: 'verified'), powers: manages);
+      for (final button in ['Assign position', 'Suspend membership', 'End membership']) {
+        expect(tester.getBottomLeft(find.text(button)).dy, lessThan(1000), reason: button);
+      }
+      expect(tester.getTopLeft(find.text('Assign position')).dy, lessThan(300));
+    });
+
+    testWidgets('a membership is suspended, then restored', (tester) async {
+      final server = ReviewServer(status: 'verified');
+      var changes = 0;
+      await open(tester, server, powers: manages, onChanged: () => changes++);
+
+      await confirm(tester, 'Suspend membership', 'Under investigation.');
+
+      expect(server.bodies['POST members/$reviewedNumber/suspend/'], {
+        'reason': 'Under investigation.',
+      });
+      expect(find.text('Membership suspended.'), findsOneWidget);
+      expect(find.text('Suspend membership'), findsNothing);
+      expect(changes, 1);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Restore membership'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(FilledButton).last);
+      await tester.pumpAndSettle();
+
+      expect(server.standing, 'active');
+      expect(find.text('Membership restored.'), findsOneWidget);
+    });
+
+    testWidgets('a membership is ended, with a reason', (tester) async {
+      final server = ReviewServer(status: 'verified');
+      await open(tester, server, powers: manages);
+
+      await confirm(tester, 'End membership', 'Left the group.');
+
+      expect(server.standing, 'deactivated');
+      expect(find.text('Membership ended.'), findsOneWidget);
+      expect(find.text('End membership'), findsNothing);
+      expect(find.text('Restore membership'), findsOneWidget);
+    });
+
+    testWidgets('changing your mind does nothing', (tester) async {
+      final server = ReviewServer(status: 'verified');
+      await open(tester, server, powers: manages);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'End membership'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(server.standing, 'active');
+      expect(server.asked('deactivate/'), isFalse);
+    });
+
+    testWidgets('a position can be managed and ended here', (tester) async {
+      final server = ReviewServer(status: 'verified')
+        ..posts.add({'role': 'state-secretary', 'role_name': 'State Secretary', 'state': 'active'});
+      await open(tester, server, powers: manages);
+
+      expect(find.text('State Secretary'), findsOneWidget);
+      expect(find.text('Assign another position'), findsOneWidget);
+
+      await tester.tap(find.text('Manage'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Revoke'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'Term over.');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Revoke'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Close').last);
+      await tester.pumpAndSettle();
+
+      expect(server.asked('access/assignments/a1/revoke/'), isTrue);
+      expect(find.text('State Secretary'), findsNothing);
+      expect(find.text('An ordinary member'), findsOneWidget);
+      expect(find.text('Assign position'), findsOneWidget);
+    });
+
+    testWidgets('a position still shows to someone who cannot manage it', (tester) async {
+      final server = ReviewServer(status: 'verified')
+        ..posts.add({'role': 'state-secretary', 'role_name': 'State Secretary', 'state': 'active'});
+      await open(tester, server);
+
+      expect(find.text('State Secretary'), findsOneWidget);
+      expect(find.text('Manage'), findsNothing);
+      expect(server.asked('access/assignments/'), isFalse);
+    });
+
+    testWidgets('nothing is offered without the powers', (tester) async {
+      await open(tester, ReviewServer(status: 'verified'));
+      for (final button in ['Assign position', 'Suspend membership', 'End membership']) {
+        expect(find.text(button), findsNothing, reason: button);
+      }
+    });
+
+    testWidgets('each power brings only its own buttons', (tester) async {
+      await open(tester, ReviewServer(status: 'verified'), powers: const {'suspendMembers'});
+      expect(find.text('Suspend membership'), findsOneWidget);
+      expect(find.text('Assign position'), findsNothing);
+    });
+
+    testWidgets('a suspended member cannot be given a position, and is told', (tester) async {
+      final server = ReviewServer(status: 'verified', standing: 'suspended');
+      await open(tester, server, powers: manages);
+
+      await tester.tap(find.text('Assign position'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Only a member with a verified identity'), findsOneWidget);
+      expect(find.text('Appoint a member'), findsNothing);
+    });
+  });
+
   for (final width in screenWidths) {
+    testWidgets('managing fits at $width wide', (tester) async {
+      await open(
+        tester,
+        ReviewServer(),
+        size: Size(width, 700),
+        powers: const {'verifyMemberIdentity', 'assignRoles', 'suspendMembers'},
+      );
+      expect(find.text('Approve'), findsOneWidget);
+      expect(find.text('Assign position'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the decision stays in reach at $width wide', (tester) async {
       final size = Size(width, 640);
       await open(tester, ReviewServer(), size: size);

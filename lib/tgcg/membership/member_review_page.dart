@@ -742,6 +742,54 @@ class _StandingTab extends StatelessWidget {
 }
 
 /// Suspend, deactivate or restore one membership, with its history.
+/// Suspends, ends or restores a membership after asking why: 'suspend',
+/// 'deactivate' or 'restore'. The member as they now stand, or null when the
+/// person changed their mind.
+Future<StaffMember?> changeMembershipStanding(
+  BuildContext context,
+  StaffMember member,
+  String action,
+) async {
+  final (title, message, label, required) = switch (action) {
+    'suspend' => (
+      'Suspend ${member.displayName}?',
+      'All their operational access stops at once and they are signed out. Their '
+          'appointments stay on record.',
+      'Suspend',
+      true,
+    ),
+    'deactivate' => (
+      "End ${member.displayName}'s membership?",
+      'They are signed out and cannot sign in again. Their history is kept.',
+      'End membership',
+      true,
+    ),
+    _ => (
+      "Restore ${member.displayName}'s membership?",
+      'Only appointments that are otherwise still valid give access again.',
+      'Restore',
+      false,
+    ),
+  };
+  final members = TgcgBackend.of(context)!.members;
+  final reason = await promptText(
+    context,
+    title: title,
+    message: message,
+    label: 'Reason',
+    action: label,
+    required: required,
+    destructive: action != 'restore',
+  );
+  if (reason == null) return null;
+  final number = member.membershipNumber;
+  return switch (action) {
+    'suspend' => members.suspend(number, reason),
+    'deactivate' => members.deactivate(number, reason),
+    _ => members.restore(number, reason: reason),
+  };
+}
+
 class StandingDialog extends StatefulWidget {
   const StandingDialog({super.key, required this.member});
 
@@ -760,48 +808,15 @@ class _StandingDialogState extends State<StandingDialog> {
   bool _busy = false;
 
   Future<void> _change(String action) async {
-    final (title, message, required) = switch (action) {
-      'suspend' => (
-        'Suspend ${_member.displayName}?',
-        'All their operational access stops at once and they are signed out. Their '
-            'appointments stay on record.',
-        true,
-      ),
-      'deactivate' => (
-        'Deactivate ${_member.displayName}\'s membership?',
-        'They are signed out and cannot sign in again. Their history is kept.',
-        true,
-      ),
-      _ => (
-        'Restore ${_member.displayName}\'s membership?',
-        'Only appointments that are otherwise still valid give access again.',
-        false,
-      ),
-    };
-    final reason = await promptText(
-      context,
-      title: title,
-      message: message,
-      label: 'Reason',
-      action: action[0].toUpperCase() + action.substring(1),
-      required: required,
-      destructive: action != 'restore',
-    );
-    if (reason == null || !mounted) return;
     final members = TgcgBackend.of(context)!.members;
     setState(() => _busy = true);
     try {
-      final number = _member.membershipNumber;
-      final updated = switch (action) {
-        'suspend' => await members.suspend(number, reason),
-        'deactivate' => await members.deactivate(number, reason),
-        _ => await members.restore(number, reason: reason),
-      };
-      if (!mounted) return;
+      final updated = await changeMembershipStanding(context, _member, action);
+      if (updated == null || !mounted) return;
       setState(() {
         _member = updated;
         _changed = true;
-        _history = members.history(number);
+        _history = members.history(updated.membershipNumber);
       });
     } catch (error) {
       if (mounted) showFailure(context, error);
@@ -877,7 +892,7 @@ class _StandingDialogState extends State<StandingDialog> {
         TextButton(
           onPressed: _busy ? null : () => _change('deactivate'),
           style: TextButton.styleFrom(foregroundColor: TgcgColors.danger),
-          child: const Text('Deactivate'),
+          child: const Text('End membership'),
         ),
       FilledButton(onPressed: () => Navigator.pop(context, _changed), child: const Text('Close')),
     ],

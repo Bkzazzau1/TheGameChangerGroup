@@ -37,6 +37,7 @@ const _place = {
 class ReviewServer {
   ReviewServer({
     this.status = 'pendingReview',
+    this.standing = 'active',
     this.mayDecide = true,
     this.seesPersonal = true,
     this.gaps = const [],
@@ -47,6 +48,7 @@ class ReviewServer {
        card = card ?? tinyPicture;
 
   String status;
+  String standing;
 
   /// The server lets this account decide this member.
   final bool mayDecide;
@@ -68,7 +70,7 @@ class ReviewServer {
     'membership_number': reviewedNumber,
     'full_name': 'Bala Musa',
     'verification_status': status,
-    'membership_state': 'active',
+    'membership_state': standing,
     'scope': _place,
     'sensitive_visible': seesPersonal,
     'photo_url': seesPersonal && !gaps.contains('selfie') ? 'https://api.tgcg.test/p' : null,
@@ -93,6 +95,17 @@ class ReviewServer {
       {'kind': 'pvcCaptured', 'result': 'passed', 'detail': 'VIN read from the card.'},
       {'kind': 'pvcValidated', 'result': 'unsupported', 'detail': 'No INEC source is connected.'},
     ],
+  };
+
+  Map<String, dynamic> get _appointment => {
+    'id': 'a1',
+    'member': reviewedNumber,
+    'member_name': 'Bala Musa',
+    'role': 'state-secretary',
+    'role_name': 'State Secretary',
+    'areas': [_place],
+    'permissions': <String>[],
+    'state': 'active',
   };
 
   http.Response _answer(http.Request request) {
@@ -139,18 +152,32 @@ class ReviewServer {
           },
         ],
       }),
+      'GET access/assignments/' => jsonResponse({
+        'count': posts.length,
+        'next': null,
+        'previous': null,
+        'results': [for (final _ in posts) _appointment],
+      }),
       'POST access/assignments/' => () {
         posts.add({'role': 'state-secretary', 'role_name': 'State Secretary', 'state': 'active'});
-        return jsonResponse({
-          'id': 'a1',
-          'member': reviewedNumber,
-          'member_name': 'Bala Musa',
-          'role': 'state-secretary',
-          'role_name': 'State Secretary',
-          'areas': <Object>[],
-          'permissions': <String>[],
-          'state': 'active',
-        }, 201);
+        return jsonResponse(_appointment, 201);
+      }(),
+      'GET access/assignments/a1/history/' => jsonResponse(<Object>[]),
+      'POST access/assignments/a1/revoke/' => () {
+        posts.clear();
+        return jsonResponse({..._appointment, 'state': 'revoked'});
+      }(),
+      'POST members/$reviewedNumber/suspend/' => () {
+        standing = 'suspended';
+        return jsonResponse(person);
+      }(),
+      'POST members/$reviewedNumber/deactivate/' => () {
+        standing = 'deactivated';
+        return jsonResponse(person);
+      }(),
+      'POST members/$reviewedNumber/restore/' => () {
+        standing = 'active';
+        return jsonResponse(person);
       }(),
       'GET members/$reviewedNumber/photo/' => http.Response.bytes(selfie, 200),
       'GET members/$reviewedNumber/card-photo/' => http.Response.bytes(card, 200),

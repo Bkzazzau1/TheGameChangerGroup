@@ -3,9 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../access/access_widgets.dart' show failureMessage, formatDay, formatMoment, promptText;
-import '../access/appointments_tab.dart' show AppointDialog;
-import '../api/access_repository.dart' show Appointment;
+import '../access/access_widgets.dart'
+    show appointmentStatePill, areaLabel, failureMessage, formatDay, formatMoment, promptText;
+import '../access/appointments_tab.dart' show AppointDialog, AppointmentDialog;
+import '../api/access_repository.dart' show AccessRepository, Appointment, AppointmentState;
 import '../api/api_client.dart' show ApiException;
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
@@ -13,18 +14,20 @@ import '../api/member_repository.dart' show disabilityText;
 import '../domain/permissions.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'member_review_page.dart' show changeMembershipStanding;
 import 'member_search.dart' show MemberAvatar, channelLabel, standingColor;
 import 'members_exco_page.dart' show ageOn, levelLabel, standingChips;
 
 /// Everything on record about a member that this account may see, with their
 /// photos large enough to judge by. A member awaiting review can be approved
 /// or rejected here, by whoever the server lets decide them: the buttons only
-/// appear once it has said so, and it checks again on every decision. Whoever
-/// appoints can give the member a position from here too.
+/// appear once it has said so, and it checks again on every decision.
+/// Everything else done to a member is here too, for whoever may do it: giving
+/// and managing positions, and suspending, ending or restoring the membership.
 ///
 /// [reviewAny] also offers the decision on a member not awaiting review, for
-/// Member Review. [onChanged] runs after a decision or a new position, so the
-/// list behind this view can show it.
+/// Member Review. [onChanged] runs after anything changes, so the list behind
+/// this view can show it.
 Future<void> showMemberDetails(
   BuildContext context,
   String number, {
@@ -48,6 +51,7 @@ class _MemberProfile extends StatefulWidget {
 
 class _MemberProfileState extends State<_MemberProfile> {
   late MemberAdminRepository _members;
+  late AccessRepository _access;
   bool _started = false;
 
   StaffMember? _member;
@@ -70,21 +74,80 @@ class _MemberProfileState extends State<_MemberProfile> {
   /// This account appoints, and this member is not themselves.
   bool _mayAssign = false;
 
+  /// This account suspends and ends memberships, and this is not its own.
+  bool _mayChangeStanding = false;
+
+  /// The member's positions, when this account may manage them: null until
+  /// the server has listed them, and then they carry a Manage button.
+  List<Appointment>? _positions;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
-    _members = TgcgBackend.of(context)!.members;
+    final backend = TgcgBackend.of(context)!;
+    _members = backend.members;
+    _access = backend.access;
     unawaited(_loadMember());
     final session = TgcgSession.maybeOf(context);
     if (session?.can(TgcgCapability.verifyMemberIdentity) ?? false) {
       unawaited(_loadReview());
     }
-    _mayAssign =
-        (session?.can(TgcgCapability.assignRoles) ?? false) &&
-        session?.membershipNumber != widget.number;
+    if (session == null || session.membershipNumber == widget.number) return;
+    _mayAssign = session.can(TgcgCapability.assignRoles);
+    _mayChangeStanding = session.can(TgcgCapability.suspendMembers);
+    if (_mayAssign || session.can(TgcgCapability.manageAssignments)) {
+      unawaited(_loadPositions());
+    }
   }
+
+  Future<void> _loadPositions() async {
+    try {
+      final page = await _access.appointments(member: widget.number);
+      if (!mounted) return;
+      setState(
+        () => _positions = [
+          for (final position in page.items)
+            if (const {
+              AppointmentState.active,
+              AppointmentState.scheduled,
+              AppointmentState.suspended,
+            }.contains(position.state))
+              position,
+        ],
+      );
+    } catch (_) {
+      // The profile still lists their positions, without the Manage buttons.
+    }
+  }
+
+  /// After something changed here: the member and their positions as they
+  /// now stand, and the list behind this view told.
+  Future<void> _refresh() async {
+    widget.onChanged?.call();
+    final member = await _members
+        .member(widget.number)
+        .then<StaffMember?>((member) => member, onError: (_) => null);
+    if (!mounted) return;
+    setState(() => _member = member ?? _member);
+    if (_positions != null) await _loadPositions();
+  }
+
+  void _clearMessages() {
+    _done = null;
+    _problem = null;
+    _notice = null;
+  }
+
+  /// A screen opened over this profile. It keeps its own messenger: on a phone
+  /// this profile covers the page, and with it anything that screen reports.
+  Future<T?> _over<T>(Widget screen) => showDialog<T>(
+    context: context,
+    builder: (_) => ScaffoldMessenger(
+      child: Scaffold(backgroundColor: Colors.transparent, body: screen),
+    ),
+  );
 
   Future<void> _loadMember() async {
     try {
@@ -133,9 +196,7 @@ class _MemberProfileState extends State<_MemberProfile> {
   Future<void> _run(Future<MemberVerification> Function() action, String done) async {
     setState(() {
       _busy = true;
-      _done = null;
-      _problem = null;
-      _notice = null;
+      _clearMessages();
     });
     try {
       final verification = await action();
@@ -197,11 +258,7 @@ class _MemberProfileState extends State<_MemberProfile> {
   /// The appoint screen, with this member chosen. The server decides who may
   /// be given what, and where.
   Future<void> _assign(StaffMember member) async {
-    setState(() {
-      _done = null;
-      _problem = null;
-      _notice = null;
-    });
+    setState(_clearMessages);
     if (member.verificationStatus != 'verified' || member.membershipState != 'active') {
       setState(
         () => _notice =
@@ -209,27 +266,71 @@ class _MemberProfileState extends State<_MemberProfile> {
       );
       return;
     }
-    final made = await showDialog<Appointment>(
-      context: context,
-      // Its own messenger: this profile covers the page on a phone, and with it
-      // anything the appoint screen reports.
-      builder: (_) => ScaffoldMessenger(
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: AppointDialog(member: member.membershipNumber, memberName: member.displayName),
-        ),
-      ),
+    final made = await _over<Appointment>(
+      AppointDialog(member: member.membershipNumber, memberName: member.displayName),
     );
     if (made == null || !mounted) return;
-    widget.onChanged?.call();
-    final updated = await _members
-        .member(widget.number)
-        .then<StaffMember?>((member) => member, onError: (_) => null);
-    if (!mounted) return;
-    setState(() {
-      _member = updated ?? _member;
-      _done = '${made.memberName} appointed ${made.roleName}.';
-    });
+    await _refresh();
+    if (mounted) setState(() => _done = '${made.memberName} appointed ${made.roleName}.');
+  }
+
+  /// One position's own screen: suspend, reactivate, restrict or revoke it.
+  Future<void> _managePosition(Appointment position) async {
+    setState(_clearMessages);
+    await _over<bool>(AppointmentDialog(appointment: position));
+    if (mounted) await _refresh();
+  }
+
+  Future<void> _changeStanding(StaffMember member, String action, String done) async {
+    setState(_clearMessages);
+    try {
+      final updated = await changeMembershipStanding(context, member, action);
+      if (updated == null || !mounted) return;
+      widget.onChanged?.call();
+      setState(() {
+        _member = updated;
+        _done = done;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _problem = error);
+    }
+  }
+
+  /// Whatever this account may do to this member, in one place at the top.
+  Widget? _manage(StaffMember member) {
+    final state = member.membershipState;
+    final buttons = <Widget>[
+      if (_mayAssign)
+        FilledButton.icon(
+          onPressed: () => _assign(member),
+          icon: const Icon(Icons.add_rounded),
+          label: Text(member.posts.isEmpty ? 'Assign position' : 'Assign another position'),
+        ),
+      if (_mayChangeStanding && state == 'active')
+        OutlinedButton.icon(
+          onPressed: () => _changeStanding(member, 'suspend', 'Membership suspended.'),
+          icon: const Icon(Icons.pause_circle_outline_rounded),
+          label: const Text('Suspend membership'),
+        ),
+      if (_mayChangeStanding && state != 'active')
+        OutlinedButton.icon(
+          onPressed: () => _changeStanding(member, 'restore', 'Membership restored.'),
+          icon: const Icon(Icons.play_circle_outline_rounded),
+          label: const Text('Restore membership'),
+        ),
+      if (_mayChangeStanding && state != 'deactivated')
+        OutlinedButton.icon(
+          onPressed: () => _changeStanding(member, 'deactivate', 'Membership ended.'),
+          style: OutlinedButton.styleFrom(foregroundColor: TgcgColors.danger),
+          icon: const Icon(Icons.person_off_outlined),
+          label: const Text('End membership'),
+        ),
+    ];
+    if (buttons.isEmpty) return null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(spacing: 8, runSpacing: 8, children: buttons),
+    );
   }
 
   /// Who this is and where they stand: the first thing to read.
@@ -251,6 +352,7 @@ class _MemberProfileState extends State<_MemberProfile> {
           membershipState: member.membershipState,
         ),
       ),
+      ?_manage(member),
     ],
   );
 
@@ -278,7 +380,7 @@ class _MemberProfileState extends State<_MemberProfile> {
                       _run(() => _members.runChecks(member.membershipNumber), 'Checks run again.'),
           ),
         ],
-        _Sections(member: member, onAssign: _mayAssign ? () => _assign(member) : null),
+        _Sections(member: member, positions: _positions, onManage: _managePosition),
       ],
     );
   }
@@ -661,12 +763,13 @@ class _ReviewPanel extends StatelessWidget {
 
 /// The member's record, section by section.
 class _Sections extends StatelessWidget {
-  const _Sections({required this.member, required this.onAssign});
+  const _Sections({required this.member, required this.positions, required this.onManage});
 
   final StaffMember member;
 
-  /// Null when this account gives this member no position.
-  final VoidCallback? onAssign;
+  /// Their positions with a Manage button, when this account manages them.
+  final List<Appointment>? positions;
+  final ValueChanged<Appointment> onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -687,24 +790,23 @@ class _Sections extends StatelessWidget {
         _Section(
           title: 'Positions',
           children: [
-            if (member.posts.isEmpty) const _Line('None', 'An ordinary member'),
-            for (final post in member.posts)
-              _Line(
-                post.roleName,
-                [
-                  if (post.areaName.isNotEmpty)
-                    post.areaLevel == null || post.areaLevel == GeographyLevel.country
-                        ? post.areaName
-                        : '${post.areaName} ${levelLabel(post.areaLevel!)}',
-                  if (post.state != 'active') post.state,
-                ].join(' · '),
-              ),
-            if (onAssign != null)
-              TextButton.icon(
-                onPressed: onAssign,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Assign position'),
-              ),
+            if ((positions?.isEmpty ?? false) || (positions == null && member.posts.isEmpty))
+              const _Line('None', 'An ordinary member'),
+            if (positions case final held?)
+              for (final position in held)
+                _Position(position: position, onManage: () => onManage(position))
+            else
+              for (final post in member.posts)
+                _Line(
+                  post.roleName,
+                  [
+                    if (post.areaName.isNotEmpty)
+                      post.areaLevel == null || post.areaLevel == GeographyLevel.country
+                          ? post.areaName
+                          : '${post.areaName} ${levelLabel(post.areaLevel!)}',
+                    if (post.state != 'active') post.state,
+                  ].join(' · '),
+                ),
           ],
         ),
         _Section(
@@ -797,6 +899,43 @@ class _Sections extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A position this account manages.
+class _Position extends StatelessWidget {
+  const _Position({required this.position, required this.onManage});
+
+  final Appointment position;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(position.roleName, style: TgcgType.label),
+                  if (position.state != AppointmentState.active)
+                    appointmentStatePill(position.state),
+                ],
+              ),
+              Text(position.areas.map(areaLabel).join('; '), style: TgcgType.caption),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton(onPressed: onManage, child: const Text('Manage')),
+      ],
+    ),
+  );
 }
 
 class _Section extends StatelessWidget {

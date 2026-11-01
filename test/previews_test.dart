@@ -189,8 +189,14 @@ void main() {
       final server = ReviewServer(
         selfie: File('assets/brand/login_poster.webp').readAsBytesSync(),
         card: File('assets/brand/tgcg_logo.png').readAsBytesSync(),
-      );
-      final session = reviewerSession(const {'verifyMemberIdentity', 'viewMemberSensitiveData'});
+      )..posts.add({'role': 'state-secretary', 'role_name': 'State Secretary', 'state': 'active'});
+      final session = reviewerSession(const {
+        'verifyMemberIdentity',
+        'viewMemberSensitiveData',
+        'assignRoles',
+        'manageAssignments',
+        'suspendMembers',
+      });
       addTearDown(session.dispose);
       await tester.pumpWidget(
         _framed(
