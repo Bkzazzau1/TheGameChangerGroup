@@ -123,7 +123,7 @@ class _MemberShellState extends State<MemberShell> {
 
   void _openInvite() => _open(const _InvitePage());
 
-  void _openRoles() => _open(const _RolesPage());
+  void _openRoles() => _open(const MyRolesPage());
 
   @override
   Widget build(BuildContext context) {
@@ -1303,8 +1303,8 @@ class _InvitePage extends StatelessWidget {
 }
 
 /// The member's own appointments.
-class _RolesPage extends StatelessWidget {
-  const _RolesPage();
+class MyRolesPage extends StatelessWidget {
+  const MyRolesPage({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(

@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
+import 'package:tgcg_emcop/tgcg/election/daily_reminder.dart';
 import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_profile.dart';
@@ -175,6 +176,68 @@ void main() {
       await openModule(tester, 'Members & Exco', width);
       await _shot(tester, 'command-members-$tag');
       await tester.pumpWidget(const SizedBox());
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+  }
+
+  for (final size in const [Size(320, 640), Size(390, 844), Size(1200, 860)]) {
+    final tag = size.width.round();
+
+    testWidgets('daily reminder at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, size);
+      const area = {'level': 'state', 'country': 'Nigeria', 'stateId': 'KD', 'stateName': 'Kaduna'};
+      final session = memberSession();
+      addTearDown(session.dispose);
+      final services = fakeBackend(
+        (path) => switch (path) {
+          'me/assignments/' => jsonResponse([
+            {
+              'id': 'a1',
+              'member': 'TGCG-000123',
+              'member_name': 'Musa Bello',
+              'role': 'ward-secretary',
+              'role_name': 'Ward Secretary',
+              'areas': [area],
+              'permissions': <String>[],
+              'starts_at': '2026-10-11T08:00:00Z',
+              'state': 'active',
+            },
+          ]),
+          'me/projects/' => jsonResponse([
+            {
+              'id': 'p1',
+              'name': 'Ward mobilisation week',
+              'starts_at': '2027-01-04T08:00:00Z',
+              'ends_at': '2027-01-09T17:00:00Z',
+              'status': 'scheduled',
+              'my_participation': {
+                'id': 'w1',
+                'project': 'p1',
+                'place': area,
+                'status': 'invited',
+              },
+            },
+          ]),
+          'me/member/' => jsonResponse(fakeCard(missing: ['pvc_photo'])),
+          _ => null,
+        },
+      );
+      await tester.pumpWidget(
+        _framed(
+          memberApp(
+            services,
+            session,
+            DailyReminder(
+              log: MemoryReminderLog(),
+              clock: () => DateTime.utc(2026, 11, 1, 9),
+              child: const Scaffold(body: SizedBox()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _shot(tester, 'daily-reminder-$tag');
       debugDisableShadows = true;
     }, skip: !_enabled);
   }

@@ -7,6 +7,7 @@ import 'api/backend.dart';
 import 'api/http_sync_transport.dart';
 import 'communications/bulk_communications_store.dart';
 import 'communications/communications_store.dart';
+import 'election/daily_reminder.dart';
 import 'field/field_agent_shell.dart';
 import 'field/field_operations_store.dart';
 import 'geography/geography_registry.dart';
@@ -28,11 +29,15 @@ import 'ui/tgcg_design.dart';
 import 'ui/tgcg_theme.dart';
 
 class TgcgApp extends StatefulWidget {
-  const TgcgApp({super.key, this.backend});
+  const TgcgApp({super.key, this.backend, this.reminderLog});
 
   /// Server connection; the TGCG server at [tgcgApiUrl] unless a test passes
   /// another.
   final BackendServices? backend;
+
+  /// When the daily reminder last showed; kept on the device. A test that
+  /// passes its own [backend] sees no reminder unless it passes this too.
+  final ReminderLog? reminderLog;
 
   static const Color primary = TgcgColors.primary;
   static const Color accent = TgcgColors.accent;
@@ -46,6 +51,8 @@ class TgcgApp extends StatefulWidget {
 
 class _TgcgAppState extends State<TgcgApp> {
   late final BackendServices backend = widget.backend ?? BackendServices.connect(tgcgApiUrl);
+  late final ReminderLog? reminderLog =
+      widget.reminderLog ?? (widget.backend == null ? DeviceReminderLog() : null);
 
   /// True while a saved server session is being restored at startup.
   bool restoringSession = true;
@@ -210,7 +217,10 @@ class _TgcgAppState extends State<TgcgApp> {
                             theme: tgcgTheme(),
                             home: restoringSession
                                 ? const _RestoringSession()
-                                : const _AuthenticationGate(),
+                                : DailyReminder(
+                                    log: reminderLog,
+                                    child: const _AuthenticationGate(),
+                                  ),
                           ),
                         ),
                       ),
