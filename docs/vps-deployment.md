@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261101-085926-c41c79acddb0` (release directory timestamps use UTC).
-- Frontend build source: `ea40a86` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261101-081716-3a9893e238bb` (one member view, `53ba8c4`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261101-142918-24a70177e9d5` (release directory timestamps use UTC).
+- Frontend build source: `afa918d` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261101-141351-49c21eae722c` (daily reminder, `cc2533a`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `c41c79acddb0dc445e91d294df2e244ec2a14204c1ea24b48c0378516d435681`.
-- Build: 856 files, 59,363,199 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `24a70177e9d53b21570abef35bff48ca80fa0baca22b5ab49344655f9dc798c0`.
+- Build: 856 files, 59,385,229 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,22 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Analogue election watch (1 November 2026)
+
+Web only, the same afternoon, from frontend `afa918d`, at the owner's word to publish: the server stays at `99f152c`. The countdown is now an analogue watch on Nigerian time, whatever time zone a phone is set to: three hands that tick every second, the day count in a window on the dial, and a gold ring that runs down through the day. At midnight in Nigeria the count falls by one and the ring fills again. The member's home and the daily reminder also show what is left of the day in figures; the dashboard band and the agent's home carry smaller watches. The count itself is unchanged: Nigerian calendar days to `nextPresidentialElection`.
+
+**506 Flutter tests** passed and analysis was clean. All 856 uploaded files matched the local checksums, the public checksum matched `24a70177…`, and the release was reachable by Chrome at phone widths. The website stands behind the sign-in page, so the watch was checked in generated screens at 320, 390 and 1200 wide rather than on a signed-in production account.
+
+### Daily reminder, and persons with disabilities (1 November 2026)
+
+Web only, from frontend `cc2533a`: the server stays at `99f152c`. The owner asked for a pop-up every 24 hours on signing in or opening the app, with the days to the election, the message to get the PVC ready and any assignment to follow up, and for the number of persons with disabilities by place, men and women.
+
+**The reminder is live on the website.** It comes once in 24 hours per account and device, remembered in the browser, and needs nothing new from the server: it reads each person's own appointments, projects, security dispatches, membership card and, for reviewers, the counts waiting. It lists only what it found, never says that nothing is waiting, and says so when a part could not be checked. It waits for an open page to close, goes on sign-out, and after the election comes only for assignments.
+
+**The disability card waits for the server.** Backend `ee6ac97` (pushed, not deployed; no migration) adds `disability_men` and `disability_women` to the member analysis, for the area and each smaller area. Until it is deployed the page keeps its single line. The figures are counts of members who told us; nothing names anyone, and everyone who can open an area on Members & Exco sees them, as they already saw the total.
+
+**498 Flutter tests** passed with analysis clean, and **692 backend tests** passed locally on SQLite with 27 skipped; the PostgreSQL run belongs to the backend deployment. A compiled build in real Chrome showed the reminder on first open and kept it away after a reload, reading the time back from browser storage. All 856 uploaded files matched the local checksums and the public checksum matched `49c21eae…`. The reminder has not been seen by a real account on production by this deployment. Android stays at version 5, without the reminder, the watch or the card.
 
 ### Manage a member from their profile (1 November 2026)
 
