@@ -113,6 +113,8 @@ class MembersFigures {
     this.fullyVerified = 0,
     this.withRole = 0,
     this.withDisability = 0,
+    this.disabilityMen,
+    this.disabilityWomen,
     this.verification = const {},
     this.standing = const {},
     this.gender = const {},
@@ -136,6 +138,11 @@ class MembersFigures {
   final int fullyVerified;
   final int withRole;
   final int withDisability;
+
+  /// The men and women among them. Null from a server that does not count
+  /// them: not the same as none.
+  final int? disabilityMen;
+  final int? disabilityWomen;
 
   /// verified, pendingReview, unverified, rejected.
   final Map<String, int> verification;
@@ -199,6 +206,8 @@ class MembersFigures {
     fullyVerified: _int(json['fully_verified']),
     withRole: _int(json['with_role']),
     withDisability: _int(json['with_disability']),
+    disabilityMen: json['disability_men'] == null ? null : _int(json['disability_men']),
+    disabilityWomen: json['disability_women'] == null ? null : _int(json['disability_women']),
     verification: _counts(json['verification']),
     standing: _counts(json['standing']),
     gender: _counts(json['gender']),
@@ -291,6 +300,9 @@ class AreaFigures {
     this.women = 0,
     this.men,
     this.new30Days = 0,
+    this.withDisability,
+    this.disabilityMen,
+    this.disabilityWomen,
     this.exco = 0,
     this.excoPeople = 0,
   });
@@ -304,6 +316,12 @@ class AreaFigures {
   /// Null from a server that does not count them: not the same as none.
   final int? men;
   final int new30Days;
+
+  /// Members here who told us of a disability, and the men and women among
+  /// them. Null from a server that does not count them: not the same as none.
+  final int? withDisability;
+  final int? disabilityMen;
+  final int? disabilityWomen;
 
   /// Exco posts in the area, and the people holding them.
   final int exco;
@@ -365,6 +383,13 @@ class MemberAnalysis {
               women: _int(part['women']),
               men: part['men'] == null ? null : _int(part['men']),
               new30Days: _int(part['new_30_days']),
+              withDisability: part['with_disability'] == null
+                  ? null
+                  : _int(part['with_disability']),
+              disabilityMen: part['disability_men'] == null ? null : _int(part['disability_men']),
+              disabilityWomen: part['disability_women'] == null
+                  ? null
+                  : _int(part['disability_women']),
               exco: _int(part['exco']),
               excoPeople: _int(part['exco_people']),
             ),

@@ -158,6 +158,9 @@ Map<String, dynamic> _part(String code, String name, int members, int exco) => {
   'women': members * 2 ~/ 5,
   'men': members ~/ 2,
   'new_30_days': members ~/ 12,
+  'with_disability': members ~/ 90,
+  'disability_men': members ~/ 160,
+  'disability_women': members ~/ 240,
   'exco': exco,
   'exco_people': exco - 2,
 };
@@ -176,6 +179,8 @@ Map<String, dynamic> fakeAnalysis({bool empty = false}) {
       'fully_verified': n(21890),
       'with_role': n(6120),
       'with_disability': n(412),
+      'disability_men': n(226),
+      'disability_women': n(171),
       'verification': {
         'verified': n(120450),
         'pendingReview': n(14300),

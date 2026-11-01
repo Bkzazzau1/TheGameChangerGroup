@@ -475,6 +475,87 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('persons with disabilities', () {
+    Map<String, dynamic> figures({int total = 12, int men = 7, int women = 4}) {
+      final analysis = _analysis(national: true);
+      analysis['members'] = <String, dynamic>{
+        ...analysis['members'] as Map<String, dynamic>,
+        'with_disability': total,
+        'disability_men': men,
+        'disability_women': women,
+      };
+      analysis['parts'] = [
+        {'code': 'KN', 'name': 'Kano', 'members': 100, 'with_disability': 2, 'disability_men': 2},
+        {
+          'code': 'KD',
+          'name': 'Kaduna',
+          'members': 1100,
+          'with_disability': 9,
+          'disability_men': 5,
+          'disability_women': 3,
+        },
+        {'code': 'LA', 'name': 'Lagos', 'members': 0, 'with_disability': 0},
+      ];
+      return analysis;
+    }
+
+    testWidgets('they are counted, men and women apart, place by place', (tester) async {
+      final server = _Server()
+        ..answer = (path, query) => switch (path) {
+          'GET members/analysis/' => _json(query['code'] == 'KD' ? _analysis(national: false) : figures()),
+          _ => null,
+        };
+      await _pumpPage(tester, server);
+
+      expect(find.text(disabilityTitle), findsOneWidget);
+      expect(find.text('12 told us · 1% of members'), findsOneWidget);
+      expect(find.text('Gender not given'), findsOneWidget);
+      expect(find.textContaining('told us of a disability'), findsNothing);
+
+      final kaduna = find.byKey(const ValueKey('disability-KD'));
+      for (final figure in ['Kaduna', '5', '3', '9']) {
+        expect(find.descendant(of: kaduna, matching: find.text(figure)), findsOneWidget);
+      }
+      // The most first, and only where there are any.
+      expect(
+        tester.getTopLeft(kaduna).dy,
+        lessThan(tester.getTopLeft(find.byKey(const ValueKey('disability-KN'))).dy),
+      );
+      expect(find.byKey(const ValueKey('disability-LA')), findsNothing);
+      expect(find.textContaining('9 with a disability'), findsOneWidget);
+
+      await _tapVisible(tester, kaduna);
+      expect(server.requests.last, 'GET members/analysis/?level=state&code=KD');
+    });
+
+    testWidgets('a long list opens on request', (tester) async {
+      final analysis = figures();
+      analysis['parts'] = [
+        for (var state = 1; state <= 8; state++)
+          {'code': 'S$state', 'name': 'State $state', 'with_disability': state, 'disability_men': 1},
+      ];
+      final server = _Server()..answer = (path, query) => _json(analysis);
+      await _pumpPage(tester, server);
+      expect(find.byKey(const ValueKey('disability-S8')), findsOneWidget);
+      expect(find.byKey(const ValueKey('disability-S1')), findsNothing);
+      await _tapVisible(tester, find.text('Show all 8'));
+      expect(find.byKey(const ValueKey('disability-S1')), findsOneWidget);
+    });
+
+    testWidgets('none yet is said plainly', (tester) async {
+      final server = _Server()..answer = (path, query) => _json(figures(total: 0, men: 0, women: 0));
+      await _pumpPage(tester, server);
+      expect(find.text('No member here has told us of a disability.'), findsOneWidget);
+    });
+
+    testWidgets('a server that does not split them keeps the one line', (tester) async {
+      final server = _Server()..answer = (path, query) => _json(_analysis(national: true));
+      await _pumpPage(tester, server);
+      expect(find.text(disabilityTitle), findsNothing);
+      expect(find.text('12 told us of a disability.'), findsOneWidget);
+    });
+  });
+
   testWidgets('quality and standing figures open members in the selected state', (tester) async {
     final server = _Server()
       ..answer = (path, query) => switch (path) {

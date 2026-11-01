@@ -36,9 +36,12 @@ void main() {
 
       // Men as well as women, and what members do: six groups, then the rest.
       expect(find.text('Gender'), findsOneWidget);
-      expect(find.text('Men'), findsOneWidget);
+      expect(find.text('Men'), findsNWidgets(3)); // gender, then disability and its table
       expect(find.text('131,000 · 53%'), findsOneWidget);
-      expect(find.text('Women'), findsOneWidget);
+      expect(find.text('Women'), findsNWidgets(3));
+      expect(find.text('Persons with disabilities'), findsOneWidget);
+      expect(find.text('412 told us · <1% of members'), findsOneWidget);
+      expect(find.text('226 · 55%'), findsOneWidget);
       expect(find.text('Profession'), findsOneWidget);
       expect(find.text('Students'), findsOneWidget);
       expect(find.text('41,200 · 17%'), findsOneWidget);

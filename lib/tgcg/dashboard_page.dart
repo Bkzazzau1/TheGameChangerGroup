@@ -15,7 +15,8 @@ import 'field/field_operations_store.dart';
 import 'field/incident_actions.dart' show incidentStatusLabel;
 import 'field/incident_report.dart'
     show incidentSeverityColor, incidentSeverityLabel, incidentSeverityRank, isOpenIncident;
-import 'membership/members_exco_page.dart' show levelLabel, levelsLabel;
+import 'membership/members_exco_page.dart'
+    show DisabilityFigures, disabilityTitle, levelLabel, levelsLabel;
 import 'results/result_operations_store.dart';
 import 'session.dart';
 import 'shell.dart' show openMyAccess;
@@ -722,6 +723,12 @@ class _MembersAndExco extends StatelessWidget {
           ShareBar(label: 'Men', value: members.gender['male'] ?? 0, total: members.total),
           ShareBar(label: 'Women', value: members.gender['female'] ?? 0, total: members.total),
           ShareBar(label: 'Not given', value: members.gender[''] ?? 0, total: members.total),
+          if (members.disabilityMen != null) ...[
+            const SizedBox(height: TgcgSpacing.md),
+            const Text(disabilityTitle, style: TgcgType.bodyStrong),
+            const SizedBox(height: 6),
+            DisabilityFigures(analysis: analysis),
+          ],
         ],
       ),
       if (jobs.isNotEmpty)

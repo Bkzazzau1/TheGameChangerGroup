@@ -450,10 +450,16 @@ class _Analysis extends StatelessWidget {
                 for (final gender in const ['male', 'female', ''])
                   (_genderLabel(gender), members.gender[gender] ?? 0),
               ],
-              footnote: members.withDisability == 0
+              footnote: members.withDisability == 0 || members.disabilityMen != null
                   ? null
                   : '${formatCount(members.withDisability)} told us of a disability.',
             ),
+            if (members.disabilityMen != null)
+              TgcgSectionCard(
+                padding: const EdgeInsets.all(16),
+                title: disabilityTitle,
+                child: DisabilityFigures(analysis: analysis, onOpen: onOpen),
+              ),
             if (members.occupationRows().isNotEmpty)
               _BarsCard(title: 'Profession', total: total, rows: members.occupationRows()),
             _BarsCard(
@@ -760,6 +766,124 @@ class _BarsCard extends StatelessWidget {
           Text(footnote!, style: _valueStyle),
         ],
       ],
+    ),
+  );
+}
+
+const disabilityTitle = 'Persons with disabilities';
+
+/// Members who told us of a disability: how many, the men and women among
+/// them, and where they are, the smaller areas with the most first. Numbers
+/// only: who they are stays private.
+class DisabilityFigures extends StatefulWidget {
+  const DisabilityFigures({super.key, required this.analysis, this.onOpen});
+
+  final MemberAnalysis analysis;
+
+  /// Opens one of the smaller areas.
+  final ValueChanged<AreaRef>? onOpen;
+
+  @override
+  State<DisabilityFigures> createState() => _DisabilityFiguresState();
+}
+
+class _DisabilityFiguresState extends State<DisabilityFigures> {
+  static const _shown = 6;
+  var _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final analysis = widget.analysis;
+    final members = analysis.members;
+    final total = members.withDisability;
+    if (total == 0) {
+      return const Text('No member here has told us of a disability.', style: _valueStyle);
+    }
+    final men = members.disabilityMen ?? 0;
+    final women = members.disabilityWomen ?? 0;
+    final places = [
+      for (final part in analysis.parts)
+        if ((part.withDisability ?? 0) > 0) part,
+    ]..sort((a, b) => b.withDisability!.compareTo(a.withDisability!));
+    final by = analysis.by;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${formatCount(total)} told us · ${share(total, members.total)} of members',
+          style: _labelStyle,
+        ),
+        const SizedBox(height: 8),
+        ShareBar(label: 'Men', value: men, total: total),
+        ShareBar(label: 'Women', value: women, total: total),
+        if (total - men - women > 0)
+          ShareBar(label: 'Gender not given', value: total - men - women, total: total),
+        if (by != null && places.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _DisabilityRow(
+            place: levelLabel(by),
+            men: 'Men',
+            women: 'Women',
+            all: 'All',
+            style: _labelStyle,
+          ),
+          const Divider(height: 8, color: TgcgColors.border),
+          for (final part in _all ? places : places.take(_shown))
+            _DisabilityRow(
+              key: ValueKey('disability-${part.area.code}'),
+              place: part.area.name,
+              men: formatCount(part.disabilityMen ?? 0),
+              women: formatCount(part.disabilityWomen ?? 0),
+              all: formatCount(part.withDisability!),
+              style: _valueStyle,
+              onTap: widget.onOpen == null ? null : () => widget.onOpen!(part.area),
+            ),
+          if (places.length > _shown)
+            TextButton(
+              onPressed: () => setState(() => _all = !_all),
+              child: Text(_all ? 'Show fewer' : 'Show all ${places.length}'),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One line of the table: the place, then men, women and all of them.
+class _DisabilityRow extends StatelessWidget {
+  const _DisabilityRow({
+    super.key,
+    required this.place,
+    required this.men,
+    required this.women,
+    required this.all,
+    required this.style,
+    this.onTap,
+  });
+
+  final String place;
+  final String men;
+  final String women;
+  final String all;
+  final TextStyle style;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(TgcgRadius.sm),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(child: Text(place, style: style)),
+          for (final figure in [men, women, all])
+            SizedBox(
+              width: 54,
+              child: Text(figure, textAlign: TextAlign.end, style: style),
+            ),
+        ],
+      ),
     ),
   );
 }
@@ -1105,6 +1229,8 @@ class _AreaRow extends StatelessWidget {
                     if (part.men case final men?) '${share(men, part.members)} men',
                     '${share(part.women, part.members)} women',
                     '+${formatCount(part.new30Days)} in 30 days',
+                    if (part.withDisability case final count? when count > 0)
+                      '${formatCount(count)} with a disability',
                   ].join(' · '),
                   style: _valueStyle,
                 ),
