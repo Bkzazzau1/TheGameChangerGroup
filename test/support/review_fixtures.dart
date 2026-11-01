@@ -60,6 +60,7 @@ class ReviewServer {
 
   final requests = <String>[];
   final bodies = <String, Map<String, dynamic>>{};
+  final posts = <Map<String, dynamic>>[];
 
   bool asked(String path) => requests.any((request) => request.endsWith(path));
 
@@ -73,6 +74,7 @@ class ReviewServer {
     'photo_url': seesPersonal && !gaps.contains('selfie') ? 'https://api.tgcg.test/p' : null,
     'phone_number': seesPersonal ? '+2348030000300' : null,
     'gaps': gaps,
+    'roles': posts,
     'has_pvc': true,
     'signed_in': false,
     'has_app_account': true,
@@ -123,6 +125,32 @@ class ReviewServer {
       'POST members/$reviewedNumber/verification/reject/' => () {
         status = 'rejected';
         return jsonResponse(verification);
+      }(),
+      'GET access/roles/' => jsonResponse({
+        'count': 1,
+        'next': null,
+        'previous': null,
+        'results': [
+          {
+            'code': 'state-secretary',
+            'name': 'State Secretary',
+            'permitted_levels': ['country'],
+            'permissions': <String>[],
+          },
+        ],
+      }),
+      'POST access/assignments/' => () {
+        posts.add({'role': 'state-secretary', 'role_name': 'State Secretary', 'state': 'active'});
+        return jsonResponse({
+          'id': 'a1',
+          'member': reviewedNumber,
+          'member_name': 'Bala Musa',
+          'role': 'state-secretary',
+          'role_name': 'State Secretary',
+          'areas': <Object>[],
+          'permissions': <String>[],
+          'state': 'active',
+        }, 201);
       }(),
       'GET members/$reviewedNumber/photo/' => http.Response.bytes(selfie, 200),
       'GET members/$reviewedNumber/card-photo/' => http.Response.bytes(card, 200),

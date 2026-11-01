@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart' show failureMessage, formatDay, formatMoment, promptText;
+import '../access/appointments_tab.dart' show AppointDialog;
+import '../api/access_repository.dart' show Appointment;
 import '../api/api_client.dart' show ApiException;
 import '../api/backend.dart';
 import '../api/member_admin_repository.dart';
@@ -17,11 +19,12 @@ import 'members_exco_page.dart' show ageOn, levelLabel, standingChips;
 /// Everything on record about a member that this account may see, with their
 /// photos large enough to judge by. A member awaiting review can be approved
 /// or rejected here, by whoever the server lets decide them: the buttons only
-/// appear once it has said so, and it checks again on every decision.
+/// appear once it has said so, and it checks again on every decision. Whoever
+/// appoints can give the member a position from here too.
 ///
 /// [reviewAny] also offers the decision on a member not awaiting review, for
-/// Member Review. [onChanged] runs after a decision, so the list behind this
-/// view can show it.
+/// Member Review. [onChanged] runs after a decision or a new position, so the
+/// list behind this view can show it.
 Future<void> showMemberDetails(
   BuildContext context,
   String number, {
@@ -61,6 +64,12 @@ class _MemberProfileState extends State<_MemberProfile> {
   String? _done;
   Object? _problem;
 
+  /// Something the person should know that is not a failure.
+  String? _notice;
+
+  /// This account appoints, and this member is not themselves.
+  bool _mayAssign = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -72,6 +81,9 @@ class _MemberProfileState extends State<_MemberProfile> {
     if (session?.can(TgcgCapability.verifyMemberIdentity) ?? false) {
       unawaited(_loadReview());
     }
+    _mayAssign =
+        (session?.can(TgcgCapability.assignRoles) ?? false) &&
+        session?.membershipNumber != widget.number;
   }
 
   Future<void> _loadMember() async {
@@ -123,6 +135,7 @@ class _MemberProfileState extends State<_MemberProfile> {
       _busy = true;
       _done = null;
       _problem = null;
+      _notice = null;
     });
     try {
       final verification = await action();
@@ -181,6 +194,44 @@ class _MemberProfileState extends State<_MemberProfile> {
     );
   }
 
+  /// The appoint screen, with this member chosen. The server decides who may
+  /// be given what, and where.
+  Future<void> _assign(StaffMember member) async {
+    setState(() {
+      _done = null;
+      _problem = null;
+      _notice = null;
+    });
+    if (member.verificationStatus != 'verified' || member.membershipState != 'active') {
+      setState(
+        () => _notice =
+            'Only a member with a verified identity and an active membership can hold a position.',
+      );
+      return;
+    }
+    final made = await showDialog<Appointment>(
+      context: context,
+      // Its own messenger: this profile covers the page on a phone, and with it
+      // anything the appoint screen reports.
+      builder: (_) => ScaffoldMessenger(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: AppointDialog(member: member.membershipNumber, memberName: member.displayName),
+        ),
+      ),
+    );
+    if (made == null || !mounted) return;
+    widget.onChanged?.call();
+    final updated = await _members
+        .member(widget.number)
+        .then<StaffMember?>((member) => member, onError: (_) => null);
+    if (!mounted) return;
+    setState(() {
+      _member = updated ?? _member;
+      _done = '${made.memberName} appointed ${made.roleName}.';
+    });
+  }
+
   /// Who this is and where they stand: the first thing to read.
   Widget _heading(StaffMember member) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,7 +278,7 @@ class _MemberProfileState extends State<_MemberProfile> {
                       _run(() => _members.runChecks(member.membershipNumber), 'Checks run again.'),
           ),
         ],
-        _Sections(member: member),
+        _Sections(member: member, onAssign: _mayAssign ? () => _assign(member) : null),
       ],
     );
   }
@@ -356,6 +407,14 @@ class _MemberProfileState extends State<_MemberProfile> {
                     icon: Icons.error_outline_rounded,
                     color: TgcgColors.danger,
                     child: Text(failureMessage(problem)),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (_notice case final notice?) ...[
+                  TgcgNotice(
+                    icon: Icons.info_outline_rounded,
+                    color: TgcgColors.warning,
+                    child: Text(notice),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -602,9 +661,12 @@ class _ReviewPanel extends StatelessWidget {
 
 /// The member's record, section by section.
 class _Sections extends StatelessWidget {
-  const _Sections({required this.member});
+  const _Sections({required this.member, required this.onAssign});
 
   final StaffMember member;
+
+  /// Null when this account gives this member no position.
+  final VoidCallback? onAssign;
 
   @override
   Widget build(BuildContext context) {
@@ -624,21 +686,26 @@ class _Sections extends StatelessWidget {
       children: [
         _Section(
           title: 'Positions',
-          children: member.posts.isEmpty
-              ? [const _Line('None', 'An ordinary member')]
-              : [
-                  for (final post in member.posts)
-                    _Line(
-                      post.roleName,
-                      [
-                        if (post.areaName.isNotEmpty)
-                          post.areaLevel == null || post.areaLevel == GeographyLevel.country
-                              ? post.areaName
-                              : '${post.areaName} ${levelLabel(post.areaLevel!)}',
-                        if (post.state != 'active') post.state,
-                      ].join(' · '),
-                    ),
-                ],
+          children: [
+            if (member.posts.isEmpty) const _Line('None', 'An ordinary member'),
+            for (final post in member.posts)
+              _Line(
+                post.roleName,
+                [
+                  if (post.areaName.isNotEmpty)
+                    post.areaLevel == null || post.areaLevel == GeographyLevel.country
+                        ? post.areaName
+                        : '${post.areaName} ${levelLabel(post.areaLevel!)}',
+                  if (post.state != 'active') post.state,
+                ].join(' · '),
+              ),
+            if (onAssign != null)
+              TextButton.icon(
+                onPressed: onAssign,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Assign position'),
+              ),
+          ],
         ),
         _Section(
           title: 'Contact',

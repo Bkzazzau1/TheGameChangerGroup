@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_profile.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_search.dart' show MemberCard;
+import 'package:tgcg_emcop/tgcg/membership/membership_store.dart';
 import 'package:tgcg_emcop/tgcg/membership/polling_unit_members_page.dart';
+import 'package:tgcg_emcop/tgcg/api/access_repository.dart' show RoleDefinition;
+import 'package:tgcg_emcop/tgcg/api/backend.dart';
+import 'package:tgcg_emcop/tgcg/geography/geography_registry.dart';
 import 'package:tgcg_emcop/tgcg/api/member_admin_repository.dart' show StaffMember;
+import 'package:tgcg_emcop/tgcg/session.dart';
 
 import 'support/redesign_fixtures.dart';
 import 'support/review_fixtures.dart';
@@ -227,6 +232,142 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(InteractiveViewer), findsNothing);
       expect(find.text('Approve'), findsOneWidget); // back on the profile
+    });
+  });
+
+  group('assigning a position', () {
+    const appoints = {'assignRoles'};
+
+    testWidgets('anyone who appoints can start from the profile', (tester) async {
+      await open(tester, ReviewServer(status: 'verified'), powers: appoints);
+
+      await tester.tap(find.text('Assign position'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Appoint a member'), findsOneWidget);
+      // This member is already chosen.
+      final chosen = tester.widget<TextField>(find.byType(TextField).first);
+      expect(chosen.controller!.text, reviewedNumber);
+      expect(find.text('Bala Musa'), findsWidgets);
+    });
+
+    testWidgets('and the new position shows on the profile', (tester) async {
+      useScreen(tester, const Size(1200, 1000));
+      final server = ReviewServer(status: 'verified');
+      final session = reviewerSession(appoints);
+      addTearDown(session.dispose);
+      var changes = 0;
+      await tester.pumpWidget(
+        TgcgBackend(
+          services: server.connect(),
+          child: TgcgSession(
+            controller: session,
+            // The area picker reads Nigeria's places from here.
+            child: MembershipOperations(
+              controller: MembershipOperationsController.prototypeSeed(
+                GeographyRegistry.prototypeSeed(),
+              ),
+              child: MaterialApp(
+                home: Scaffold(
+                  body: Builder(
+                    builder: (context) => TextButton(
+                      key: key,
+                      onPressed: () =>
+                          showMemberDetails(context, reviewedNumber, onChanged: () => changes++),
+                      child: const Text('Open'),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(key));
+      await tester.pumpAndSettle();
+      expect(find.text('An ordinary member'), findsOneWidget);
+
+      await tester.tap(find.text('Assign position'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<RoleDefinition>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('State Secretary').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add area'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Choose'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Review and appoint'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Appoint'));
+      await tester.pumpAndSettle();
+
+      expect(server.bodies['POST access/assignments/']!['member'], reviewedNumber);
+      expect(find.text('Bala Musa appointed State Secretary.'), findsOneWidget);
+      expect(find.text('An ordinary member'), findsNothing);
+      expect(find.text('State Secretary'), findsOneWidget);
+      expect(changes, 1);
+    });
+
+    testWidgets('nobody who does not appoint is offered it', (tester) async {
+      await open(tester, ReviewServer(status: 'verified'));
+      expect(find.text('Assign position'), findsNothing);
+    });
+
+    testWidgets('nobody is offered it on their own profile', (tester) async {
+      useScreen(tester, const Size(1200, 1000));
+      final server = ReviewServer(status: 'verified');
+      final session = TgcgSessionController()
+        ..signInFromServer(
+          fullName: 'Bala Musa',
+          accessId: reviewedNumber,
+          scope: GeographicScope.nigeria,
+          capabilities: appoints,
+          membershipNumber: reviewedNumber,
+        );
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        memberApp(
+          server.connect(),
+          session,
+          Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                key: key,
+                onPressed: () => showMemberDetails(context, reviewedNumber),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(key));
+      await tester.pumpAndSettle();
+      expect(find.text('Assign position'), findsNothing);
+    });
+
+    testWidgets('a member not yet verified is told why, not sent to the form', (tester) async {
+      final server = ReviewServer();
+      await open(tester, server, powers: appoints);
+
+      await tester.tap(find.text('Assign position'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Only a member with a verified identity'), findsOneWidget);
+      expect(find.text('Appoint a member'), findsNothing);
+      expect(server.asked('access/assignments/'), isFalse);
+    });
+
+    testWidgets('once approved, the same person can be given a position', (tester) async {
+      await open(tester, ReviewServer(), powers: const {'verifyMemberIdentity', 'assignRoles'});
+
+      await decide(tester, 'Approve', 'Checked in person.');
+      await tester.ensureVisible(find.text('Assign position'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Assign position'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Appoint a member'), findsOneWidget);
     });
   });
 
