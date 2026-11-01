@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/election/election_calendar.dart';
 import 'package:tgcg_emcop/tgcg/election/election_countdown.dart';
+import 'package:tgcg_emcop/tgcg/election/election_watch.dart';
 
 const _election = nextPresidentialElection;
 
@@ -88,9 +89,95 @@ void main() {
       );
     });
 
+    test('what is left of the day is left in Nigeria', () {
+      expect(leftOfLagosDay(DateTime.parse('2026-11-01T11:00:00Z')), const Duration(hours: 12));
+      expect(leftOfLagosDay(DateTime.parse('2026-11-01T22:59:59Z')), const Duration(seconds: 1));
+      expect(leftOfLagosDay(DateTime.parse('2026-11-01T23:00:00Z')), const Duration(hours: 24));
+    });
+
     test('the hour is the hour in Nigeria', () {
       expect(lagosHour(DateTime.parse('2026-10-30T22:30:00Z')), 23);
       expect(lagosHour(DateTime.parse('2026-10-30T23:30:00Z')), 0);
+    });
+  });
+
+  group('the watch', () {
+    test('its hands show the time in Nigeria', () {
+      // 03:30:15 in Nigeria.
+      final hands = watchHands(DateTime.parse('2026-11-01T02:30:15Z'));
+      expect(hands.second, 15 / 60);
+      expect(hands.minute, closeTo(30.25 / 60, 1e-9));
+      expect(hands.hour, closeTo((3 + 30.25 / 60) / 12, 1e-9));
+    });
+
+    test('its hands show the same on a phone in another time zone', () {
+      final tokyo = watchHands(DateTime.parse('2026-11-01T11:30:15+09:00'));
+      expect(tokyo.hour, watchHands(DateTime.parse('2026-11-01T02:30:15Z')).hour);
+    });
+
+    test('in the afternoon the hour hand goes round again', () {
+      final hands = watchHands(DateTime.parse('2026-11-01T14:00:00Z')); // 15:00
+      expect(hands.hour, closeTo(.25, 1e-9));
+    });
+
+    testWidgets('every size has one, and the ring stops once the election is held', (
+      tester,
+    ) async {
+      ElectionWatch watch() => tester.widget(find.byType(ElectionWatch));
+      for (final size in ElectionCountdownSize.values) {
+        for (final (moment, counting) in const [
+          ('2026-10-30T12:00:00Z', true),
+          ('2027-01-16T09:00:00Z', true),
+          ('2027-02-01T09:00:00Z', false),
+        ]) {
+          await _pump(tester, () => DateTime.parse(moment), size: size);
+          expect(watch().counting, counting, reason: '$size at $moment');
+          await tester.pumpWidget(const SizedBox());
+        }
+      }
+    });
+
+    testWidgets('it ticks, second by second', (tester) async {
+      var now = DateTime.parse('2026-11-01T11:00:00Z');
+      await _pump(tester, () => now);
+      expect(find.text('12:00:00 left today'), findsOneWidget);
+      ElectionWatch watch() => tester.widget(find.byType(ElectionWatch));
+      expect(watch().now, now);
+
+      now = now.add(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('11:59:59 left today'), findsOneWidget);
+      expect(watch().now, now);
+    });
+
+    testWidgets('it stops ticking when it leaves the screen', (tester) async {
+      var reads = 0;
+      await _pump(tester, () {
+        reads++;
+        return DateTime.parse('2026-11-01T11:00:00Z');
+      });
+      await tester.pumpWidget(const SizedBox());
+      final after = reads;
+      await tester.pump(const Duration(seconds: 3));
+      expect(reads, after);
+    });
+
+    testWidgets('on a very narrow card the words go below the watch', (tester) async {
+      tester.view.physicalSize = const Size(250, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ElectionCountdown(clock: () => DateTime.parse('2026-10-30T12:00:00Z')),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getTopLeft(find.text('PRESIDENTIAL ELECTION')).dy,
+        greaterThan(tester.getBottomLeft(find.byType(ElectionWatch)).dy),
+      );
     });
   });
 

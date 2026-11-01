@@ -28,6 +28,15 @@ Future<void> _pump(
 Future<void> _reach(WidgetTester tester, Finder finder) =>
     tester.scrollUntilVisible(finder, 200, scrollable: find.byType(Scrollable).first);
 
+/// Ask Me floats low on the right: a link is brought up above it, then tapped.
+Future<void> _follow(WidgetTester tester, String link) async {
+  await _reach(tester, find.text(link));
+  await Scrollable.ensureVisible(tester.element(find.text(link)), alignment: .3);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(link));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   group('member navigation', () {
     testWidgets('five tabs, and everything from the old tabs can still be found', (tester) async {
@@ -69,9 +78,7 @@ void main() {
 
     testWidgets('home leads to the other tabs', (tester) async {
       await _pump(tester, memberServer);
-      await _reach(tester, find.text('See all'));
-      await tester.tap(find.text('See all'));
-      await tester.pumpAndSettle();
+      await _follow(tester, 'See all');
       expect(
         find.text('All Kwarbai A members meet at 4pm at the ward secretariat.'),
         findsOneWidget,
@@ -79,9 +86,7 @@ void main() {
 
       await tester.tap(find.text('Home'));
       await tester.pumpAndSettle();
-      await _reach(tester, find.text('Details'));
-      await tester.tap(find.text('Details'));
-      await tester.pumpAndSettle();
+      await _follow(tester, 'Details');
       expect(find.text('TGCG members in this unit'), findsOneWidget);
     });
 

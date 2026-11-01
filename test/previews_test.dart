@@ -11,10 +11,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/election/daily_reminder.dart';
+import 'package:tgcg_emcop/tgcg/election/election_countdown.dart';
 import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_profile.dart';
 import 'package:tgcg_emcop/tgcg/session.dart';
+import 'package:tgcg_emcop/tgcg/ui/tgcg_design.dart';
 import 'package:tgcg_emcop/tgcg/ui/tgcg_theme.dart';
 
 import 'support/command_fixtures.dart';
@@ -238,6 +240,45 @@ void main() {
       );
       await tester.pumpAndSettle();
       await _shot(tester, 'daily-reminder-$tag');
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+
+    testWidgets('election watch at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, Size(size.width, 760));
+      DateTime clock() => DateTime.utc(2026, 11, 1, 9, 14, 22);
+      await tester.pumpWidget(
+        _framed(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: tgcgTheme(),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElectionCountdown(clock: clock),
+                    const SizedBox(height: 16),
+                    TgcgNavyPanel(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ElectionCountdown(size: ElectionCountdownSize.band, clock: clock),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElectionCountdown(size: ElectionCountdownSize.compact, clock: clock),
+                    const SizedBox(height: 16),
+                    ElectionCountdown(clock: () => DateTime.utc(2027, 1, 16, 8, 40, 5)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await _shot(tester, 'election-watch-$tag');
+      await tester.pumpWidget(const SizedBox());
       debugDisableShadows = true;
     }, skip: !_enabled);
   }

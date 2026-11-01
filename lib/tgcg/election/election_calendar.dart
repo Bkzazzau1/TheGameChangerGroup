@@ -79,6 +79,9 @@ int lagosHour(DateTime now) => now.toUtc().add(lagosOffset).hour;
 DateTime nextLagosMidnight(DateTime now) =>
     lagosDate(now).add(const Duration(days: 1)).subtract(lagosOffset);
 
+/// What is left of [now]'s day in Nigeria.
+Duration leftOfLagosDay(DateTime now) => nextLagosMidnight(now).difference(now);
+
 enum ElectionPhase { upcoming, electionDay, completed }
 
 /// Where an election stands on a given day.
