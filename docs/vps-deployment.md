@@ -176,6 +176,16 @@ The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback
 
 ## Remaining configuration
 
+### Kebbi LGA coordinators and Kankia LGA executives (1 November 2026)
+
+The owner sent three lists: Kebbi's LGA coordinators (21 rows), Katsina's Kankia LGA executives (16 rows, the first Katsina people on the system) and Kebbi's state officers, which is the same file as on 16 October. The owner's rule: the same name is not a problem; the same phone number is. No code changed: the release uses `import_state_officers` at backend `2fdd662`.
+
+**Imported: 31 members, 31 appointments, 16 appointing grants.** Kebbi LGA coordinators 15 (15 grants); Kankia 14 (1 grant, the LGA Coordinator); Kebbi state rows 20 and 24, held since 16 October as a possible duplicate and released under the owner's rule because their phones differ. All 25 other imported Kebbi state officers were already registered. The dry run matched the rehearsal exactly: no phone was registered already, and every role existed. All are verified on the chapter's word, and their first password is their phone number.
+
+**Held, 10 rows for the chapters.** Kebbi LGA: rows 1 and 11 (no name), 2 and 3 (one phone under two names), 6 and 9 (invalid phone). Kankia: rows 3 and 5 (invalid phone). Kebbi state, as before: rows 14 and 28 (invalid or no phone).
+
+**Checks.** Every phone was found in the PDFs and none clashes with 9,381 phones on earlier lists, apart from rows 20 and 24 themselves. The rehearsal signed in all 31 with the phone as password and gave no one the Situation Room. Running the three files again on production found nothing to import. Backups succeeded before and after, the API log shows no errors, and the copies on the server were shredded. Private files stay in `build/` on the owner's PC.
+
 ### Men and professions in the member figures (31 October 2026)
 
 From the live dashboard the owner saw women but not men, and asked for a profession summary. Backend `2fdd6628e497ebc855f69b458b96c02c9c318f1d` went live over `82a304b`, and the web build followed from frontend `4fe79e0`. There are no migrations, dependency or setting changes, and no APK: Android stays on version 5.
