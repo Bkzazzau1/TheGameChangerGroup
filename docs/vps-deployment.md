@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `0a52d7d72084dfc278aa31639c806d6b8aa5884e`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `f7b90f1e456acc233a1751a525f0e79a7fbbdc8c`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261101-154116-20ecbad5f650` (release directory timestamps use UTC).
-- Frontend build source: `9b2ab40` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261101-142918-24a70177e9d5` (election watch, `afa918d`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261103-090940-42928a1f7631` (release directory timestamps use UTC).
+- Frontend build source: `dc4edd2` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261101-154116-20ecbad5f650` (pop-up messages, `9b2ab40`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `20ecbad5f650acab30d7804f058062aa78f7c54291fd655872f2385c6a9c3474`.
-- Build: 856 files, 59,407,420 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `42928a1f763137e3decc62fd999f4f645f4732b4aff189aaca4df576ebb0d90c`.
+- Build: 856 files, 59,501,561 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,20 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Support groups (3 November 2026)
+
+Backend `f7b90f1` over `0a52d7d`, and frontend `dc4edd2`, on the owner's word ("publish it. and make sure national administrator can see all the group"). Organizations allied with TGCG register as support groups and their leaders manage their members; which group a member is in shows to nobody but the member, the leader and those who vet groups.
+
+- **Registering:** "Register an organization" on the sign-in page starts joining with the organization's details from the paper form, and the person joining leads it. Members register one under Account, then Support groups, led by themselves or someone they name; a member named as leader must say yes in the app. Serial numbers follow the paper form: `TGCG/0001/BAT/27`, counted from the `support_group` sequence.
+- **Vetting:** the new `manageSupportGroups` power, held for all of Nigeria, on the new Support Groups page, which opens on every group. Approve, turn down or suspend with a reason, all audited. Totals count a person in several groups once.
+- **Members:** the leader adds a person, uploads a list (Excel, CSV, Word, PDF, or a scan or photo read with Tesseract, at most 8 scanned pages an upload) and checks each line; the app sends ten at a time, as each new account's PIN hash takes about half a second. New people get an account with their phone number as the first PIN; people already registered are asked in the app. Members join with the group's code or link and can leave. The leader sees name, phone, place and approval only, and messages the group in the app, ten messages a day.
+- **Administrators:** a National Administrator appointed through the role now holds every power, as the legacy administrator account does. The stored role gains new powers only when system roles are synced, and that stays off in releases, so appointed administrators had lacked the newer powers (pop-ups included). A test proves an appointed administrator whose stored role lacks the power sees every group. A count of live administrators was refused by this deployment's safeguards, so it was not confirmed on production accounts.
+- **Package:** `pypdf==6.20.1`, added from the new lock file with `uv sync --locked --no-dev --inexact` before the API stopped (a dry run showed that one addition and nothing else); also added, hash-checked, to the test venv.
+
+**780 PostgreSQL tests** passed with 0 skipped in the isolated run at `f7b90f1`, on fresh throwaway databases, including the Tesseract test that cannot run on the owner's PC; **537 Flutter tests** passed with analysis clean. With the API stopped, `migrate.py` applied exactly `support_groups.0001_initial`, with the role-sync receiver disconnected. **Zero migrations are pending.** Fingerprints matched before and after: **92 roles, 2,412 appointments, 129 delegation grants**. Backup `20261103T091708Z-AIiPmc` preceded the deployment and `20261103T091932Z-58lkFe` followed it.
+
+All 856 uploaded files matched the local checksums, the public checksum matched `42928a1f…`, health passed, and Chrome drew the live sign-in page with "Register an organization" at 390 and 320 wide. Anonymous `/support-groups/`, `/support-groups/totals/`, `/me/support-groups/` and `/me/support-groups/register/` return 401. No server errors in the 30 minutes after (1,255 requests). Android stays at version 5.
 
 ### Pop-up messages, in-app notices and disability figures (1 November 2026)
 
