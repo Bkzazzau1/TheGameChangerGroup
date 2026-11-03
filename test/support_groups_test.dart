@@ -365,6 +365,102 @@ void main() {
     expect(find.text('Approve'), findsNothing);
   });
 
+  testWidgets('types of group open their groups; a type is added and a group moved', (
+    tester,
+  ) async {
+    Map<String, dynamic> kind(String code, String name, {int approved = 0, bool offered = true}) =>
+        {
+          'code': code,
+          'name': name,
+          'offered': offered,
+          'groups': {'pending': 0, 'approved': approved, 'rejected': 0, 'suspended': 0},
+          'people': approved * 40,
+        };
+    var kinds = [
+      {'code': 'support', 'name': 'Support Groups', 'position': 1, 'offered': true},
+      {'code': 'women', 'name': 'Women Groups', 'position': 2, 'offered': true},
+      {'code': 'youth', 'name': 'Youth Groups', 'position': 3, 'offered': true},
+    ];
+    final api = _Api((method, path, body) {
+      switch ((method, path)) {
+        case ('GET', 'support-groups/totals/'):
+          return jsonResponse({
+            'groups': {'pending': 0, 'approved': 3, 'rejected': 0, 'suspended': 0},
+            'people': 120,
+            'approved_people': 30,
+            'kinds': [
+              kind('support', 'Support Groups', approved: 1),
+              kind('women', 'Women Groups', approved: 2),
+              kind('pwd', 'People With Disability (PWD) Groups'),
+            ],
+          });
+        case ('GET', 'support-groups/'):
+          return jsonResponse(_page([_group()..['kind_name'] = 'Youth Groups']));
+        case ('GET', 'support-groups/kinds/'):
+          return jsonResponse(kinds);
+        case ('POST', 'support-groups/kinds/'):
+          kinds = [
+            ...kinds,
+            {'code': 'traders-groups', 'name': 'Traders Groups', 'position': 4, 'offered': true},
+          ];
+          return jsonResponse(kinds.last, 201);
+        case ('PATCH', 'support-groups/kinds/women/'):
+          kinds = [
+            for (final row in kinds) row['code'] == 'women' ? {...row, 'offered': false} : row,
+          ];
+          return jsonResponse(kinds[1]);
+        case ('GET', 'support-groups/g1/members/'):
+          return jsonResponse(_page(<Object>[]));
+        case ('POST', 'support-groups/g1/kind/'):
+          return jsonResponse({..._group(), 'kind': 'women', 'kind_name': 'Women Groups'});
+      }
+      return null;
+    });
+    await _show(tester, api, const Scaffold(body: SupportGroupsPage()));
+
+    expect(find.text('Types of group'), findsOneWidget);
+    expect(find.text('2 approved · 80 people'), findsOneWidget);
+    await _tap(tester, find.byKey(const ValueKey('kind-women')));
+    expect(api.urls.last.queryParameters, {'kind': 'women'});
+    await _tap(tester, find.byKey(const ValueKey('kind-women')));
+    expect(api.urls.last.queryParameters, isEmpty);
+
+    await _tap(tester, find.text('Manage types'));
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name, e.g. Traders Groups'),
+      'Traders Groups',
+    );
+    await _tap(tester, find.widgetWithText(FilledButton, 'Add'));
+    expect(api.sent('POST', 'support-groups/kinds/'), [
+      {'name': 'Traders Groups'},
+    ]);
+    expect(find.text('Traders Groups'), findsOneWidget);
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byKey(const ValueKey('manage-kind-women')),
+        matching: find.byType(Switch),
+      ),
+    );
+    expect(api.sent('PATCH', 'support-groups/kinds/women/'), [
+      {'offered': false},
+    ]);
+    expect(find.text('Not offered to new groups'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await _tap(tester, find.text(_name));
+    expect(find.text('Youth Groups'), findsOneWidget);
+    await _tap(tester, find.text('Change type'));
+    // Only types offered to groups, and its own.
+    expect(find.text('Women Groups'), findsNothing);
+    await _tap(tester, find.text('Traders Groups'));
+    expect(api.sent('POST', 'support-groups/g1/kind/'), [
+      {'kind': 'traders-groups'},
+    ]);
+    expect(find.text('Women Groups'), findsOneWidget);
+  });
+
   testWidgets('a group whose named leader has not said yes cannot be approved', (tester) async {
     final api = _Api(
       (method, path, body) =>

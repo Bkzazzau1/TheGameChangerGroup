@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../access/access_widgets.dart' show failureMessage;
+import '../api/backend.dart';
 import '../api/support_groups_repository.dart';
 import '../geography/geography_registry.dart';
 import '../ui/tgcg_design.dart';
@@ -12,6 +14,9 @@ final _states = [...GeographyRegistry.prototypeSeed().states]
 class OrganizationDraft {
   final name = TextEditingController();
   final email = TextEditingController();
+
+  /// The code of the type of group chosen.
+  String? kind;
   String coverage = 'national';
   String? region;
   String? state;
@@ -28,6 +33,7 @@ class OrganizationDraft {
 
   OrganizationDetails get details => OrganizationDetails(
     name: name.text,
+    kind: kind ?? '',
     coverage: coverage,
     region: region ?? '',
     state: state ?? '',
@@ -45,6 +51,7 @@ class OrganizationDraft {
   /// What is missing, keyed as the server keys it, before anything is sent.
   Map<String, String> check() => {
     if (name.text.trim().length < 3) 'organization_name': "Enter the organization's name.",
+    if (kind == null) 'organization_kind': 'Choose the type of group.',
     if (coverage == 'regional' && region == null)
       'organization_zone': 'Choose the region it covers.',
     if (coverage == 'state' && state == null) 'organization_state': 'Choose the state it covers.',
@@ -90,9 +97,67 @@ class OrganizationFields extends StatefulWidget {
 class _OrganizationFieldsState extends State<OrganizationFields> {
   OrganizationDraft get _draft => widget.draft;
 
+  /// The types of group offered, from the server.
+  List<GroupKind>? _kinds;
+  Object? _kindsError;
+  bool _askedKinds = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_askedKinds) {
+      _askedKinds = true;
+      _loadKinds();
+    }
+  }
+
+  Future<void> _loadKinds() async {
+    final groups = TgcgBackend.of(context)?.supportGroups;
+    if (groups == null) return;
+    setState(() => _kindsError = null);
+    try {
+      final kinds = await groups.offeredKinds();
+      if (mounted) setState(() => _kinds = kinds);
+    } catch (error) {
+      if (mounted) setState(() => _kindsError = error);
+    }
+  }
+
   void _changed(VoidCallback change) {
     setState(change);
     widget.onChanged?.call();
+  }
+
+  Widget _kindField() {
+    final kinds = _kinds;
+    if (kinds == null) {
+      if (_kindsError case final error?) {
+        return TgcgNotice(
+          icon: Icons.cloud_off_outlined,
+          color: TgcgColors.danger,
+          child: Row(
+            children: [
+              Expanded(child: Text(failureMessage(error))),
+              TextButton(onPressed: _loadKinds, child: const Text('Try again')),
+            ],
+          ),
+        );
+      }
+      return const LinearProgressIndicator(minHeight: 2);
+    }
+    return DropdownButtonFormField<String>(
+      key: const ValueKey('organization-kind'),
+      initialValue: kinds.any((kind) => kind.code == _draft.kind) ? _draft.kind : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Type of group',
+        errorText: widget.errors['organization_kind'],
+      ),
+      items: [
+        for (final kind in kinds) DropdownMenuItem(value: kind.code, child: Text(kind.name)),
+      ],
+      onChanged: (value) => _changed(() => _draft.kind = value),
+    );
   }
 
   @override
@@ -108,6 +173,8 @@ class _OrganizationFieldsState extends State<OrganizationFields> {
           errorText: widget.errors['organization_name'],
         ),
       ),
+      const SizedBox(height: 12),
+      _kindField(),
       const SizedBox(height: 16),
       const Text('Area it covers', style: TextStyle(fontWeight: FontWeight.w800)),
       const SizedBox(height: 8),

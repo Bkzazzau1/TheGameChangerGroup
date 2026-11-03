@@ -43,11 +43,31 @@ class GroupOfficial {
   );
 }
 
+/// A type of support group: Support Groups, Women Groups, Youth Groups and
+/// People With Disability (PWD) Groups to start with, and more as those who
+/// vet groups add them.
+class GroupKind {
+  const GroupKind({required this.code, required this.name, this.offered = true});
+
+  final String code;
+  final String name;
+
+  /// Offered to groups registering; groups already of it keep it either way.
+  final bool offered;
+
+  factory GroupKind.fromJson(Map<String, dynamic> json) => GroupKind(
+    code: json['code'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    offered: json['offered'] as bool? ?? true,
+  );
+}
+
 /// The organization's part of the registration form.
 class OrganizationDetails {
   const OrganizationDetails({
     required this.name,
     required this.coverage,
+    this.kind = '',
     this.region = '',
     this.state = '',
     this.email = '',
@@ -55,6 +75,9 @@ class OrganizationDetails {
   });
 
   final String name;
+
+  /// The code of its [GroupKind].
+  final String kind;
 
   /// A code from [groupCoverages].
   final String coverage;
@@ -70,6 +93,7 @@ class OrganizationDetails {
   /// The form's fields, as joining and registering send them.
   Map<String, Object> toFields() => {
     'organization_name': name.trim(),
+    'organization_kind': kind,
     'organization_coverage': coverage,
     if (coverage == 'regional') 'organization_zone': region,
     if (coverage == 'state') 'organization_state': state,
@@ -115,6 +139,8 @@ class SupportGroup {
     required this.status,
     required this.statusLabel,
     required this.leader,
+    this.kind = '',
+    this.kindName = '',
     this.zone,
     this.state,
     this.email = '',
@@ -137,6 +163,10 @@ class SupportGroup {
   /// As on the paper form: TGCG/0001/BAT/27.
   final String serialNumber;
   final String name;
+
+  /// Its type: the [GroupKind]'s code and name.
+  final String kind;
+  final String kindName;
   final String coverage;
   final String coverageLabel;
 
@@ -177,6 +207,8 @@ class SupportGroup {
     id: json['id'] as String,
     serialNumber: json['serial_number'] as String? ?? '',
     name: json['name'] as String? ?? '',
+    kind: json['kind'] as String? ?? '',
+    kindName: json['kind_name'] as String? ?? '',
     coverage: json['coverage'] as String? ?? '',
     coverageLabel: json['coverage_label'] as String? ?? '',
     status: json['status'] as String? ?? '',
@@ -268,11 +300,15 @@ class MyGroupPlace {
     required this.leaderName,
     required this.status,
     this.leads = false,
+    this.kindName = '',
   });
 
   final String id;
   final String groupId;
   final String groupName;
+
+  /// The group's type, e.g. Women Groups.
+  final String kindName;
   final String serialNumber;
   final String coverageLabel;
   final String leaderName;
@@ -287,6 +323,7 @@ class MyGroupPlace {
       id: json['id'] as String,
       groupId: group['id'] as String? ?? '',
       groupName: group['name'] as String? ?? '',
+      kindName: group['kind_name'] as String? ?? '',
       serialNumber: group['serial_number'] as String? ?? '',
       coverageLabel: group['coverage_label'] as String? ?? '',
       leaderName: group['leader'] as String? ?? '',
@@ -408,21 +445,50 @@ class AddResult {
   );
 }
 
-/// Groups by status, and people in approved groups counted once.
+Map<String, int> _byStatus(Object? json) => {
+  for (final entry in (json as Map<String, dynamic>? ?? const {}).entries)
+    entry.key: entry.value as int,
+};
+
+/// One type of group: its groups by status, and the people in its approved
+/// groups counted once.
+class GroupKindTotals {
+  const GroupKindTotals({required this.kind, this.byStatus = const {}, this.people = 0});
+
+  final GroupKind kind;
+  final Map<String, int> byStatus;
+  final int people;
+
+  factory GroupKindTotals.fromJson(Map<String, dynamic> json) => GroupKindTotals(
+    kind: GroupKind.fromJson(json),
+    byStatus: _byStatus(json['groups']),
+    people: json['people'] as int? ?? 0,
+  );
+}
+
+/// Groups by status, and people in approved groups counted once; and the
+/// same for each type of group.
 class SupportGroupTotals {
-  const SupportGroupTotals({this.byStatus = const {}, this.people = 0, this.approvedPeople = 0});
+  const SupportGroupTotals({
+    this.byStatus = const {},
+    this.people = 0,
+    this.approvedPeople = 0,
+    this.kinds = const [],
+  });
 
   final Map<String, int> byStatus;
   final int people;
   final int approvedPeople;
+  final List<GroupKindTotals> kinds;
 
   factory SupportGroupTotals.fromJson(Map<String, dynamic> json) => SupportGroupTotals(
-    byStatus: {
-      for (final entry in (json['groups'] as Map<String, dynamic>? ?? const {}).entries)
-        entry.key: entry.value as int,
-    },
+    byStatus: _byStatus(json['groups']),
     people: json['people'] as int? ?? 0,
     approvedPeople: json['approved_people'] as int? ?? 0,
+    kinds: [
+      for (final item in json['kinds'] as List<dynamic>? ?? const [])
+        GroupKindTotals.fromJson(item as Map<String, dynamic>),
+    ],
   );
 }
 
@@ -472,6 +538,14 @@ class SupportGroupsRepository {
 
   Future<void> leave(String placeId) async {
     await client.post('me/support-groups/$placeId/leave/');
+  }
+
+  /// The types of group a registering organization chooses from. No
+  /// sign-in is needed: the joining page asks too.
+  Future<List<GroupKind>> offeredKinds() async {
+    final body =
+        await client.get('register/support-group-kinds/', authenticated: false) as List<dynamic>;
+    return [for (final item in body) GroupKind.fromJson(item as Map<String, dynamic>)];
   }
 
   /// The name of the group whose link opened joining.
@@ -539,8 +613,10 @@ class SupportGroupsRepository {
 
   // --- vetting --------------------------------------------------------------------
 
+  /// Every group, or those of one [status] and of one type ([kind], its code).
   Future<ApiPage<SupportGroup>> all({
     String status = '',
+    String kind = '',
     String search = '',
     int offset = 0,
   }) async => ApiPage.fromJson(
@@ -548,6 +624,7 @@ class SupportGroupsRepository {
       'support-groups/',
       query: {
         if (status.isNotEmpty) 'status': status,
+        if (kind.isNotEmpty) 'kind': kind,
         if (search.trim().isNotEmpty) 'search': search.trim(),
         if (offset > 0) 'offset': '$offset',
       },
@@ -572,4 +649,33 @@ class SupportGroupsRepository {
     await client.get('support-groups/$id/members/', query: {if (offset > 0) 'offset': '$offset'}),
     GroupPerson.fromJson,
   );
+
+  /// Moves a group to another type.
+  Future<SupportGroup> changeKind(String id, String kind) async => SupportGroup.fromJson(
+    await client.post('support-groups/$id/kind/', body: {'kind': kind}) as Map<String, dynamic>,
+  );
+
+  // --- types of group ---------------------------------------------------------------
+
+  /// Every type, offered or not.
+  Future<List<GroupKind>> kinds() async {
+    final body = await client.get('support-groups/kinds/') as List<dynamic>;
+    return [for (final item in body) GroupKind.fromJson(item as Map<String, dynamic>)];
+  }
+
+  /// Adds a type, offered at once.
+  Future<GroupKind> addKind(String name) async => GroupKind.fromJson(
+    await client.post('support-groups/kinds/', body: {'name': name.trim()})
+        as Map<String, dynamic>,
+  );
+
+  /// Renames a type, or stops or starts offering it.
+  Future<GroupKind> updateKind(String code, {String? name, bool? offered}) async =>
+      GroupKind.fromJson(
+        await client.patch(
+              'support-groups/kinds/$code/',
+              body: {'name': ?name?.trim(), 'offered': ?offered},
+            )
+            as Map<String, dynamic>,
+      );
 }

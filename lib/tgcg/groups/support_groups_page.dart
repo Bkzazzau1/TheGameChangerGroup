@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart' show failureMessage, showFailure;
 import '../api/access_repository.dart' show ApiPage;
+import '../api/api_client.dart' show ApiException;
 import '../api/backend.dart';
 import '../api/support_groups_repository.dart';
 import '../ui/tgcg_design.dart';
@@ -18,8 +19,17 @@ const _filters = [
 String _day(DateTime? moment) =>
     moment == null ? '' : '${moment.day}/${moment.month}/${moment.year}';
 
+/// "3 approved · 1 waiting · 120 people", for a type of group.
+String _kindDetail(GroupKindTotals row) => [
+  '${row.byStatus['approved'] ?? 0} approved',
+  if ((row.byStatus['pending'] ?? 0) > 0) '${row.byStatus['pending']} waiting',
+  '${row.people} ${row.people == 1 ? 'person' : 'people'}',
+  if (!row.kind.offered) 'not offered to new groups',
+].join(' · ');
+
 /// Every support group, for those who vet them nationwide: the totals, with
-/// people in several groups counted once, and each group to vet.
+/// people in several groups counted once, the types of group, each opening
+/// its groups, and each group to vet.
 class SupportGroupsPage extends StatefulWidget {
   const SupportGroupsPage({super.key});
 
@@ -28,8 +38,9 @@ class SupportGroupsPage extends StatefulWidget {
 }
 
 class _SupportGroupsPageState extends State<SupportGroupsPage> {
-  // Every group at first, whatever its state.
+  // Every group at first, whatever its state or type.
   String _status = '';
+  String _kind = '';
   final _search = TextEditingController();
   Future<SupportGroupTotals>? _totals;
   final _items = <SupportGroup>[];
@@ -66,6 +77,7 @@ class _SupportGroupsPageState extends State<SupportGroupsPage> {
     try {
       final ApiPage<SupportGroup> page = await _groups.all(
         status: _status,
+        kind: _kind,
         search: _search.text,
         offset: _items.length,
       );
@@ -87,6 +99,40 @@ class _SupportGroupsPageState extends State<SupportGroupsPage> {
     ).push(MaterialPageRoute<void>(builder: (_) => VettedGroupPage(group: group)));
     if (mounted) _reload();
   }
+
+  Future<void> _manageKinds() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const GroupKindsPage()));
+    if (mounted) _reload();
+  }
+
+  void _showKind(String code) {
+    _kind = _kind == code ? '' : code;
+    _reload();
+  }
+
+  Widget _kinds(SupportGroupTotals totals) => TgcgSectionCard(
+    title: 'Types of group',
+    trailing: TextButton.icon(
+      onPressed: _manageKinds,
+      icon: const Icon(Icons.tune_rounded, size: 18),
+      label: const Text('Manage types'),
+    ),
+    child: TgcgRowGroup(
+      children: [
+        for (final row in totals.kinds)
+          TgcgActionRow(
+            key: ValueKey('kind-${row.kind.code}'),
+            icon: _kind == row.kind.code ? Icons.check_circle_rounded : Icons.diversity_3_outlined,
+            color: _kind == row.kind.code ? TgcgColors.success : TgcgColors.primary,
+            title: row.kind.name,
+            detail: _kindDetail(row),
+            onTap: () => _showKind(row.kind.code),
+          ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -113,7 +159,7 @@ class _SupportGroupsPageState extends State<SupportGroupsPage> {
                     )
                   : const LinearProgressIndicator(minHeight: 2);
             }
-            return TgcgMetricGrid(
+            final grid = TgcgMetricGrid(
               across: const [2, 4, 4],
               cards: [
                 TgcgMetricCard(
@@ -140,6 +186,11 @@ class _SupportGroupsPageState extends State<SupportGroupsPage> {
                   tone: TgcgMetricTone.success,
                 ),
               ],
+            );
+            if (totals.kinds.isEmpty) return grid;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [grid, const SizedBox(height: 16), _kinds(totals)],
             );
           },
         ),
@@ -193,9 +244,13 @@ class _SupportGroupsPageState extends State<SupportGroupsPage> {
                 TgcgActionRow(
                   icon: Icons.diversity_3_outlined,
                   title: group.name,
-                  detail:
-                      '${group.serialNumber} · ${group.area} · ${group.leader.fullName} · '
-                      '${group.members ?? 0} in it',
+                  detail: [
+                    group.serialNumber,
+                    if (_kind.isEmpty && group.kindName.isNotEmpty) group.kindName,
+                    group.area,
+                    group.leader.fullName,
+                    '${group.members ?? 0} in it',
+                  ].join(' · '),
                   trailing: TgcgStatusPill(
                     compact: true,
                     label: groupStatus(group).$1,
@@ -288,6 +343,42 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
     }
   }
 
+  /// Moves the group to another type, one offered to groups or its own.
+  Future<void> _changeKind() async {
+    setState(() => _deciding = true);
+    try {
+      final kinds = await _groups.kinds();
+      if (!mounted) return;
+      final chosen = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: Text('Type of ${_group.name}'),
+          children: [
+            for (final kind in kinds)
+              if (kind.offered || kind.code == _group.kind)
+                ListTile(
+                  leading: Icon(
+                    kind.code == _group.kind
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: TgcgColors.primary,
+                  ),
+                  title: Text(kind.name),
+                  onTap: () => Navigator.pop(context, kind.code),
+                ),
+          ],
+        ),
+      );
+      if (chosen == null || chosen == _group.kind || !mounted) return;
+      final moved = await _groups.changeKind(_group.id, chosen);
+      if (mounted) setState(() => _group = moved);
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    } finally {
+      if (mounted) setState(() => _deciding = false);
+    }
+  }
+
   Widget _fact(String label, String value) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(
@@ -318,6 +409,7 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _fact('Serial number', group.serialNumber),
+                  _fact('Type', group.kindName),
                   _fact('Leader', group.leader.fullName),
                   _fact("Leader's phone", group.leader.phoneNumber),
                   _fact("Leader's place", group.leader.place),
@@ -389,6 +481,11 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
                     icon: const Icon(Icons.play_circle_outline_rounded),
                     label: const Text('Lift the suspension'),
                   ),
+                OutlinedButton.icon(
+                  onPressed: _deciding ? null : _changeKind,
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  label: const Text('Change type'),
+                ),
               ],
             ),
             const SizedBox(height: 18),
@@ -449,6 +546,209 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
       ),
     );
   }
+}
+
+/// The types of group, for those who vet groups: add one, rename one, and
+/// stop or start offering one to groups registering. Groups already of a
+/// type keep it either way.
+class GroupKindsPage extends StatefulWidget {
+  const GroupKindsPage({super.key});
+
+  @override
+  State<GroupKindsPage> createState() => _GroupKindsPageState();
+}
+
+class _GroupKindsPageState extends State<GroupKindsPage> {
+  List<GroupKind>? _kinds;
+  Object? _error;
+  bool _busy = false;
+  final _name = TextEditingController();
+  String? _nameError;
+
+  SupportGroupsRepository get _groups => TgcgBackend.of(context)!.supportGroups;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_kinds == null && _error == null && !_busy) _load();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final kinds = await _groups.kinds();
+      if (mounted) setState(() => _kinds = kinds);
+    } catch (error) {
+      if (mounted) setState(() => _error = error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Runs [work], then lists the types again; a refusal shows by the field.
+  Future<void> _change(Future<void> Function() work) async {
+    setState(() => _busy = true);
+    try {
+      await work();
+      if (mounted) await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      final field = error.fieldError('name');
+      if (field != null) {
+        setState(() => _nameError = field);
+      } else {
+        showFailure(context, error);
+      }
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _add() async {
+    final name = _name.text.trim();
+    if (name.length < 3) {
+      setState(() => _nameError = 'Name the type of group.');
+      return;
+    }
+    setState(() => _nameError = null);
+    await _change(() async {
+      await _groups.addKind(name);
+      _name.clear();
+    });
+  }
+
+  Future<void> _rename(GroupKind kind) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _RenameDialog(name: kind.name),
+    );
+    if (name == null || name == kind.name || !mounted) return;
+    await _change(() => _groups.updateKind(kind.code, name: name));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kinds = _kinds;
+    return Scaffold(
+      backgroundColor: TgcgColors.canvas,
+      appBar: AppBar(title: const Text('Types of group')),
+      body: SafeArea(
+        child: TgcgPageList(
+          children: [
+            TgcgSectionCard(
+              title: 'Add a type',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _name,
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) {
+                      if (_nameError != null) setState(() => _nameError = null);
+                    },
+                    onSubmitted: (_) => _add(),
+                    decoration: InputDecoration(
+                      labelText: 'Name, e.g. Traders Groups',
+                      errorText: _nameError,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : _add,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (_error != null && kinds == null)
+              TgcgNotice(
+                icon: Icons.cloud_off_outlined,
+                color: TgcgColors.danger,
+                child: Text(failureMessage(_error!)),
+              )
+            else if (kinds == null)
+              const LinearProgressIndicator(minHeight: 2)
+            else
+              TgcgRowGroup(
+                children: [
+                  for (final kind in kinds)
+                    TgcgActionRow(
+                      key: ValueKey('manage-kind-${kind.code}'),
+                      icon: Icons.diversity_3_outlined,
+                      color: kind.offered ? TgcgColors.primary : TgcgColors.muted,
+                      title: kind.name,
+                      detail: kind.offered
+                          ? 'Offered to groups registering'
+                          : 'Not offered to new groups',
+                      onTap: _busy ? null : () => _rename(kind),
+                      trailing: Switch(
+                        value: kind.offered,
+                        onChanged: _busy
+                            ? null
+                            : (offered) =>
+                                  _change(() => _groups.updateKind(kind.code, offered: offered)),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.name});
+
+  final String name;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final _name = TextEditingController(text: widget.name);
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Rename the type'),
+    content: TextField(
+      controller: _name,
+      autofocus: true,
+      textCapitalization: TextCapitalization.words,
+      decoration: const InputDecoration(labelText: 'Name'),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _name.text.trim()),
+        child: const Text('Rename'),
+      ),
+    ],
+  );
 }
 
 class _ReasonDialog extends StatefulWidget {

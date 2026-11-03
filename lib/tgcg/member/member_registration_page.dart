@@ -652,6 +652,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   /// The pages of the form where each field's mistake shows.
   Map<String, _Step> get _fieldSteps => {
         'organization_name': _Step.organization,
+        'organization_kind': _Step.organization,
         'organization_coverage': _Step.organization,
         'organization_zone': _Step.organization,
         'organization_state': _Step.organization,

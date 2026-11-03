@@ -301,6 +301,8 @@ void main() {
         'id': 'g1',
         'serial_number': 'TGCG/0001/BAT/27',
         'name': 'Arewa Youth for Progress',
+        'kind': 'youth',
+        'kind_name': 'Youth Groups',
         'coverage': 'state',
         'coverage_label': 'State',
         'state': 'Kaduna',
@@ -376,7 +378,28 @@ void main() {
             'groups': {'approved': 14, 'pending': 3, 'rejected': 1, 'suspended': 0},
             'people': 18420,
             'approved_people': 4115,
+            'kinds': [
+              for (final (code, name, approved, pending, people) in [
+                ('support', 'Support Groups', 6, 1, 9120),
+                ('women', 'Women Groups', 4, 1, 5210),
+                ('youth', 'Youth Groups', 3, 1, 3480),
+                ('pwd', 'People With Disability (PWD) Groups', 1, 0, 610),
+              ])
+                {
+                  'code': code,
+                  'name': name,
+                  'offered': true,
+                  'groups': {'approved': approved, 'pending': pending, 'rejected': 0, 'suspended': 0},
+                  'people': people,
+                },
+            ],
           }),
+          'register/support-group-kinds/' => jsonResponse([
+            {'code': 'support', 'name': 'Support Groups'},
+            {'code': 'women', 'name': 'Women Groups'},
+            {'code': 'youth', 'name': 'Youth Groups'},
+            {'code': 'pwd', 'name': 'People With Disability (PWD) Groups'},
+          ]),
           'support-groups/' => jsonResponse({
             'count': 2,
             'next': null,

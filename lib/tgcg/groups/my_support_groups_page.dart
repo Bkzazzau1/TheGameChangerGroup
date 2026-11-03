@@ -163,7 +163,11 @@ class _MySupportGroupsPageState extends State<MySupportGroupsPage> {
                       TgcgActionRow(
                         icon: Icons.diversity_3_outlined,
                         title: group.name,
-                        detail: '${group.serialNumber} · ${group.area}',
+                        detail: [
+                          group.serialNumber,
+                          if (group.kindName.isNotEmpty) group.kindName,
+                          group.area,
+                        ].join(' · '),
                         trailing: TgcgStatusPill(
                           compact: true,
                           label: groupStatus(group).$1,
@@ -184,7 +188,11 @@ class _MySupportGroupsPageState extends State<MySupportGroupsPage> {
                         TgcgActionRow(
                           icon: Icons.groups_outlined,
                           title: place.groupName,
-                          detail: 'Led by ${place.leaderName} · ${place.coverageLabel}',
+                          detail: [
+                            'Led by ${place.leaderName}',
+                            if (place.kindName.isNotEmpty) place.kindName,
+                            place.coverageLabel,
+                          ].join(' · '),
                           trailing: TextButton(
                             onPressed: _busy.contains(place.id) ? null : () => _leave(place),
                             child: const Text('Leave'),

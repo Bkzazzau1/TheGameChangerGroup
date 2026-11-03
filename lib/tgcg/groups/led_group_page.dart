@@ -231,7 +231,11 @@ class _LedGroupPageState extends State<LedGroupPage> {
             children: [
               TgcgSectionCard(
                 title: group.name,
-                subtitle: '${group.serialNumber} · ${group.area}',
+                subtitle: [
+                  group.serialNumber,
+                  if (group.kindName.isNotEmpty) group.kindName,
+                  group.area,
+                ].join(' · '),
                 trailing: TgcgStatusPill(label: status, color: color),
                 trailingBeside: true,
                 child: _GroupState(group: group),

@@ -259,6 +259,12 @@ void main() {
                 'name': 'KWARBAI I/ PRI. SCH. MADARKACI',
                 'navigation': null,
               }),
+            'register/support-group-kinds/' => _json([
+                {'code': 'support', 'name': 'Support Groups'},
+                {'code': 'women', 'name': 'Women Groups'},
+                {'code': 'youth', 'name': 'Youth Groups'},
+                {'code': 'pwd', 'name': 'People With Disability (PWD) Groups'},
+              ]),
             // The lists for finding a polling unit by name.
             'register/places/states/' => _json([
                 {'code': 'KD', 'name': 'Kaduna'},
@@ -412,10 +418,15 @@ void main() {
       expect(find.text('Your organization'), findsOneWidget);
       await onward('Next');
       expect(find.text("Enter the organization's name."), findsOneWidget);
+      expect(find.text('Choose the type of group.'), findsOneWidget);
       await tester.enterText(
         find.widgetWithText(TextField, 'Name of the organization'),
         'Arewa Youth for Progress',
       );
+      await tester.tap(find.byKey(const ValueKey('organization-kind')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Youth Groups').last);
+      await tester.pumpAndSettle();
       await tester.enterText(find.widgetWithText(TextField, 'Name').first, 'Bala Musa');
       await tester.enterText(find.widgetWithText(TextField, 'Position').first, 'Secretary');
       await onward('Next');
@@ -432,6 +443,7 @@ void main() {
 
       final upload = api.requests.last as http.MultipartRequest;
       expect(upload.fields['organization_name'], 'Arewa Youth for Progress');
+      expect(upload.fields['organization_kind'], 'youth');
       expect(upload.fields['organization_coverage'], 'national');
       expect(jsonDecode(upload.fields['organization_officials']!), [
         {'name': 'Bala Musa', 'position': 'Secretary', 'phone': ''},
