@@ -8,11 +8,11 @@ import '../ui/tgcg_design.dart';
 import 'my_support_groups_page.dart' show groupStatus;
 
 const _filters = [
+  ('', 'All groups'),
   ('pending', 'Waiting for vetting'),
   ('approved', 'Approved'),
   ('suspended', 'Suspended'),
   ('rejected', 'Not approved'),
-  ('', 'All'),
 ];
 
 String _day(DateTime? moment) =>
@@ -28,7 +28,8 @@ class SupportGroupsPage extends StatefulWidget {
 }
 
 class _SupportGroupsPageState extends State<SupportGroupsPage> {
-  String _status = 'pending';
+  // Every group at first, whatever its state.
+  String _status = '';
   final _search = TextEditingController();
   Future<SupportGroupTotals>? _totals;
   final _items = <SupportGroup>[];

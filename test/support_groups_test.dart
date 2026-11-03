@@ -104,6 +104,7 @@ class _Api {
 
   final http.Response? Function(String method, String path, Object? body) answer;
   final calls = <(String, String, Object?)>[];
+  final urls = <Uri>[];
 
   BackendServices connect() => BackendServices.connect(
     'https://api.tgcg.test',
@@ -113,6 +114,7 @@ class _Api {
       final json = (request.headers['content-type'] ?? '').contains('application/json');
       final body = json && request.body.isNotEmpty ? jsonDecode(request.body) : null;
       calls.add((request.method, path, body));
+      urls.add(request.url);
       return answer(request.method, path, body) ?? jsonResponse({'detail': 'Not found.'}, 404);
     }),
   );
@@ -334,6 +336,13 @@ void main() {
     });
     await _show(tester, api, const Scaffold(body: SupportGroupsPage()));
 
+    // Every group at first, whatever its state.
+    final listed = api.urls.firstWhere((url) => url.path.endsWith('/support-groups/'));
+    expect(listed.queryParameters, isEmpty);
+    expect(
+      tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'All groups')).selected,
+      isTrue,
+    );
     expect(find.text('1250'), findsOneWidget);
     expect(find.text('Each person counted once'), findsOneWidget);
     await _tap(tester, find.text(_name));
