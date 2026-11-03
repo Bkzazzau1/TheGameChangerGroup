@@ -429,6 +429,42 @@ void main() {
       debugDisableShadows = true;
     }, skip: !_enabled);
 
+    testWidgets('diaspora at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, size);
+      final services = fakeBackend(
+        (path) => switch (path) {
+          'register/places/countries/' => jsonResponse([
+            {'code': 'CA', 'name': 'Canada', 'calling_code': '1'},
+            {'code': 'GB', 'name': 'United Kingdom', 'calling_code': '44'},
+          ]),
+          _ => null,
+        },
+      );
+      await tester.pumpWidget(
+        _framed(memberApp(services, memberSession(), const MemberRegistrationPage(diaspora: true))),
+      );
+      await tester.pumpAndSettle();
+      await _shot(tester, 'diaspora-where-$tag');
+      await tester.tap(find.byKey(const ValueKey('residence-country')));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'diaspora-countries-$tag');
+      await tester.tap(find.text('United Kingdom'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'City or town'), 'London');
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'amina@example.com');
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'diaspora-phone-$tag');
+      await tester.enterText(find.byType(TextField).first, '+44 7700 900123');
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('No PVC'));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'diaspora-home-$tag');
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+
     testWidgets('election watch at $tag', (tester) async {
       debugDisableShadows = false;
       useScreen(tester, Size(size.width, 760));

@@ -851,6 +851,15 @@ class _Sections extends StatelessWidget {
             if (member.pollingUnitFromList) _Line('Unit selection', 'Chosen from the list'),
           ],
         ),
+        if (member.abroad case final abroad?)
+          _Section(
+            title: 'Lives abroad',
+            children: [
+              _Line('Country', abroad.countryName),
+              _Line('City', abroad.city),
+              if (abroad.address case final address?) _Line('Address', address, selectable: true),
+            ],
+          ),
         _Section(
           title: 'Identity & profile',
           children: [

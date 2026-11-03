@@ -8,20 +8,28 @@ import '../ui/tgcg_design.dart';
 /// Finds a polling unit by name, for someone who cannot read the code on
 /// their PVC: the state, the LGA and the ward, each picked from a list that
 /// typing narrows, then the unit. Returns the chosen polling unit.
+///
+/// With [home], for someone joining from the diaspora without a PVC: their
+/// state and LGA of origin, then their ward if they know it. Returns the
+/// places chosen, from the state down, as a `List<RegistrationPlace>`.
 class PollingUnitFinderPage extends StatefulWidget {
-  const PollingUnitFinderPage({super.key});
+  const PollingUnitFinderPage({super.key, this.home = false});
+
+  final bool home;
 
   @override
   State<PollingUnitFinderPage> createState() => _PollingUnitFinderPageState();
 }
 
 class _PollingUnitFinderPageState extends State<PollingUnitFinderPage> {
-  static const _titles = [
-    'Choose your state',
-    'Choose your LGA',
-    'Choose your ward',
-    'Choose your polling unit',
-  ];
+  late final _titles = widget.home
+      ? const ['Choose your state of origin', 'Choose your LGA of origin', 'Choose your ward']
+      : const [
+          'Choose your state',
+          'Choose your LGA',
+          'Choose your ward',
+          'Choose your polling unit',
+        ];
 
   late ReferenceRepository _reference;
   bool _started = false;
@@ -84,7 +92,7 @@ class _PollingUnitFinderPageState extends State<PollingUnitFinderPage> {
 
   void _choose(RegistrationPlace place) {
     if (_level == _titles.length - 1) {
-      Navigator.of(context).pop(place);
+      Navigator.of(context).pop(widget.home ? [..._chosen, place] : place);
     } else {
       _show(() => _chosen.add(place));
     }
@@ -111,7 +119,9 @@ class _PollingUnitFinderPageState extends State<PollingUnitFinderPage> {
           if (!didPop) _show(_chosen.removeLast);
         },
         child: Scaffold(
-          appBar: AppBar(title: const Text('Find your polling unit')),
+          appBar: AppBar(
+            title: Text(widget.home ? 'Your home in Nigeria' : 'Find your polling unit'),
+          ),
           body: SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -137,6 +147,12 @@ class _PollingUnitFinderPageState extends State<PollingUnitFinderPage> {
                           labelText: 'Type part of the name',
                         ),
                       ),
+                      // The ward is optional for a home without a PVC.
+                      if (widget.home && _level == _titles.length - 1)
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop([..._chosen]),
+                          child: const Text("I don't know my ward"),
+                        ),
                     ],
                   ),
                 ),

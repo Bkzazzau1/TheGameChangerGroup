@@ -127,6 +127,18 @@ class RegistrationPlace {
   final String location;
 }
 
+/// A country someone joining from the diaspora may live in.
+class RegistrationCountry {
+  const RegistrationCountry({required this.code, required this.name, required this.callingCode});
+
+  /// The ISO code, e.g. GB.
+  final String code;
+  final String name;
+
+  /// Its international calling code, without the +.
+  final String callingCode;
+}
+
 /// Reference data the field screens need from the server.
 class ReferenceRepository {
   ReferenceRepository(this.client);
@@ -199,6 +211,20 @@ class ReferenceRepository {
           code: item['code'] as String,
           name: item['name'] as String,
           location: (item['location'] as String?) ?? '',
+        ),
+    ];
+  }
+
+  /// The countries someone joining from the diaspora may live in, by name.
+  /// No sign-in is needed.
+  Future<List<RegistrationCountry>> registrationCountries() async {
+    final body = await client.get('register/places/countries/', authenticated: false) as List<dynamic>;
+    return [
+      for (final item in body.cast<Map<String, dynamic>>())
+        RegistrationCountry(
+          code: item['code'] as String,
+          name: item['name'] as String,
+          callingCode: (item['calling_code'] as String?) ?? '',
         ),
     ];
   }

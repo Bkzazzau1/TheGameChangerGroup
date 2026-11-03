@@ -11,6 +11,7 @@ import 'package:tgcg_emcop/tgcg/api/api_client.dart';
 import 'package:tgcg_emcop/tgcg/api/auth_repository.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
+import 'package:tgcg_emcop/tgcg/member/diaspora_form.dart';
 import 'package:tgcg_emcop/tgcg/member/disability_picker.dart';
 import 'package:tgcg_emcop/tgcg/member/forgot_pin_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_registration_page.dart';
@@ -217,6 +218,21 @@ void main() {
     expect(normalizeNigerianPhone('12345'), isNull);
   });
 
+  test('numbers abroad are read by their country code, as the server reads them', () {
+    expect(normalizeAnyPhone('+44 7700 900123'), '+447700900123');
+    expect(normalizeAnyPhone('0044 7700 900123'), '+447700900123');
+    expect(normalizeAnyPhone('+44 (0) 7700 900123'), '+447700900123');
+    expect(normalizeAnyPhone('+44 07700 900123'), '+447700900123');
+    expect(normalizeAnyPhone('+225 07 12 34 56 78'), '+2250712345678');
+    expect(normalizeAnyPhone('+82 2 123 4567'), '+8221234567');
+    expect(normalizeAnyPhone('+234 0803 123 4567'), '+2348031234567');
+    // Written as at home, a number abroad could pass for a Nigerian one.
+    expect(normalizeAnyPhone('07700 900123'), isNull);
+    expect(normalizeAnyPhone('0803 123 4567'), isNull);
+    expect(normalizeAnyPhone('+234 1 234 5678'), isNull);
+    expect(normalizeAnyPhone('+44 12'), isNull);
+  });
+
   test('a member session has no operations role', () {
     final session = TgcgSessionController();
     session.signInMember(fullName: 'Musa Bello', membershipNumber: 'TGCG-000123');
@@ -421,6 +437,175 @@ void main() {
         {'name': 'Bala Musa', 'position': 'Secretary', 'phone': ''},
       ]);
       expect(upload.fields['full_name'], 'Musa Bello');
+    });
+
+    group('from the diaspora', () {
+      _Server abroad() => server(
+            extra: (path) => switch (path) {
+              'register/' => _json(_session(), 201),
+              'register/places/countries/' => _json([
+                  {'code': 'GH', 'name': 'Ghana', 'calling_code': '233'},
+                  {'code': 'GB', 'name': 'United Kingdom', 'calling_code': '44'},
+                  {'code': 'US', 'name': 'United States', 'calling_code': '1'},
+                ]),
+              _ => null,
+            },
+          );
+
+      Future<TgcgSessionController> openAbroad(WidgetTester tester, _Server api) => _pump(
+            tester,
+            api.connect(),
+            MemberRegistrationPage(
+              scanPvc: ({required camera}) async => null,
+              takeSelfie: () async => XFile.fromData(_pixel),
+              checkSelfie: (_) async => const SelfieCheck.passed(),
+              diaspora: true,
+            ),
+          );
+
+      Future<void> onward(WidgetTester tester, String label) async {
+        await tester.ensureVisible(find.text(label));
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+
+      Future<void> liveInLondon(WidgetTester tester) async {
+        await tester.tap(find.byKey(const ValueKey('residence-country')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.widgetWithText(TextField, 'Type part of the name'), 'united k');
+        await tester.pump();
+        expect(find.text('United States'), findsNothing);
+        await tester.tap(find.text('United Kingdom'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.widgetWithText(TextField, 'City or town'), 'London');
+        await tester.enterText(find.widgetWithText(TextField, 'Email'), 'amina@example.com');
+        await onward(tester, 'Next');
+      }
+
+      testWidgets('joins without a PVC, with a number abroad and a home in Nigeria',
+          (tester) async {
+        final api = abroad();
+        final session = await openAbroad(tester, api);
+
+        expect(find.text('Join from the diaspora'), findsOneWidget);
+        expect(find.text('STEP 1 OF 5'), findsOneWidget);
+        expect(find.text('Where you live'), findsOneWidget);
+        await onward(tester, 'Next');
+        expect(find.text('Choose the country where you live.'), findsOneWidget);
+        expect(find.text('Enter your email address.'), findsOneWidget);
+        await liveInLondon(tester);
+
+        // The country's code starts the number; a 0 dialled at home is dropped.
+        expect(find.text('+44 '), findsOneWidget);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Phone number, with its country code'),
+          '+44 07700 900123',
+        );
+        await onward(tester, 'Next');
+        expect(api.bodies.keys, isNot(contains('POST /api/v1/register/code/')));
+
+        expect(find.text('Your home in Nigeria'), findsOneWidget);
+        await tester.tap(find.text('No PVC'));
+        await tester.pumpAndSettle();
+        await onward(tester, 'Next');
+        expect(find.text('Choose your state and LGA of origin.'), findsOneWidget);
+        await tester.enterText(find.widgetWithText(TextField, 'Full name'), 'Amina Yusuf');
+        await onward(tester, 'Choose your state and LGA of origin');
+        expect(find.text('Choose your state of origin'), findsOneWidget);
+        await tester.tap(find.text('Kaduna'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Zaria'));
+        await tester.pumpAndSettle();
+        expect(find.text('Choose your ward'), findsOneWidget);
+        await tester.tap(find.text("I don't know my ward"));
+        await tester.pumpAndSettle();
+        expect(find.text('Your home: Zaria LGA, Kaduna State'), findsOneWidget);
+        await onward(tester, 'Next');
+
+        // The email was asked with where they live.
+        expect(find.text('About you (optional)'), findsOneWidget);
+        expect(find.widgetWithText(TextField, 'Email'), findsNothing);
+        await onward(tester, 'Next');
+        await tester.enterText(find.widgetWithText(TextField, 'PIN'), '482915');
+        await tester.enterText(find.widgetWithText(TextField, 'PIN again'), '482915');
+        await tester.tap(find.byType(Checkbox));
+        await tester.pump();
+        await onward(tester, 'Create my membership');
+
+        expect(session.isMember, isTrue);
+        final upload = api.requests.last as http.MultipartRequest;
+        expect(upload.url.path, '/api/v1/register/');
+        expect(upload.fields, {
+          'phone_number': '+447700900123',
+          'vin': '',
+          'full_name': 'Amina Yusuf',
+          'occupation': '',
+          'email': 'amina@example.com',
+          'pin': '482915',
+          'consent': 'true',
+          'residence_country': 'GB',
+          'residence_city': 'London',
+          'residence_address': '',
+          'home_lga': 'KD-ZARIA',
+        });
+      });
+
+      testWidgets('a number needs its country code, and a PVC places them at its unit',
+          (tester) async {
+        final api = abroad();
+        await openAbroad(tester, api);
+        await liveInLondon(tester);
+
+        // Written as at home in Britain, it could pass for a Nigerian number.
+        final phone = find.widgetWithText(TextField, 'Phone number, with its country code');
+        await tester.enterText(phone, '07700 900123');
+        await onward(tester, 'Next');
+        expect(
+          find.text('Enter your number with its country code, e.g. +44 7700 900123.'),
+          findsOneWidget,
+        );
+        await tester.enterText(phone, '+1 202 555 0143');
+        await onward(tester, 'Next');
+
+        expect(find.text('Your home in Nigeria'), findsOneWidget);
+        await typeCard(tester);
+        await onward(tester, 'Next');
+        await choosePin(tester);
+
+        final upload = api.requests.last as http.MultipartRequest;
+        expect(upload.fields['phone_number'], '+12025550143');
+        expect(upload.fields['vin'], '90F5B0E8D0295847263');
+        expect(upload.fields['delim'], '18-23-01-001');
+        expect(upload.fields.containsKey('home_lga'), isFalse);
+        expect(upload.fields['residence_country'], 'GB');
+      });
+
+      testWidgets("the server's mistakes open the page they belong to", (tester) async {
+        final api = server(
+          extra: (path) => switch (path) {
+            'register/' => _json({
+                'residence_city': ['Enter the city or town where you live.'],
+              }, 400),
+            'register/places/countries/' => _json([
+                {'code': 'GB', 'name': 'United Kingdom', 'calling_code': '44'},
+              ]),
+            _ => null,
+          },
+        );
+        await openAbroad(tester, api);
+        await liveInLondon(tester);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Phone number, with its country code'),
+          '+44 7700 900123',
+        );
+        await onward(tester, 'Next');
+        await typeCard(tester);
+        await onward(tester, 'Next');
+        await choosePin(tester);
+
+        expect(find.text('Where you live'), findsOneWidget);
+        expect(find.text('Enter the city or town where you live.'), findsOneWidget);
+      });
     });
 
     testWidgets("a support group's link puts the new member in the group", (tester) async {

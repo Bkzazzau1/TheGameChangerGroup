@@ -128,6 +128,10 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         MaterialPageRoute(builder: (_) => const MemberRegistrationPage(organization: true)),
       );
 
+  void _joinFromDiaspora() => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MemberRegistrationPage(diaspora: true)),
+      );
+
   @override
   Widget build(BuildContext context) => Scaffold(
         body: SafeArea(
@@ -208,10 +212,20 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   icon: const Icon(Icons.person_add_alt_1_rounded),
                   label: const Text('New member? Register with your PVC'),
                 ),
-                TextButton.icon(
-                  onPressed: _registerOrganization,
-                  icon: const Icon(Icons.add_business_outlined),
-                  label: const Text('Register an organization'),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _registerOrganization,
+                      icon: const Icon(Icons.add_business_outlined),
+                      label: const Text('Register an organization'),
+                    ),
+                    TextButton.icon(
+                      onPressed: _joinFromDiaspora,
+                      icon: const Icon(Icons.public_rounded),
+                      label: const Text('Join from the diaspora'),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -336,10 +350,20 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                 ),
                 const SizedBox(height: 4),
                 Center(
-                  child: TextButton.icon(
-                    onPressed: signingIn ? null : _registerOrganization,
-                    icon: const Icon(Icons.add_business_outlined),
-                    label: const Text('Register an organization'),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      TextButton.icon(
+                        onPressed: signingIn ? null : _registerOrganization,
+                        icon: const Icon(Icons.add_business_outlined),
+                        label: const Text('Register an organization'),
+                      ),
+                      TextButton.icon(
+                        onPressed: signingIn ? null : _joinFromDiaspora,
+                        icon: const Icon(Icons.public_rounded),
+                        label: const Text('Join from the diaspora'),
+                      ),
+                    ],
                   ),
                 ),
               ],

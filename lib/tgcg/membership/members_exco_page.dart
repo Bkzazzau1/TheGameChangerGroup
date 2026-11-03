@@ -68,15 +68,27 @@ const _profileLabels = {
 };
 
 class _MemberSelection {
-  const _MemberSelection(this.label, {this.show, this.verification, this.standing});
+  const _MemberSelection(
+    this.label, {
+    this.show,
+    this.verification,
+    this.standing,
+    this.country,
+  });
 
   final String label;
   final String? show;
   final String? verification;
   final String? standing;
-  bool get isEveryone => show == null && verification == null && standing == null;
-  String get key => show ?? (standing == null ? verification ?? 'all' : 'standing-$standing');
-  String get signature => '$show|$verification|$standing';
+
+  /// Members in the diaspora living in this country (its ISO code).
+  final String? country;
+  bool get isEveryone =>
+      show == null && verification == null && standing == null && country == null;
+  String get key => country != null
+      ? 'country-$country'
+      : show ?? (standing == null ? verification ?? 'all' : 'standing-$standing');
+  String get signature => '$show|$verification|$standing|$country';
 }
 
 const _everyone = _MemberSelection('Everyone');
@@ -420,6 +432,19 @@ class _Analysis extends StatelessWidget {
               TgcgMetricTone.neutral,
               null,
             ),
+            if (members.diaspora case final diaspora?)
+              (
+                'Diaspora',
+                formatCount(diaspora.total),
+                switch (diaspora.countries.length) {
+                  0 => 'Members living abroad',
+                  1 => 'Living in 1 country',
+                  final count => 'Living in ${formatCount(count)} countries',
+                },
+                Icons.public_outlined,
+                TgcgMetricTone.info,
+                () => onMembers(const _MemberSelection('Diaspora', show: 'diaspora')),
+              ),
             (
               'Awaiting review',
               formatCount(members.verification['pendingReview'] ?? 0),
@@ -454,6 +479,12 @@ class _Analysis extends StatelessWidget {
                   ? null
                   : '${formatCount(members.withDisability)} told us of a disability.',
             ),
+            if (members.diaspora case final diaspora?)
+              TgcgSectionCard(
+                padding: const EdgeInsets.all(16),
+                title: 'Diaspora',
+                child: _DiasporaFigures(diaspora: diaspora, total: total, onMembers: onMembers),
+              ),
             if (members.disabilityMen != null)
               TgcgSectionCard(
                 padding: const EdgeInsets.all(16),
@@ -768,6 +799,61 @@ class _BarsCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Members in the diaspora here, by the country where they live, the most
+/// first; a country opens its members.
+class _DiasporaFigures extends StatefulWidget {
+  const _DiasporaFigures({required this.diaspora, required this.total, required this.onMembers});
+
+  final DiasporaFigures diaspora;
+
+  /// All the members here.
+  final int total;
+  final ValueChanged<_MemberSelection> onMembers;
+
+  @override
+  State<_DiasporaFigures> createState() => _DiasporaFiguresState();
+}
+
+class _DiasporaFiguresState extends State<_DiasporaFigures> {
+  static const _shown = 6;
+  var _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final diaspora = widget.diaspora;
+    if (diaspora.total == 0) {
+      return const Text('No member here lives abroad.', style: _valueStyle);
+    }
+    final countries = diaspora.countries;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${formatCount(diaspora.total)} live abroad · ${share(diaspora.total, widget.total)} '
+          'of members',
+          style: _labelStyle,
+        ),
+        const SizedBox(height: 8),
+        for (final country in _all ? countries : countries.take(_shown))
+          ShareBar(
+            key: ValueKey('diaspora-${country.code}'),
+            label: country.name,
+            value: country.count,
+            total: diaspora.total,
+            onTap: () => widget.onMembers(
+              _MemberSelection('Living in ${country.name}', show: 'diaspora', country: country.code),
+            ),
+          ),
+        if (countries.length > _shown)
+          TextButton(
+            onPressed: () => setState(() => _all = !_all),
+            child: Text(_all ? 'Show fewer' : 'Show all ${countries.length}'),
+          ),
+      ],
+    );
+  }
 }
 
 const disabilityTitle = 'Persons with disabilities';
@@ -1597,6 +1683,7 @@ const _memberFilters = [
   _MemberSelection('Exco', show: 'withRole'),
   _MemberSelection('Not exco', show: 'withoutRole'),
   _MemberSelection('Never signed in', show: 'neverSignedIn'),
+  _MemberSelection('Diaspora', show: 'diaspora'),
 ];
 
 class _MembersList extends StatefulWidget {
@@ -1658,6 +1745,7 @@ class _MembersListState extends State<_MembersList> {
         show: selection.show,
         verificationStatus: selection.verification,
         membershipState: selection.standing,
+        country: selection.country,
         area: widget.area,
         offset: more ? _members.length : 0,
       );
@@ -1778,6 +1866,7 @@ class _MemberRow extends StatelessWidget {
                 if (member.gender.isNotEmpty) member.gender == 'female' ? 'Woman' : 'Man',
                 if (age != null) '$age years',
                 if (placeOf(member.scope).isNotEmpty) placeOf(member.scope),
+                if (member.abroad case final abroad?) 'Lives in ${abroad.label}',
               ].join(' · '),
               style: _valueStyle,
             ),

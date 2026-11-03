@@ -556,6 +556,72 @@ void main() {
     });
   });
 
+  group('members in the diaspora', () {
+    Map<String, dynamic> figures(Map<String, dynamic> diaspora) {
+      final analysis = _analysis(national: true);
+      analysis['members'] = <String, dynamic>{
+        ...analysis['members'] as Map<String, dynamic>,
+        'diaspora': diaspora,
+      };
+      return analysis;
+    }
+
+    testWidgets('are counted by country, and a country opens its members', (tester) async {
+      final abroad = {
+        ..._member('TGCG-000901', 'Amina Yusuf'),
+        'diaspora': {
+          'country': 'GB',
+          'country_name': 'United Kingdom',
+          'city': 'London',
+          'address': null,
+        },
+      };
+      final server = _Server()
+        ..answer = (path, query) => switch (path) {
+          'GET members/analysis/' => _json(
+            figures({
+              'total': 30,
+              'countries': [
+                {'country': 'GB', 'name': 'United Kingdom', 'count': 18},
+                {'country': 'US', 'name': 'United States', 'count': 12},
+              ],
+            }),
+          ),
+          'GET members/' => _json(_page([abroad])),
+          _ => null,
+        };
+      await _pumpPage(tester, server);
+
+      expect(find.text('Living in 2 countries'), findsOneWidget);
+      expect(find.text('30 live abroad · 3% of members'), findsOneWidget);
+      final bars = _barsIn(tester, 'Diaspora');
+      expect([for (final bar in bars) (bar.label, bar.value)], [
+        ('United Kingdom', 18),
+        ('United States', 12),
+      ]);
+
+      await _tapVisible(tester, find.byKey(const ValueKey('diaspora-GB')));
+      expect(_lastMemberQuery(server), containsPair('country', 'GB'));
+      expect(_lastMemberQuery(server), containsPair('show', 'diaspora'));
+      expect(find.text('Living in United Kingdom'), findsOneWidget);
+      expect(find.textContaining('Lives in London, United Kingdom'), findsOneWidget);
+    });
+
+    testWidgets('none yet is said plainly', (tester) async {
+      final server = _Server()
+        ..answer = (path, query) => _json(figures({'total': 0, 'countries': []}));
+      await _pumpPage(tester, server);
+      expect(find.text('No member here lives abroad.'), findsOneWidget);
+      expect(find.text('Members living abroad'), findsOneWidget);
+    });
+
+    testWidgets('a server that does not count them shows no false zero', (tester) async {
+      final server = _Server()..answer = (path, query) => _json(_analysis(national: true));
+      await _pumpPage(tester, server);
+      expect(find.text('Diaspora'), findsNothing);
+    });
+  });
+
   testWidgets('quality and standing figures open members in the selected state', (tester) async {
     final server = _Server()
       ..answer = (path, query) => switch (path) {

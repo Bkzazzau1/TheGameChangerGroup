@@ -128,9 +128,14 @@ class MembersFigures {
     this.accounts = const {},
     this.quality = const {},
     this.weekly = const [],
+    this.diaspora,
   });
 
   final int total;
+
+  /// Members in the diaspora here, by the country where they live. Null
+  /// from a server that does not count them.
+  final DiasporaFigures? diaspora;
   final int new7Days;
   final int new30Days;
   final int? previous7Days;
@@ -226,6 +231,32 @@ class MembersFigures {
     weekly: [
       for (final week in (json['weekly'] as List<dynamic>? ?? const []))
         (DateTime.parse((week as Map<String, dynamic>)['week'] as String), _int(week['count'])),
+    ],
+    diaspora: json['diaspora'] is Map<String, dynamic>
+        ? DiasporaFigures.fromJson(json['diaspora'] as Map<String, dynamic>)
+        : null,
+  );
+}
+
+/// One country members in the diaspora live in, and how many live there.
+typedef DiasporaCountry = ({String code, String name, int count});
+
+/// Members in the diaspora: how many, and in which countries, the most first.
+class DiasporaFigures {
+  const DiasporaFigures({this.total = 0, this.countries = const []});
+
+  final int total;
+  final List<DiasporaCountry> countries;
+
+  factory DiasporaFigures.fromJson(Map<String, dynamic> json) => DiasporaFigures(
+    total: _int(json['total']),
+    countries: [
+      for (final row in (json['countries'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>())
+        (
+          code: row['country'] as String? ?? '',
+          name: row['name'] as String? ?? '',
+          count: _int(row['count']),
+        ),
     ],
   );
 }

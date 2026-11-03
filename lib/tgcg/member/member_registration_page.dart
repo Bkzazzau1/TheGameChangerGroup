@@ -13,6 +13,7 @@ import '../media/device_media.dart';
 import '../membership/pvc_recognition_service.dart';
 import '../session.dart';
 import '../ui/tgcg_design.dart';
+import 'diaspora_form.dart';
 import 'disability_picker.dart';
 import 'polling_unit_finder_page.dart';
 import 'referral.dart';
@@ -127,7 +128,7 @@ String cleanVin(String value) => value.replaceAll(RegExp(r'\s'), '').toUpperCase
 /// A VIN has 19 letters and digits.
 bool isVin(String value) => RegExp(r'^[A-Z0-9]{19}$').hasMatch(cleanVin(value));
 
-enum _Step { organization, phone, pvc, about, pin }
+enum _Step { organization, abroad, phone, pvc, about, pin }
 
 /// Joining in the app, as on USSD: the phone number first (proved by an SMS
 /// code only while the server asks for one), then the PVC's VIN, polling unit
@@ -136,6 +137,11 @@ enum _Step { organization, phone, pvc, about, pin }
 /// With [organization] someone registers an organization (3 November 2026):
 /// its details come first, and the person joining leads it. It waits for
 /// TGCG's vetting.
+///
+/// With [diaspora] someone living abroad joins on their own form (3 November
+/// 2026): where they live and their email first, then a phone from any
+/// country, written with its code, and their home in Nigeria: the PVC if
+/// they have one, or else their state and LGA of origin and maybe their ward.
 class MemberRegistrationPage extends StatefulWidget {
   const MemberRegistrationPage({
     super.key,
@@ -146,7 +152,10 @@ class MemberRegistrationPage extends StatefulWidget {
     this.referralCode,
     this.groupCode,
     this.organization = false,
+    this.diaspora = false,
   });
+
+  final bool diaspora;
 
   /// From the inviting member's link; it can still be changed or cleared.
   final String? referralCode;
@@ -171,6 +180,7 @@ class MemberRegistrationPage extends StatefulWidget {
 class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   late final List<_Step> _steps = [
     if (widget.organization) _Step.organization,
+    if (widget.diaspora) _Step.abroad,
     _Step.phone,
     _Step.pvc,
     _Step.about,
@@ -181,6 +191,14 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   // First, when registering an organization: its details.
   final _organization = OrganizationDraft();
+
+  // First, when joining from the diaspora: where they live.
+  final _residence = ResidenceDraft();
+
+  /// From the diaspora: whether they give a PVC. Without one, their home is
+  /// the state, LGA and maybe ward they chose.
+  bool _hasPvc = true;
+  List<RegistrationPlace>? _home;
 
   /// The name of the support group whose link opened joining, once found.
   String? _groupName;
@@ -255,6 +273,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   void dispose() {
     _ticker?.cancel();
     _organization.dispose();
+    _residence.dispose();
     for (final controller in [
       _phone,
       _code,
@@ -310,16 +329,42 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     _go(_Step.phone);
   }
 
+  // --- where they live, first when joining from the diaspora -------------------------
+
+  void _abroadNext() {
+    final errors = _residence.check(_email.text);
+    if (errors.isNotEmpty) {
+      setState(() => _errors = errors);
+      return;
+    }
+    // Their country's code starts the number; they can change it.
+    final code = _residence.country?.callingCode ?? '';
+    if (_phone.text.trim().isEmpty && code.isNotEmpty) _phone.text = '+$code ';
+    _go(_Step.phone);
+  }
+
   // --- step 1 ---------------------------------------------------------------------
 
-  String? get _normalizedPhone => normalizeNigerianPhone(_phone.text);
+  String? get _normalizedPhone =>
+      widget.diaspora ? normalizeAnyPhone(_phone.text) : normalizeNigerianPhone(_phone.text);
+
+  /// A number abroad: no SMS reaches it, so it needs no code.
+  bool get _numberAbroad => !(_normalizedPhone?.startsWith('+234') ?? true);
 
   bool get _codeSent => _codeSentTo != null && _codeSentTo == _normalizedPhone;
 
   Future<void> _phoneNext() async {
     final phone = _normalizedPhone;
     if (phone == null) {
-      setState(() => _errors = {'phone_number': 'Enter a Nigerian mobile number, e.g. 0803 123 4567.'});
+      setState(() => _errors = {
+            'phone_number': widget.diaspora
+                ? 'Enter your number with its country code, e.g. +44 7700 900123.'
+                : 'Enter a Nigerian mobile number, e.g. 0803 123 4567.',
+          });
+      return;
+    }
+    if (_numberAbroad) {
+      _go(_Step.pvc);
       return;
     }
     if (_codeSent) {
@@ -488,6 +533,40 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     _go(_Step.about);
   }
 
+  /// The PVC's details count only when given: from the diaspora, someone
+  /// without a PVC gives their home instead.
+  bool get _usesPvc => !widget.diaspora || _hasPvc;
+
+  Future<void> _findHome() async {
+    final home = await Navigator.of(context).push<List<RegistrationPlace>>(
+      MaterialPageRoute(builder: (_) => const PollingUnitFinderPage(home: true)),
+    );
+    if (home == null || home.length < 2 || !mounted) return;
+    setState(() {
+      _home = home;
+      _errors
+        ..remove('home_lga')
+        ..remove('home_ward');
+    });
+  }
+
+  void _homeNext() {
+    setState(() {
+      _errors = {
+        if (_name.text.trim().isEmpty) 'full_name': 'Enter your full name.',
+        if (_home == null) 'home_lga': 'Choose your state and LGA of origin.',
+      };
+    });
+    if (_errors.isEmpty) _go(_Step.about);
+  }
+
+  /// "Kufena ward, Zaria LGA, Kaduna State", from the state down.
+  static String _homeLabel(List<RegistrationPlace> home) => [
+        if (home.length > 2) '${home[2].name} ward',
+        '${home[1].name} LGA',
+        '${home[0].name} State',
+      ].join(', ');
+
   // --- step 3 ---------------------------------------------------------------------
 
   Future<void> _pickBirthday() async {
@@ -570,6 +649,40 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
     _go(_Step.pin);
   }
 
+  /// The pages of the form where each field's mistake shows.
+  Map<String, _Step> get _fieldSteps => {
+        'organization_name': _Step.organization,
+        'organization_coverage': _Step.organization,
+        'organization_zone': _Step.organization,
+        'organization_state': _Step.organization,
+        'organization_email': _Step.organization,
+        'organization_officials': _Step.organization,
+        'residence_country': _Step.abroad,
+        'residence_city': _Step.abroad,
+        'residence_address': _Step.abroad,
+        'group_code': _Step.pin,
+        'phone_number': _Step.phone,
+        'code': _Step.phone,
+        'full_name': _Step.pvc,
+        'vin': _Step.pvc,
+        'delim': _Step.pvc,
+        'polling_unit': _Step.pvc,
+        'pvc_image': _Step.pvc,
+        'home_lga': _Step.pvc,
+        'home_ward': _Step.pvc,
+        'gender': _Step.about,
+        'date_of_birth': _Step.about,
+        'occupation': _Step.about,
+        // From the diaspora the email comes with where they live.
+        'email': widget.diaspora ? _Step.abroad : _Step.about,
+        'disabilities': _Step.about,
+        'disability_other': _Step.about,
+        'photo': _Step.about,
+        'pin': _Step.pin,
+        'consent': _Step.pin,
+        'referral_code': _Step.pin,
+      };
+
   // --- step 4 ---------------------------------------------------------------------
 
   String? get _pinError {
@@ -606,9 +719,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
         MemberRegistration(
           phoneNumber: _normalizedPhone!,
           code: _codeSent ? _code.text.trim() : '',
-          vin: cleanVin(_vin.text),
-          delim: _unitFromList ? '' : _delim.text.trim(),
-          pollingUnit: _unitFromList ? _unit!.code : '',
+          vin: _usesPvc ? cleanVin(_vin.text) : '',
+          delim: !_usesPvc || _unitFromList ? '' : _delim.text.trim(),
+          pollingUnit: _usesPvc && _unitFromList ? _unit!.code : '',
           fullName: _name.text.trim(),
           gender: _gender,
           dateOfBirth: _dateOfBirth,
@@ -618,10 +731,13 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           disabilityOther: _disabilities.contains('other') ? _disabilityOther.text.trim() : '',
           pin: _pin.text,
           selfie: _selfieReady ? _selfie : null,
-          pvcImage: _pvcPhoto,
+          pvcImage: _usesPvc ? _pvcPhoto : null,
           referralCode: _referral.text.trim(),
           groupCode: widget.groupCode ?? '',
           organization: widget.organization ? _organization.details : null,
+          residence: widget.diaspora ? _residence.residence : null,
+          homeLga: _usesPvc ? '' : _home![1].code,
+          homeWard: !_usesPvc && _home!.length > 2 ? _home![2].code : '',
         ),
       );
       navigator.popUntil((route) => route.isFirst);
@@ -636,32 +752,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   /// Shows server errors next to their fields and opens the first step with one.
   void _showServerErrors(ApiException error) {
-    const steps = {
-      'organization_name': _Step.organization,
-      'organization_coverage': _Step.organization,
-      'organization_zone': _Step.organization,
-      'organization_state': _Step.organization,
-      'organization_email': _Step.organization,
-      'organization_officials': _Step.organization,
-      'group_code': _Step.pin,
-      'phone_number': _Step.phone,
-      'code': _Step.phone,
-      'full_name': _Step.pvc,
-      'vin': _Step.pvc,
-      'delim': _Step.pvc,
-      'polling_unit': _Step.pvc,
-      'pvc_image': _Step.pvc,
-      'gender': _Step.about,
-      'date_of_birth': _Step.about,
-      'occupation': _Step.about,
-      'email': _Step.about,
-      'disabilities': _Step.about,
-      'disability_other': _Step.about,
-      'photo': _Step.about,
-      'pin': _Step.pin,
-      'consent': _Step.pin,
-      'referral_code': _Step.pin,
-    };
+    final steps = _fieldSteps;
     final errors = {for (final entry in error.fieldErrors.entries) entry.key: entry.value.first};
     final step = errors.keys
         .map((field) => steps[field])
@@ -685,14 +776,21 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   Widget build(BuildContext context) {
     final titles = {
       _Step.organization: 'Your organization',
+      _Step.abroad: 'Where you live',
       _Step.phone: widget.organization ? 'Your phone number, as its leader' : 'Your phone number',
-      _Step.pvc: 'Your PVC details',
+      _Step.pvc: widget.diaspora ? 'Your home in Nigeria' : 'Your PVC details',
       _Step.about: 'About you (optional)',
       _Step.pin: 'Choose your PIN',
     };
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.organization ? 'Register an organization' : 'Become a member'),
+        title: Text(
+          widget.organization
+              ? 'Register an organization'
+              : widget.diaspora
+                  ? 'Join from the diaspora'
+                  : 'Become a member',
+        ),
       ),
       body: SafeArea(
         child: ListView(
@@ -721,8 +819,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             if (_errors['general'] != null) _ErrorBox(_errors['general']!),
             switch (_step) {
               _Step.organization => _organizationStep(),
+              _Step.abroad => _abroadStep(),
               _Step.phone => _phoneStep(),
-              _Step.pvc => _pvcStep(),
+              _Step.pvc => _usesPvc ? _pvcStep() : _homeStep(),
               _Step.about => _aboutStep(),
               _Step.pin => _pinStep(),
             },
@@ -780,6 +879,105 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
         ],
       );
 
+  Widget _abroadStep() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Where you live now. Your phone number and your home in Nigeria come next.',
+            style: TextStyle(color: TgcgColors.muted, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          ResidenceFields(
+            draft: _residence,
+            email: _email,
+            errors: _errors,
+            onChanged: () => setState(() {
+              for (final field in _errors.keys.toList()) {
+                if (field.startsWith('residence_') || field == 'email') _errors.remove(field);
+              }
+            }),
+          ),
+          _nav(onNext: _abroadNext),
+        ],
+      );
+
+  /// From the diaspora: whether they give a PVC or, without one, their home.
+  Widget _pvcChoice() => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Do you have a Permanent Voter Card (PVC)?',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('I have a PVC')),
+                ButtonSegment(value: false, label: Text('No PVC')),
+              ],
+              selected: {_hasPvc},
+              onSelectionChanged: (value) => setState(() {
+                _hasPvc = value.first;
+                _errors = {};
+              }),
+            ),
+          ],
+        ),
+      );
+
+  Widget _homeStep() {
+    final home = _home;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _pvcChoice(),
+        const Text(
+          'Without a PVC, choose your state and LGA of origin, and your ward if you know it.',
+          style: TextStyle(color: TgcgColors.muted, height: 1.4),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _name,
+          textCapitalization: TextCapitalization.words,
+          onChanged: (_) => _clearError('full_name'),
+          decoration: InputDecoration(labelText: 'Full name', errorText: _errors['full_name']),
+        ),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _findHome,
+          icon: const Icon(Icons.home_outlined),
+          label: Text(home == null ? 'Choose your state and LGA of origin' : 'Choose again'),
+        ),
+        if (_errors['home_lga'] ?? _errors['home_ward'] case final error?) _FieldError(error),
+        if (home != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: TgcgColors.primarySoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.home_outlined, color: TgcgColors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Your home: ${_homeLabel(home)}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        _nav(onNext: _homeNext),
+      ],
+    );
+  }
+
   Widget _phoneStep() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -789,8 +987,8 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             autofillHints: const [AutofillHints.telephoneNumber],
             onChanged: (_) => setState(() => _errors.remove('phone_number')),
             decoration: InputDecoration(
-              labelText: 'Phone number',
-              hintText: '0803 123 4567',
+              labelText: widget.diaspora ? 'Phone number, with its country code' : 'Phone number',
+              hintText: widget.diaspora ? '+44 7700 900123' : '0803 123 4567',
               helperText: 'You sign in with this number.',
               errorText: _errors['phone_number'],
             ),
@@ -826,6 +1024,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   Widget _pvcStep() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.diaspora) _pvcChoice(),
           const Text(
             'Type the name, VIN and polling unit code from your Permanent Voter Card (PVC), '
             'or scan the card to fill them in. Check each one against the card.',
@@ -1011,12 +1210,15 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(labelText: 'Occupation', errorText: _errors['occupation']),
         ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(labelText: 'Email', errorText: _errors['email']),
-        ),
+        // From the diaspora the email came with where they live.
+        if (!widget.diaspora) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(labelText: 'Email', errorText: _errors['email']),
+          ),
+        ],
         const SizedBox(height: 18),
         const Text('Disability', style: TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
@@ -1161,8 +1363,12 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
                 ? 'I agree that TGCG keeps my details, photo and PVC information, and my '
                     "organization's details, to manage our membership and to contact us about "
                     'party activities.'
-                : 'I agree that TGCG keeps my details, photo and PVC information to manage my '
-                    'membership and to contact me about party activities.',
+                : widget.diaspora
+                    ? 'I agree that TGCG keeps my details, where I live, my photo and any PVC '
+                        'information to manage my membership and to contact me about party '
+                        'activities.'
+                    : 'I agree that TGCG keeps my details, photo and PVC information to manage '
+                        'my membership and to contact me about party activities.',
             style: const TextStyle(fontSize: 13),
           ),
         ),

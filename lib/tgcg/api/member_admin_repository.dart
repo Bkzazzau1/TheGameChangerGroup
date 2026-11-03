@@ -12,6 +12,35 @@ export 'member_insights.dart';
 
 DateTime? _date(Object? value) => value == null ? null : DateTime.tryParse('$value')?.toLocal();
 
+/// Where a member in the diaspora lives, as staff see it: the address only
+/// with access to members' personal details.
+class MemberAbroad {
+  const MemberAbroad({
+    required this.country,
+    required this.countryName,
+    required this.city,
+    this.address,
+  });
+
+  final String country;
+  final String countryName;
+  final String city;
+  final String? address;
+
+  /// "London, United Kingdom".
+  String get label => '$city, $countryName';
+
+  static MemberAbroad? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    return MemberAbroad(
+      country: json['country'] as String? ?? '',
+      countryName: json['country_name'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      address: json['address'] as String?,
+    );
+  }
+}
+
 /// A member as staff see them (`/members/`). Personal details are null unless
 /// the server allows this account to see them for the member's area.
 class StaffMember {
@@ -46,9 +75,13 @@ class StaffMember {
     this.lastSignIn,
     this.verifiedHow,
     this.posts = const [],
+    this.abroad,
   });
 
   final String membershipNumber;
+
+  /// Where they live, for a member in the diaspora.
+  final MemberAbroad? abroad;
   final String fullName;
 
   /// Quick USSD membership can exist before the caller adds their name.
@@ -156,6 +189,7 @@ class StaffMember {
       for (final role in (json['roles'] as List<dynamic>? ?? const []))
         MemberPost.fromJson(role as Map<String, dynamic>),
     ],
+    abroad: MemberAbroad.fromJson(json['diaspora']),
   );
 }
 
@@ -390,8 +424,9 @@ class MemberAdminRepository {
   /// [show]: fullyVerified, notFullyVerified, neverSignedIn, withRole or
   /// withoutRole. [area]: only members registered in that area. [query]:
   /// words found in names, membership numbers, places and current posts, or
-  /// a phone number. [role]: only those holding that post now. [ordering]:
-  /// full_name or -created_at.
+  /// a phone number. [role]: only those holding that post now. [country]:
+  /// only members in the diaspora living in that country (its ISO code).
+  /// [ordering]: full_name or -created_at.
   Future<ApiPage<StaffMember>> members({
     String search = '',
     String query = '',
@@ -401,6 +436,7 @@ class MemberAdminRepository {
     String? pollingUnit,
     String? show,
     String? role,
+    String? country,
     String? ordering,
     AreaRef? area,
     int offset = 0,
@@ -411,6 +447,7 @@ class MemberAdminRepository {
         if (search.trim().isNotEmpty) 'search': search.trim(),
         if (query.trim().isNotEmpty) 'q': query.trim(),
         'role': ?role,
+        'country': ?country,
         'ordering': ?ordering,
         if (verificationStatus != null) 'verification_status': verificationStatus,
         if (membershipState != null) 'membership_state': membershipState,

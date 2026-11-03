@@ -277,9 +277,21 @@ class MemberRegistration {
     this.referralCode = '',
     this.groupCode = '',
     this.organization,
+    this.residence,
+    this.homeLga = '',
+    this.homeWard = '',
   });
 
   final String phoneNumber;
+
+  /// Where a member joining from the diaspora lives. They give a phone from
+  /// any country and an email, and the PVC only if they have one.
+  final DiasporaResidence? residence;
+
+  /// From the diaspora without a PVC: the codes of their LGA of origin and,
+  /// if they know it, their ward.
+  final String homeLga;
+  final String homeWard;
 
   /// The 7-digit code of the member who invited them, if any.
   final String referralCode;
@@ -313,6 +325,22 @@ class MemberRegistration {
   /// Codes from [disabilityKinds], if the member chose to give them.
   final List<String> disabilities;
   final String disabilityOther;
+}
+
+/// Where a member in the diaspora lives: the country's ISO code, the city
+/// and, if they give it, the address.
+class DiasporaResidence {
+  const DiasporaResidence({required this.country, required this.city, this.address = ''});
+
+  final String country;
+  final String city;
+  final String address;
+
+  Map<String, String> toFields() => {
+        'residence_country': country,
+        'residence_city': city.trim(),
+        'residence_address': address.trim(),
+      };
 }
 
 /// A member's referral code and link, and how many joined with them.
@@ -627,6 +655,9 @@ class MemberRepository {
         if (data.referralCode.isNotEmpty) 'referral_code': data.referralCode,
         if (data.groupCode.isNotEmpty) 'group_code': data.groupCode,
         ...?data.organization?.toFields(),
+        ...?data.residence?.toFields(),
+        if (data.homeLga.isNotEmpty) 'home_lga': data.homeLga,
+        if (data.homeWard.isNotEmpty) 'home_ward': data.homeWard,
       },
       files: () async => [
         if (data.selfie case final selfie?)
