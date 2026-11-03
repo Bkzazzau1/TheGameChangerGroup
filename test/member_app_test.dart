@@ -374,6 +374,82 @@ void main() {
       expect(upload.fields['referral_code'], '4827155');
     });
 
+    testWidgets('an organization registers, its leader joining at the same time', (tester) async {
+      final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
+      await _pump(
+        tester,
+        api.connect(),
+        MemberRegistrationPage(
+          scanPvc: ({required camera}) async => null,
+          takeSelfie: () async => XFile.fromData(_pixel),
+          checkSelfie: (_) async => const SelfieCheck.passed(),
+          organization: true,
+        ),
+      );
+      Future<void> onward(String label) async {
+        await tester.ensureVisible(find.text(label));
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.text('STEP 1 OF 5'), findsOneWidget);
+      expect(find.text('Your organization'), findsOneWidget);
+      await onward('Next');
+      expect(find.text("Enter the organization's name."), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name of the organization'),
+        'Arewa Youth for Progress',
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'Name').first, 'Bala Musa');
+      await tester.enterText(find.widgetWithText(TextField, 'Position').first, 'Secretary');
+      await onward('Next');
+
+      expect(find.text('Your phone number, as its leader'), findsOneWidget);
+      await enterPhone(tester);
+      await typeCard(tester);
+      await next(tester);
+      await tester.enterText(find.widgetWithText(TextField, 'PIN'), '482915');
+      await tester.enterText(find.widgetWithText(TextField, 'PIN again'), '482915');
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await onward('Register the organization');
+
+      final upload = api.requests.last as http.MultipartRequest;
+      expect(upload.fields['organization_name'], 'Arewa Youth for Progress');
+      expect(upload.fields['organization_coverage'], 'national');
+      expect(jsonDecode(upload.fields['organization_officials']!), [
+        {'name': 'Bala Musa', 'position': 'Secretary', 'phone': ''},
+      ]);
+      expect(upload.fields['full_name'], 'Musa Bello');
+    });
+
+    testWidgets("a support group's link puts the new member in the group", (tester) async {
+      final api = server(
+        extra: (path) => switch (path) {
+          'register/' => _json(_session(), 201),
+          'register/support-group/' => _json({'name': 'Arewa Youth for Progress'}),
+          _ => null,
+        },
+      );
+      await _pump(
+        tester,
+        api.connect(),
+        MemberRegistrationPage(
+          scanPvc: ({required camera}) async => null,
+          takeSelfie: () async => XFile.fromData(_pixel),
+          checkSelfie: (_) async => const SelfieCheck.passed(),
+          groupCode: '4827155',
+        ),
+      );
+      await enterPhone(tester);
+      await typeCard(tester);
+      await next(tester);
+      expect(find.text('You join the support group Arewa Youth for Progress.'), findsOneWidget);
+      await choosePin(tester);
+      final upload = api.requests.last as http.MultipartRequest;
+      expect(upload.fields['group_code'], '4827155');
+    });
+
     testWidgets('a member may give their disabilities when joining', (tester) async {
       final api = server(extra: (path) => path == 'register/' ? _json(_session(), 201) : null);
       await open(tester, api);

@@ -39,6 +39,7 @@ enum TgcgModule {
   projects,
   messages,
   popups,
+  supportGroups,
   askMe,
 }
 
@@ -63,6 +64,7 @@ const liveModules = {
   TgcgModule.projects,
   TgcgModule.messages,
   TgcgModule.popups,
+  TgcgModule.supportGroups,
   TgcgModule.askMe,
 };
 
@@ -414,6 +416,8 @@ Set<TgcgModule> allowedModulesFor(
     modules.add(TgcgModule.messages);
   }
   if (can(TgcgCapability.postPopups)) modules.add(TgcgModule.popups);
+  // Support groups: vetting them and seeing who is in them.
+  if (can(TgcgCapability.manageSupportGroups)) modules.add(TgcgModule.supportGroups);
   // Wallets: payments to members, withdrawals and credit rates, for finance
   // staff in their areas and the administrators who set the rates.
   if (any(const [

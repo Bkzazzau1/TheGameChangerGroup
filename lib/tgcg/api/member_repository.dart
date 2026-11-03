@@ -7,6 +7,7 @@ import 'api_client.dart';
 import 'auth_repository.dart' show geographicScopeFromJson;
 import 'meetings_repository.dart' show scopeInput;
 import 'reference_repository.dart';
+import 'support_groups_repository.dart' show OrganizationDetails;
 
 /// A member's polling unit, as the member app shows it.
 class MemberUnit {
@@ -274,12 +275,21 @@ class MemberRegistration {
     this.disabilities = const [],
     this.disabilityOther = '',
     this.referralCode = '',
+    this.groupCode = '',
+    this.organization,
   });
 
   final String phoneNumber;
 
   /// The 7-digit code of the member who invited them, if any.
   final String referralCode;
+
+  /// The code of the support group whose link opened joining, if any.
+  final String groupCode;
+
+  /// The organization the member registers and leads, if any. It waits for
+  /// TGCG's vetting.
+  final OrganizationDetails? organization;
 
   /// The SMS code, when the server asked for one.
   final String code;
@@ -615,6 +625,8 @@ class MemberRepository {
         'pin': data.pin,
         'consent': 'true',
         if (data.referralCode.isNotEmpty) 'referral_code': data.referralCode,
+        if (data.groupCode.isNotEmpty) 'group_code': data.groupCode,
+        ...?data.organization?.toFields(),
       },
       files: () async => [
         if (data.selfie case final selfie?)

@@ -95,6 +95,8 @@ enum TgcgCapability {
   sendPushNotifications,
   // Pop-up messages to everyone, held nationwide.
   postPopups,
+  // Vetting support groups and seeing who is in them, held nationwide.
+  manageSupportGroups,
   // Security officers answer the incidents the Situation Room sends them.
   respondToSecurity,
   // Ask Me: reviewers draft its library and review answers; a National

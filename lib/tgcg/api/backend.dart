@@ -18,6 +18,7 @@ import 'projects_repository.dart';
 import 'reference_repository.dart';
 import 'results_repository.dart';
 import 'security_repository.dart';
+import 'support_groups_repository.dart';
 import 'tracking_repository.dart';
 import 'wallet_repository.dart';
 
@@ -41,6 +42,7 @@ class BackendServices {
         projects = ProjectsRepository(client),
         messaging = MessagingRepository(client),
         popups = PopupsRepository(client),
+        supportGroups = SupportGroupsRepository(client),
         security = SecurityRepository(client);
 
   factory BackendServices.connect(
@@ -102,6 +104,9 @@ class BackendServices {
 
   /// Messages that pop up for everyone.
   final PopupsRepository popups;
+
+  /// Organizations allied with TGCG: the member's own, the leader's, and vetting.
+  final SupportGroupsRepository supportGroups;
 
   /// Incidents the Situation Room sends to security officers, and their answers.
   final SecurityRepository security;

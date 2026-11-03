@@ -36,13 +36,17 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
   @override
   void initState() {
     super.initState();
-    // Opened from a member's referral link: go straight to joining.
+    // Opened from a member's referral link, or a support group's: go
+    // straight to joining.
     final code = referralFromLink();
-    if (code != null) {
+    final group = groupFromLink();
+    if (code != null || group != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => MemberRegistrationPage(referralCode: code)),
+          MaterialPageRoute(
+            builder: (_) => MemberRegistrationPage(referralCode: code, groupCode: group),
+          ),
         );
       });
     }
@@ -118,6 +122,10 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
 
   void _register() => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const MemberRegistrationPage()),
+      );
+
+  void _registerOrganization() => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MemberRegistrationPage(organization: true)),
       );
 
   @override
@@ -199,6 +207,11 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   onPressed: _register,
                   icon: const Icon(Icons.person_add_alt_1_rounded),
                   label: const Text('New member? Register with your PVC'),
+                ),
+                TextButton.icon(
+                  onPressed: _registerOrganization,
+                  icon: const Icon(Icons.add_business_outlined),
+                  label: const Text('Register an organization'),
                 ),
               ],
             ),
@@ -319,6 +332,14 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                     onPressed: signingIn ? null : _register,
                     icon: const Icon(Icons.person_add_alt_1_rounded),
                     label: const Text('New member? Register with your PVC'),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: signingIn ? null : _registerOrganization,
+                    icon: const Icon(Icons.add_business_outlined),
+                    label: const Text('Register an organization'),
                   ),
                 ),
               ],

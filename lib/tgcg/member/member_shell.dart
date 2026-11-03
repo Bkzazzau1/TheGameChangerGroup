@@ -13,6 +13,7 @@ import '../api/member_repository.dart';
 import '../api/wallet_repository.dart';
 import '../askme/ask_me_chat.dart';
 import '../discussion/discussion_room_page.dart';
+import '../groups/my_support_groups_page.dart';
 import '../location/directions.dart';
 import '../messaging/inbox_page.dart';
 import '../media/device_media.dart';
@@ -125,6 +126,8 @@ class _MemberShellState extends State<MemberShell> {
 
   void _openRoles() => _open(const MyRolesPage());
 
+  void _openGroups() => _open(const MySupportGroupsPage());
+
   @override
   Widget build(BuildContext context) {
     final session = TgcgSession.of(context);
@@ -184,6 +187,7 @@ class _MemberShellState extends State<MemberShell> {
               onOpenRoles: _openRoles,
               onOpenWallet: () => _open(const MyWalletPage()),
               onOpenRegistered: () => _open(const RegisteredMembersPage()),
+              onOpenGroups: _openGroups,
             ),
         },
       ),
@@ -647,7 +651,25 @@ class _CardTab extends StatelessWidget {
               const SizedBox(height: 12),
               _CardDownload(card: card, save: saveCard),
               const SizedBox(height: 18),
-              if (accountLinks) ...[const _WalletRow(), const ReferralCard()],
+              if (accountLinks) ...[
+                const _WalletRow(),
+                const ReferralCard(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: TgcgRowGroup(
+                    children: [
+                      TgcgActionRow(
+                        icon: Icons.diversity_3_outlined,
+                        title: 'Support groups',
+                        detail: 'Groups you are in or lead, and registering an organization',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => const MySupportGroupsPage()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               TgcgSectionCard(
                 title: 'My details',
                 child: Column(
@@ -1161,6 +1183,7 @@ class _AccountTab extends StatelessWidget {
     required this.onOpenRoles,
     required this.onOpenWallet,
     required this.onOpenRegistered,
+    required this.onOpenGroups,
   });
 
   final Future<(MemberCard, Uint8List?)> card;
@@ -1170,6 +1193,7 @@ class _AccountTab extends StatelessWidget {
   final VoidCallback onOpenRoles;
   final VoidCallback onOpenWallet;
   final VoidCallback onOpenRegistered;
+  final VoidCallback onOpenGroups;
 
   @override
   Widget build(BuildContext context) {
@@ -1254,6 +1278,12 @@ class _AccountTab extends StatelessWidget {
         const TgcgSectionHeading(title: 'Taking part'),
         TgcgRowGroup(
           children: [
+            TgcgActionRow(
+              icon: Icons.diversity_3_outlined,
+              title: 'Support groups',
+              detail: 'Groups you are in or lead, and registering an organization',
+              onTap: onOpenGroups,
+            ),
             TgcgActionRow(
               icon: Icons.volunteer_activism_outlined,
               title: 'Volunteering',

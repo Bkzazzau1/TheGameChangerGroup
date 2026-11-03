@@ -36,6 +36,7 @@ import 'member/registered_members_page.dart';
 import 'messaging/inbox_page.dart';
 import 'messaging/messages_page.dart';
 import 'messaging/popups_page.dart';
+import 'groups/support_groups_page.dart';
 import 'tracking/agents_on_ground_page.dart';
 import 'ui/demo_data_notice.dart';
 import 'projects/project_mode.dart';
@@ -204,6 +205,7 @@ class _TgcgShellState extends State<TgcgShell> {
         TgcgModule.projects => const ProjectsPage(),
         TgcgModule.messages => const MessagesPage(),
         TgcgModule.popups => const PopupsPage(),
+        TgcgModule.supportGroups => const SupportGroupsPage(),
         TgcgModule.askMe => const AskMeHubPage(),
       };
 }
@@ -224,6 +226,7 @@ const _destinations = <_Destination>[
   _Destination(TgcgModule.aiAnalytics, 'AI Data Analytics', Icons.query_stats_rounded, _NavGroup.command),
   _Destination(TgcgModule.alertCenter, 'Alert Centre', Icons.notifications_active_outlined, _NavGroup.command),
   _Destination(TgcgModule.membershipNetwork, 'Members & Exco', Icons.groups_2_outlined, _NavGroup.command),
+  _Destination(TgcgModule.supportGroups, 'Support Groups', Icons.diversity_3_outlined, _NavGroup.command),
   _Destination(TgcgModule.projects, 'Projects', Icons.flag_outlined, _NavGroup.command),
   _Destination(TgcgModule.situationRoom, 'Situation Room', Icons.radar_rounded, _NavGroup.command),
   _Destination(TgcgModule.agentTracking, 'Agents on the Ground', Icons.share_location_rounded, _NavGroup.command),
@@ -620,6 +623,7 @@ String _moduleLabel(TgcgModule module) => switch (module) {
       TgcgModule.projects => 'Projects',
       TgcgModule.messages => 'Messages',
       TgcgModule.popups => 'Pop-up Messages',
+      TgcgModule.supportGroups => 'Support Groups',
       TgcgModule.askMe => 'Ask Me',
     };
 

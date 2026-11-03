@@ -104,6 +104,7 @@ class TgcgDemoDataPage extends StatelessWidget {
     TgcgModule.projects ||
     TgcgModule.messages ||
     TgcgModule.popups ||
+    TgcgModule.supportGroups ||
     TgcgModule.unitMapping ||
     TgcgModule.agentTracking ||
     TgcgModule.situationRoom ||

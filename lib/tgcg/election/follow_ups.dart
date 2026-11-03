@@ -8,6 +8,7 @@ import '../api/backend.dart';
 import '../api/member_repository.dart' show cardNeeds;
 import '../api/projects_repository.dart';
 import '../domain/permissions.dart';
+import '../groups/my_support_groups_page.dart';
 import '../member/member_shell.dart' show MyMembershipCardPage, MyRolesPage;
 import '../membership/member_review_page.dart';
 import '../projects/project_mode.dart' show hourMinute, openProject, statusNow;
@@ -50,6 +51,10 @@ void _openCard(BuildContext context) => Navigator.of(
 
 void _openRoles(BuildContext context) =>
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const MyRolesPage()));
+
+void _openGroups(BuildContext context) => Navigator.of(
+  context,
+).push(MaterialPageRoute<void>(builder: (_) => const MySupportGroupsPage()));
 
 /// A page made for the shell, with a way back.
 void _openModule(BuildContext context, Widget page) => Navigator.of(context).push(
@@ -121,6 +126,21 @@ Future<List<FollowUp>> _appointments(BackendServices services) async {
           : 'You have ${undecided.length} appointments to answer',
       detail: 'Accept or decline ${one ? 'it' : 'them'} in Roles and access',
       open: _openRoles,
+    ),
+  ];
+}
+
+Future<List<FollowUp>> _groups(BackendServices services) async {
+  final asked = (await services.supportGroups.mine()).invitations;
+  if (asked.isEmpty) return const [];
+  return [
+    FollowUp(
+      icon: Icons.diversity_3_outlined,
+      title: asked.length == 1
+          ? '${asked.single.groupName} asks you to confirm'
+          : '${asked.length} support groups ask you to confirm',
+      detail: 'Say yes or no in Support groups',
+      open: _openGroups,
     ),
   ];
 }
@@ -199,6 +219,7 @@ Future<FollowUps> loadFollowUps(
     if (session.can(TgcgCapability.respondToSecurity)) checked(() => _dispatches(services)),
     if (member) checked(() => _projects(services, now)),
     checked(() => _appointments(services)),
+    if (member) checked(() => _groups(services)),
     if (reviews) checked(() => _reviews(services, session)),
     if (member) checked(() => _card(services)),
   ]);

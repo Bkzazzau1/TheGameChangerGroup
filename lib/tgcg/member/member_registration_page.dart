@@ -8,6 +8,7 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../api/member_repository.dart';
 import '../api/reference_repository.dart';
+import '../groups/organization_form.dart';
 import '../media/device_media.dart';
 import '../membership/pvc_recognition_service.dart';
 import '../session.dart';
@@ -126,11 +127,15 @@ String cleanVin(String value) => value.replaceAll(RegExp(r'\s'), '').toUpperCase
 /// A VIN has 19 letters and digits.
 bool isVin(String value) => RegExp(r'^[A-Z0-9]{19}$').hasMatch(cleanVin(value));
 
-enum _Step { phone, pvc, about, pin }
+enum _Step { organization, phone, pvc, about, pin }
 
 /// Joining in the app, as on USSD: the phone number first (proved by an SMS
 /// code only while the server asks for one), then the PVC's VIN, polling unit
 /// code and name, optional details and selfie, and a PIN.
+///
+/// With [organization] someone registers an organization (3 November 2026):
+/// its details come first, and the person joining leads it. It waits for
+/// TGCG's vetting.
 class MemberRegistrationPage extends StatefulWidget {
   const MemberRegistrationPage({
     super.key,
@@ -139,10 +144,17 @@ class MemberRegistrationPage extends StatefulWidget {
     this.checkSelfie = checkSelfieOnDevice,
     this.readPvcText,
     this.referralCode,
+    this.groupCode,
+    this.organization = false,
   });
 
   /// From the inviting member's link; it can still be changed or cleared.
   final String? referralCode;
+
+  /// From a support group's link: the new member is in that group at once.
+  final String? groupCode;
+
+  final bool organization;
 
   final ScanPvc scanPvc;
   final TakeSelfie takeSelfie;
@@ -157,8 +169,22 @@ class MemberRegistrationPage extends StatefulWidget {
 }
 
 class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
-  _Step _step = _Step.phone;
+  late final List<_Step> _steps = [
+    if (widget.organization) _Step.organization,
+    _Step.phone,
+    _Step.pvc,
+    _Step.about,
+    _Step.pin,
+  ];
+  late _Step _step = _steps.first;
   bool _busy = false;
+
+  // First, when registering an organization: its details.
+  final _organization = OrganizationDraft();
+
+  /// The name of the support group whose link opened joining, once found.
+  String? _groupName;
+  bool _askedGroupName = false;
 
   // Step 1: the phone, and its SMS code while the server asks for one.
   final _phone = TextEditingController();
@@ -211,8 +237,24 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   Map<String, String> _errors = {};
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final code = widget.groupCode;
+    if (code == null || _askedGroupName) return;
+    _askedGroupName = true;
+    TgcgBackend.of(context)?.supportGroups.nameForCode(code).then(
+      (name) {
+        if (mounted) setState(() => _groupName = name);
+      },
+      // An unknown code is said when joining, next to the PIN.
+      onError: (Object _) {},
+    );
+  }
+
+  @override
   void dispose() {
     _ticker?.cancel();
+    _organization.dispose();
     for (final controller in [
       _phone,
       _code,
@@ -255,6 +297,17 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
 
   void _clearError(String field) {
     if (_errors.containsKey(field)) setState(() => _errors.remove(field));
+  }
+
+  // --- the organization, first when registering one ---------------------------------
+
+  void _organizationNext() {
+    final errors = _organization.check();
+    if (errors.isNotEmpty) {
+      setState(() => _errors = errors);
+      return;
+    }
+    _go(_Step.phone);
   }
 
   // --- step 1 ---------------------------------------------------------------------
@@ -547,6 +600,7 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   Future<void> _submit() async {
     final session = TgcgSession.of(context, listen: false);
     final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     await _whileBusy(() async {
       final card = await _members.register(
         MemberRegistration(
@@ -566,16 +620,30 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
           selfie: _selfieReady ? _selfie : null,
           pvcImage: _pvcPhoto,
           referralCode: _referral.text.trim(),
+          groupCode: widget.groupCode ?? '',
+          organization: widget.organization ? _organization.details : null,
         ),
       );
       navigator.popUntil((route) => route.isFirst);
       session.signInMember(fullName: card.fullName, membershipNumber: card.membershipNumber);
+      if (widget.organization) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Your organization is registered. TGCG will vet it.')),
+        );
+      }
     });
   }
 
   /// Shows server errors next to their fields and opens the first step with one.
   void _showServerErrors(ApiException error) {
     const steps = {
+      'organization_name': _Step.organization,
+      'organization_coverage': _Step.organization,
+      'organization_zone': _Step.organization,
+      'organization_state': _Step.organization,
+      'organization_email': _Step.organization,
+      'organization_officials': _Step.organization,
+      'group_code': _Step.pin,
       'phone_number': _Step.phone,
       'code': _Step.phone,
       'full_name': _Step.pvc,
@@ -616,19 +684,22 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
   @override
   Widget build(BuildContext context) {
     final titles = {
-      _Step.phone: 'Your phone number',
+      _Step.organization: 'Your organization',
+      _Step.phone: widget.organization ? 'Your phone number, as its leader' : 'Your phone number',
       _Step.pvc: 'Your PVC details',
       _Step.about: 'About you (optional)',
       _Step.pin: 'Choose your PIN',
     };
     return Scaffold(
-      appBar: AppBar(title: const Text('Become a member')),
+      appBar: AppBar(
+        title: Text(widget.organization ? 'Register an organization' : 'Become a member'),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             Text(
-              'STEP ${_step.index + 1} OF ${_Step.values.length}',
+              'STEP ${_steps.indexOf(_step) + 1} OF ${_steps.length}',
               style: const TextStyle(
                 color: TgcgColors.accentDeep,
                 fontWeight: FontWeight.w900,
@@ -642,13 +713,14 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: (_step.index + 1) / _Step.values.length,
+                value: (_steps.indexOf(_step) + 1) / _steps.length,
                 minHeight: 6,
               ),
             ),
             const SizedBox(height: 18),
             if (_errors['general'] != null) _ErrorBox(_errors['general']!),
             switch (_step) {
+              _Step.organization => _organizationStep(),
               _Step.phone => _phoneStep(),
               _Step.pvc => _pvcStep(),
               _Step.about => _aboutStep(),
@@ -664,9 +736,9 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
         padding: const EdgeInsets.only(top: 20),
         child: Row(
           children: [
-            if (_step != _Step.phone) ...[
+            if (_step != _steps.first) ...[
               OutlinedButton(
-                onPressed: _busy ? null : () => _go(_Step.values[_step.index - 1]),
+                onPressed: _busy ? null : () => _go(_steps[_steps.indexOf(_step) - 1]),
                 child: const Text('Back'),
               ),
               const SizedBox(width: 12),
@@ -684,6 +756,28 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             ),
           ],
         ),
+      );
+
+  Widget _organizationStep() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            "Your organization's details, as on the support group registration form. You "
+            'lead it: your own details come next.',
+            style: TextStyle(color: TgcgColors.muted, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          OrganizationFields(
+            draft: _organization,
+            errors: _errors,
+            onChanged: () => setState(() {
+              for (final field in _errors.keys.toList()) {
+                if (field.startsWith('organization_')) _errors.remove(field);
+              }
+            }),
+          ),
+          _nav(onNext: _organizationNext),
+        ],
       );
 
   Widget _phoneStep() => Column(
@@ -1043,6 +1137,16 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             errorText: _errors['referral_code'],
           ),
         ),
+        if (widget.groupCode != null) ...[
+          _Notice(
+            icon: Icons.diversity_3_outlined,
+            color: TgcgColors.primary,
+            text: _groupName == null
+                ? 'You join the support group whose link you opened.'
+                : 'You join the support group $_groupName.',
+          ),
+          if (_errors['group_code'] != null) _FieldError(_errors['group_code']!),
+        ],
         const SizedBox(height: 6),
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,
@@ -1052,14 +1156,21 @@ class _MemberRegistrationPageState extends State<MemberRegistrationPage> {
             _consent = value ?? false;
             _errors.remove('consent');
           }),
-          title: const Text(
-            'I agree that TGCG keeps my details, photo and PVC information to manage my '
-            'membership and to contact me about party activities.',
-            style: TextStyle(fontSize: 13),
+          title: Text(
+            widget.organization
+                ? 'I agree that TGCG keeps my details, photo and PVC information, and my '
+                    "organization's details, to manage our membership and to contact us about "
+                    'party activities.'
+                : 'I agree that TGCG keeps my details, photo and PVC information to manage my '
+                    'membership and to contact me about party activities.',
+            style: const TextStyle(fontSize: 13),
           ),
         ),
         if (_errors['consent'] != null) _FieldError(_errors['consent']!),
-        _nav(onNext: _pinNext, label: 'Create my membership'),
+        _nav(
+          onNext: _pinNext,
+          label: widget.organization ? 'Register the organization' : 'Create my membership',
+        ),
       ],
     );
   }

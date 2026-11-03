@@ -10,9 +10,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tgcg_emcop/tgcg/api/backend.dart';
 import 'package:tgcg_emcop/tgcg/api/popups_repository.dart';
+import 'package:tgcg_emcop/tgcg/api/support_groups_repository.dart';
 import 'package:tgcg_emcop/tgcg/app.dart';
 import 'package:tgcg_emcop/tgcg/election/daily_reminder.dart';
 import 'package:tgcg_emcop/tgcg/election/election_countdown.dart';
+import 'package:tgcg_emcop/tgcg/groups/led_group_page.dart';
+import 'package:tgcg_emcop/tgcg/groups/my_support_groups_page.dart';
+import 'package:tgcg_emcop/tgcg/groups/support_groups_page.dart';
+import 'package:tgcg_emcop/tgcg/member/member_registration_page.dart';
 import 'package:tgcg_emcop/tgcg/login_page.dart';
 import 'package:tgcg_emcop/tgcg/member/member_shell.dart';
 import 'package:tgcg_emcop/tgcg/membership/member_profile.dart';
@@ -286,6 +291,141 @@ void main() {
         ),
       );
       await _shot(tester, 'popup-form-$tag');
+      debugDisableShadows = true;
+    }, skip: !_enabled);
+
+    testWidgets('support groups at $tag', (tester) async {
+      debugDisableShadows = false;
+      useScreen(tester, size);
+      final group = <String, dynamic>{
+        'id': 'g1',
+        'serial_number': 'TGCG/0001/BAT/27',
+        'name': 'Arewa Youth for Progress',
+        'coverage': 'state',
+        'coverage_label': 'State',
+        'state': 'Kaduna',
+        'email': 'info@ayp.ng',
+        'officials': [
+          {'name': 'Bala Musa', 'position': 'Secretary', 'phone': '08035550009'},
+          {'name': 'Grace Obi', 'position': 'Women Leader', 'phone': '08035550010'},
+        ],
+        'leader': {
+          'membership_number': 'TGCG-000123',
+          'full_name': 'Halima Sani',
+          'phone_number': '08035550001',
+          'place': 'Dambo, Zaria, Kaduna',
+        },
+        'leader_confirmed': true,
+        'status': 'approved',
+        'status_label': 'Approved',
+        'created_at': '2026-11-03T09:00:00Z',
+        'members': 1248,
+        'approved_members': 311,
+        'waiting': 27,
+        'registered_by': 'Halima Sani',
+        'join_code': '4827155',
+        'link': 'https://app.tgcg.online/?ref=1234567&group=4827155',
+      };
+      Map<String, dynamic> person(String name, String status, {bool? approved, String via = 'registered'}) => {
+        'id': name,
+        'full_name': name,
+        'phone_number': '08035550101',
+        'place': status == 'active' ? 'Dambo, Zaria, Kaduna' : '',
+        'approved': approved,
+        'status': status,
+        'status_label': status,
+        'via': via,
+        'via_label': 'Registered by the group',
+        'membership_number': 'TGCG-000124',
+      };
+      final people = {
+        'count': 4,
+        'next': null,
+        'results': [
+          person('Halima Sani', 'active', approved: true, via: 'leader'),
+          person('Usman Garba', 'active', approved: false),
+          person('Zainab Ali', 'active', approved: true),
+          person('Ibrahim Y.', 'invited'),
+        ],
+      };
+      final services = fakeBackend(
+        (path) => switch (path) {
+          'me/support-groups/' => jsonResponse({
+            'invitations': [
+              {
+                'id': 'p1',
+                'group': {
+                  'id': 'g2',
+                  'serial_number': 'TGCG/0002/BAT/27',
+                  'name': 'Women for Tomorrow',
+                  'coverage_label': 'National',
+                  'leader': 'Aisha Bello',
+                },
+                'status': 'invited',
+                'via': 'confirmed',
+                'leads': false,
+              },
+            ],
+            'groups': <Object>[],
+            'leading': [group],
+            'vets': false,
+          }),
+          'my-groups/g1/' => jsonResponse(group),
+          'my-groups/g1/members/' || 'support-groups/g1/members/' => jsonResponse(people),
+          'support-groups/totals/' => jsonResponse({
+            'groups': {'approved': 14, 'pending': 3, 'rejected': 1, 'suspended': 0},
+            'people': 18420,
+            'approved_people': 4115,
+          }),
+          'support-groups/' => jsonResponse({
+            'count': 2,
+            'next': null,
+            'results': [
+              {...group, 'status': 'pending', 'status_label': 'Waiting for vetting'},
+              {
+                ...group,
+                'id': 'g3',
+                'name': 'Northern Traders Forum',
+                'serial_number': 'TGCG/0003/BAT/27',
+                'status': 'pending',
+                'leader_confirmed': false,
+              },
+            ],
+          }),
+          _ => null,
+        },
+      );
+      Future<void> show(Widget home, String name) async {
+        await tester.pumpWidget(_framed(memberApp(services, memberSession(), home)));
+        await tester.pumpAndSettle();
+        await _shot(tester, name);
+      }
+
+      await show(const MySupportGroupsPage(), 'groups-mine-$tag');
+      await show(const LedGroupPage(groupId: 'g1'), 'groups-led-$tag');
+      await show(
+        ListReviewPage(
+          group: SupportGroup.fromJson(group),
+          fileName: 'arewa-youth-members.xlsx',
+          read: ReadList.fromJson({
+            'people': [
+              {'line': 1, 'full_name': 'Musa Bello', 'phone_number': '08035550101', 'place': 'Dambo, Zaria, Kaduna', 'problem': ''},
+              {'line': 2, 'full_name': 'Aisha Sani', 'phone_number': '08035550102', 'place': '', 'problem': ''},
+              {'line': 3, 'full_name': '', 'phone_number': '08035550103', 'place': '', 'problem': 'No name was found next to this number.'},
+              {'line': 4, 'full_name': 'Musa B.', 'phone_number': '08035550101', 'place': '', 'problem': 'The same phone number as line 1.'},
+            ],
+            'notes': ['Only the first 8 pages of this scan were read. Upload the other pages as another file.'],
+          }),
+        ),
+        'groups-review-$tag',
+      );
+      await show(const Scaffold(body: SupportGroupsPage()), 'groups-vetting-$tag');
+      await show(
+        VettedGroupPage(group: SupportGroup.fromJson({...group, 'status': 'pending', 'status_label': 'Waiting for vetting'})),
+        'groups-vet-one-$tag',
+      );
+      await show(const RegisterOrganizationPage(), 'groups-register-$tag');
+      await show(const MemberRegistrationPage(organization: true), 'groups-join-$tag');
       debugDisableShadows = true;
     }, skip: !_enabled);
 

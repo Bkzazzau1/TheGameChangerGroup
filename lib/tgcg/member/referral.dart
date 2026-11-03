@@ -13,6 +13,13 @@ String? referralFromLink([Uri? link]) {
   return code.length == 7 ? code : null;
 }
 
+/// The support group code in the link the web app was opened with
+/// (app.tgcg.online/?ref=1234567&group=7654321), or null.
+String? groupFromLink([Uri? link]) {
+  final code = ((link ?? Uri.base).queryParameters['group'] ?? '').replaceAll(RegExp(r'\D'), '');
+  return code.length == 7 ? code : null;
+}
+
 /// Shares text (replaced in tests).
 typedef ShareText = Future<void> Function(String text);
 
