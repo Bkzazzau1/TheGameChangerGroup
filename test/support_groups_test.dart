@@ -461,6 +461,104 @@ void main() {
     expect(find.text('Women Groups'), findsOneWidget);
   });
 
+  testWidgets("a group's analytics show, its people are found, and one opens their profile", (
+    tester,
+  ) async {
+    final api = _Api((method, path, body) {
+      switch ((method, path)) {
+        case ('GET', 'support-groups/g1/analysis/'):
+          return jsonResponse({
+            'members': {
+              'total': 120,
+              'new_7_days': 30,
+              'new_30_days': 120,
+              'verification': {'unverified': 118, 'verified': 2},
+              'gender': {'male': 70, 'female': 20, '': 30},
+              'age': {'18-24': 40, 'unknown': 80},
+              'channel': {'import': 117, 'self': 3},
+              'profile': {'signedIn': 25},
+            },
+            'via': {'leader': 1, 'list': 119},
+            'waiting': 2,
+            'states': [
+              {'code': 'BO', 'name': 'Borno', 'count': 80},
+              {'code': '', 'name': '', 'count': 40},
+            ],
+            'sign_in': {'phone': 90, 'vin_only': 30, 'pin_to_choose': 28},
+          });
+        case ('GET', 'support-groups/g1/members/'):
+          return jsonResponse(_page([_person('p1', 'Musa Bello')]));
+        case ('GET', 'members/TGCG-000123/'):
+          return jsonResponse({
+            'membership_number': 'TGCG-000123',
+            'full_name': 'Musa Bello',
+            'verification_status': 'unverified',
+            'membership_state': 'active',
+            'scope': {'level': 'state', 'country': 'Nigeria', 'stateId': 'BO', 'stateName': 'Borno'},
+            'roles': <Object>[],
+            'gaps': ['vin'],
+          });
+      }
+      return null;
+    });
+    await _show(tester, api, VettedGroupPage(group: SupportGroup.fromJson(_group())));
+
+    expect(find.text('Analytics'), findsOneWidget);
+    expect(find.text('120'), findsWidgets);
+    expect(find.text('Where they are'), findsOneWidget);
+    expect(find.text('Borno'), findsOneWidget);
+    expect(find.text('No place given'), findsOneWidget);
+    expect(find.text("From the group's list, placed by TGCG"), findsOneWidget);
+    expect(find.text('With their VIN'), findsOneWidget);
+    expect(find.text('28 with a VIN have not chosen their own PIN yet.'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Find by name, membership number, phone or VIN'),
+      'musa',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    final searched = api.urls.lastWhere((url) => url.path.endsWith('/support-groups/g1/members/'));
+    expect(searched.queryParameters, {'q': 'musa'});
+
+    await _tap(tester, find.byKey(const ValueKey('group-person-p1')));
+    expect(api.urls.any((url) => url.path.endsWith('/members/TGCG-000123/')), isTrue);
+    expect(find.text('Musa Bello'), findsWidgets);
+  });
+
+  testWidgets('people added between pages are not shown twice', (tester) async {
+    var pages = 0;
+    final api = _Api((method, path, body) {
+      if (path != 'support-groups/g1/members/') return null;
+      final more = pages++ > 0;
+      return jsonResponse({
+        'count': 3,
+        // Someone joined at the top meanwhile: the second page repeats Musa.
+        'next': more ? null : 'https://api.tgcg.test/api/v1/support-groups/g1/members/?offset=1',
+        'previous': null,
+        'results': more
+            ? [_person('p1', 'Musa Bello'), _person('p2', 'Aisha Sani')]
+            : [_person('p1', 'Musa Bello')],
+      });
+    });
+    await _show(tester, api, VettedGroupPage(group: SupportGroup.fromJson(_group())));
+    await _tap(tester, find.text('Show more'));
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('group-person-p1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-person-p2')), findsOneWidget);
+  });
+
+  testWidgets('a group page from a server without analytics shows its people', (tester) async {
+    final api = _Api(
+      (method, path, body) => path == 'support-groups/g1/members/'
+          ? jsonResponse(_page([_person('p1', 'Musa Bello')]))
+          : null,
+    );
+    await _show(tester, api, VettedGroupPage(group: SupportGroup.fromJson(_group())));
+    expect(find.text('Analytics'), findsNothing);
+    expect(find.text('Musa Bello'), findsOneWidget);
+  });
+
   testWidgets('a group whose named leader has not said yes cannot be approved', (tester) async {
     final api = _Api(
       (method, path, body) =>

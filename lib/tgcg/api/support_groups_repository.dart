@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'access_repository.dart' show ApiPage;
 import 'api_client.dart';
+import 'member_insights.dart' show MembersFigures;
 
 /// What an organization covers: the server's code, and its name.
 const groupCoverages = [('national', 'National'), ('regional', 'Regional'), ('state', 'State')];
@@ -492,6 +493,71 @@ class SupportGroupTotals {
   );
 }
 
+/// How each person came into a group, as the server names it.
+const groupVias = {
+  'leader': 'Leads the group',
+  'registered': 'Registered by the group',
+  'confirmed': 'Already a member, said yes',
+  'code': "Joined with the group's code",
+  'link': "Joined TGCG with the group's link",
+  'list': "From the group's list, placed by TGCG",
+};
+
+/// One state and how many of a group's people are there; an empty [code]
+/// for those placed nowhere.
+typedef GroupStateCount = ({String code, String name, int count});
+
+/// Everything about the people in one group, for those who vet groups: what
+/// Members & Exco shows about members, and the group's own figures.
+class GroupAnalysis {
+  const GroupAnalysis({
+    required this.members,
+    this.via = const {},
+    this.waiting = 0,
+    this.states = const [],
+    this.withPhone = 0,
+    this.vinOnly = 0,
+    this.pinToChoose = 0,
+  });
+
+  final MembersFigures members;
+
+  /// How many came into the group each way (keys of [groupVias]).
+  final Map<String, int> via;
+
+  /// Asked to confirm, and not yet said yes.
+  final int waiting;
+
+  /// The most first.
+  final List<GroupStateCount> states;
+
+  /// How they sign in: with a phone, or with their VIN; and those with a VIN
+  /// who have not yet chosen their own PIN.
+  final int withPhone;
+  final int vinOnly;
+  final int pinToChoose;
+
+  factory GroupAnalysis.fromJson(Map<String, dynamic> json) {
+    final signIn = json['sign_in'] as Map<String, dynamic>? ?? const {};
+    return GroupAnalysis(
+      members: MembersFigures.fromJson(json['members'] as Map<String, dynamic>? ?? const {}),
+      via: _byStatus(json['via']),
+      waiting: json['waiting'] as int? ?? 0,
+      states: [
+        for (final row in (json['states'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>())
+          (
+            code: row['code'] as String? ?? '',
+            name: row['name'] as String? ?? '',
+            count: row['count'] as int? ?? 0,
+          ),
+      ],
+      withPhone: signIn['phone'] as int? ?? 0,
+      vinOnly: signIn['vin_only'] as int? ?? 0,
+      pinToChoose: signIn['pin_to_choose'] as int? ?? 0,
+    );
+  }
+}
+
 /// People sent to be added in one request. A new account takes the server
 /// about half a second to secure, so a batch answers well within the app's
 /// wait; the server takes at most 25.
@@ -645,10 +711,31 @@ class SupportGroupsRepository {
             as Map<String, dynamic>,
       );
 
-  Future<ApiPage<GroupPerson>> groupPeople(String id, {int offset = 0}) async => ApiPage.fromJson(
-    await client.get('support-groups/$id/members/', query: {if (offset > 0) 'offset': '$offset'}),
-    GroupPerson.fromJson,
-  );
+  /// Everyone in a group, or those matching [query]: words of a name, a
+  /// membership number, a phone or a VIN.
+  Future<ApiPage<GroupPerson>> groupPeople(String id, {int offset = 0, String query = ''}) async =>
+      ApiPage.fromJson(
+        await client.get(
+          'support-groups/$id/members/',
+          query: {
+            if (offset > 0) 'offset': '$offset',
+            if (query.trim().isNotEmpty) 'q': query.trim(),
+          },
+        ),
+        GroupPerson.fromJson,
+      );
+
+  /// The group's analytics; null from a server that does not have them yet.
+  Future<GroupAnalysis?> analysis(String id) async {
+    try {
+      return GroupAnalysis.fromJson(
+        await client.get('support-groups/$id/analysis/') as Map<String, dynamic>,
+      );
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
 
   /// Moves a group to another type.
   Future<SupportGroup> changeKind(String id, String kind) async => SupportGroup.fromJson(

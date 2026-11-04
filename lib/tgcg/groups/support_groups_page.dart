@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart' show failureMessage, showFailure;
@@ -5,7 +7,9 @@ import '../api/access_repository.dart' show ApiPage;
 import '../api/api_client.dart' show ApiException;
 import '../api/backend.dart';
 import '../api/support_groups_repository.dart';
+import '../membership/member_profile.dart' show showMemberDetails;
 import '../ui/tgcg_design.dart';
+import 'group_figures.dart';
 import 'my_support_groups_page.dart' show groupStatus;
 
 const _filters = [
@@ -292,29 +296,75 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
   bool _loading = false;
   bool _more = false;
   Object? _error;
+  Future<GroupAnalysis?>? _analysis;
+  final _search = TextEditingController();
+  Timer? _debounce;
+
+  /// Counts the answers, so a late one for an old search is dropped.
+  int _generation = 0;
 
   SupportGroupsRepository get _groups => TgcgBackend.of(context)!.supportGroups;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _analysis ??= _groups.analysis(_group.id);
     if (_people.isEmpty && !_loading && _error == null) _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool fresh = false}) async {
+    final generation = ++_generation;
+    setState(() {
+      _loading = true;
+      _error = null;
+      if (fresh) {
+        _people.clear();
+        _more = false;
+      }
+    });
     try {
-      final page = await _groups.groupPeople(_group.id, offset: _people.length);
-      if (!mounted) return;
+      final page = await _groups.groupPeople(
+        _group.id,
+        offset: _people.length,
+        query: _search.text,
+      );
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _people.addAll(page.items);
+        // Newest first: people added since the last page push the list down,
+        // so a page can repeat some of the one before.
+        final shown = {for (final person in _people) person.id};
+        _people.addAll(page.items.where((person) => shown.add(person.id)));
         _more = page.hasMore;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted && generation == _generation) setState(() => _error = error);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) setState(() => _loading = false);
     }
+  }
+
+  void _searchSoon() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () => _load(fresh: true));
+  }
+
+  /// The member's full profile, as Members & Exco opens it; a decision there
+  /// shows here at once, in the list and the analytics.
+  Future<void> _openPerson(GroupPerson person) async {
+    final number = person.membershipNumber;
+    if (number == null) return;
+    var changed = false;
+    await showMemberDetails(context, number, onChanged: () => changed = true);
+    if (!changed || !mounted) return;
+    setState(() => _analysis = _groups.analysis(_group.id));
+    await _load(fresh: true);
   }
 
   Future<String?> _askReason(String title, String action) => showDialog<String>(
@@ -489,9 +539,45 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
               ],
             ),
             const SizedBox(height: 18),
+            FutureBuilder<GroupAnalysis?>(
+              future: _analysis,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return TgcgNotice(
+                    icon: Icons.cloud_off_outlined,
+                    color: TgcgColors.danger,
+                    child: Text(failureMessage(snapshot.error!)),
+                  );
+                }
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const LinearProgressIndicator(minHeight: 2);
+                }
+                final analysis = snapshot.data;
+                if (analysis == null) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const TgcgSectionHeading(title: 'Analytics'),
+                    GroupFigures(analysis: analysis),
+                    const SizedBox(height: 6),
+                  ],
+                );
+              },
+            ),
             TgcgSectionHeading(
               title: group.members == null ? 'People' : 'People (${group.members} in it)',
             ),
+            TextField(
+              controller: _search,
+              textInputAction: TextInputAction.search,
+              onChanged: (_) => _searchSoon(),
+              decoration: const InputDecoration(
+                labelText: 'Find by name, membership number, phone or VIN',
+                prefixIcon: Icon(Icons.search_rounded),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 10),
             if (_error != null && _people.isEmpty)
               TgcgNotice(
                 icon: Icons.cloud_off_outlined,
@@ -500,11 +586,18 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
               )
             else if (_people.isEmpty && _loading)
               const LinearProgressIndicator(minHeight: 2)
+            else if (_people.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text('Nobody found.', style: TgcgType.caption),
+              )
             else
               TgcgRowGroup(
                 children: [
                   for (final person in _people)
                     TgcgActionRow(
+                      key: ValueKey('group-person-${person.id}'),
+                      onTap: person.membershipNumber == null ? null : () => _openPerson(person),
                       icon: person.isWaiting
                           ? Icons.hourglass_top_rounded
                           : Icons.person_outline_rounded,
@@ -536,7 +629,7 @@ class _VettedGroupPageState extends State<VettedGroupPage> {
               const SizedBox(height: 10),
               Center(
                 child: OutlinedButton(
-                  onPressed: _loading ? null : _load,
+                  onPressed: _loading ? null : () => _load(),
                   child: const Text('Show more'),
                 ),
               ),
