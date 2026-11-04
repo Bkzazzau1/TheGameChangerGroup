@@ -117,7 +117,8 @@ class MemberCard {
     return MemberCard(
       membershipNumber: json['membership_number'] as String,
       fullName: json['full_name'] as String,
-      phoneNumber: json['phone_number'] as String,
+      // Empty for a member from a group's list who signs in with their VIN.
+      phoneNumber: (json['phone_number'] as String?) ?? '',
       email: (json['email'] as String?) ?? '',
       whatsappNumber: (json['whatsapp_number'] as String?) ?? '',
       vin: json['vin'] as String?,
@@ -562,7 +563,7 @@ class RegisteredMember {
   factory RegisteredMember.fromJson(Map<String, dynamic> json) => RegisteredMember(
         membershipNumber: json['membership_number'] as String,
         fullName: json['full_name'] as String,
-        phoneNumber: json['phone_number'] as String,
+        phoneNumber: (json['phone_number'] as String?) ?? '',
         place: json['scope'] is Map<String, dynamic>
             ? geographicScopeFromJson(json['scope'] as Map<String, dynamic>)
             : GeographicScope.nigeria,

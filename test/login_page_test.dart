@@ -41,16 +41,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('members sign in with a phone number and PIN', (tester) async {
+  testWidgets('members sign in with a phone number or VIN, and a PIN', (tester) async {
     await _pump(tester);
     await _openForm(tester);
 
-    expect(find.text('Phone number'), findsOneWidget);
+    expect(find.text('Phone number or VIN'), findsOneWidget);
     expect(find.text('PIN'), findsOneWidget);
     expect(find.text('Forgot PIN?'), findsOneWidget);
-    expect(_field(tester, 0).keyboardType, TextInputType.phone);
+    // Letters for a VIN; digits for the PIN, until the VIN's letters come.
+    expect(_field(tester, 0).keyboardType, TextInputType.text);
     expect(_field(tester, 1).keyboardType, TextInputType.number);
     expect(_field(tester, 1).obscureText, isTrue);
+    await tester.enterText(find.byType(TextField).first, '90F5B0E8D0295847263');
+    await tester.pump();
+    expect(_field(tester, 1).keyboardType, TextInputType.text);
   });
 
   testWidgets('agents and coordinators sign in with an access ID and password', (tester) async {
@@ -81,7 +85,7 @@ void main() {
     await _openForm(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pump();
-    expect(find.text('Enter your phone number and PIN.'), findsOneWidget);
+    expect(find.text('Enter your phone number or VIN, and your PIN.'), findsOneWidget);
 
     await tester.tap(find.text('Agent or coordinator'));
     await tester.pumpAndSettle();

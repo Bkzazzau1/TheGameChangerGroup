@@ -99,6 +99,10 @@ http.Response _json(Object body, [int status = 200]) =>
 
 String _path(http.Request request) => request.url.path.replaceFirst('/api/v1/', '');
 
+/// The requests made to [path].
+List<http.BaseRequest> _requestsTo(_Server server, String path) =>
+    [for (final request in server.requests) if (request.url.path == '/api/v1/$path') request];
+
 Future<TgcgSessionController> _pump(
   WidgetTester tester,
   BackendServices backend,
@@ -1721,6 +1725,61 @@ void main() {
 
     expect(find.text('TGCG Member'), findsOneWidget);
     expect(find.text('TGCG-000123'), findsOneWidget);
+  });
+
+  testWidgets('signed in with a VIN, a member chooses their own PIN before anything else', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const vin = '90F5B0E8D0295847263';
+    final server = _Server((request) => switch (_path(request)) {
+          'auth/login/' => _json({
+              'access': 'A',
+              'refresh': 'R',
+              'user': {
+                'access_id': 'TGCG-000123',
+                'full_name': 'Musa Bello',
+                'role': 'member',
+                'scope': {'level': 'lga', 'country': 'Nigeria', 'lgaId': 'KD-ZARIA'},
+                'capabilities': <String>[],
+                'must_change_pin': true,
+              },
+            }),
+          'auth/password/' => _json({'access': 'A2', 'refresh': 'R2'}),
+          'me/member/' => _json(_card()),
+          'me/polling-unit/' => _json({'polling_unit': _unit, 'members_in_unit': 1, 'members_in_ward': 1}),
+          'me/announcements/' => _json({'count': 0, 'results': <Object>[]}),
+          'me/volunteer/' => _json(<Object>[]),
+          _ => null,
+        });
+    await tester.pumpWidget(TgcgApp(backend: server.connect()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'Phone number or VIN'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).at(0), vin);
+    await tester.enterText(find.byType(TextField).at(1), vin);
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose your own PIN'), findsOneWidget);
+    expect(_requestsTo(server, 'me/member/'), isEmpty);
+    await tester.enterText(find.widgetWithText(TextField, 'New 6-digit PIN'), '482915');
+    await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482916');
+    await tester.tap(find.text('Save my PIN'));
+    await tester.pumpAndSettle();
+    expect(find.text('The two PINs do not match.'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482915');
+    await tester.tap(find.text('Save my PIN'));
+    await tester.pumpAndSettle();
+
+    expect(jsonDecode(server.bodies['POST /api/v1/auth/password/']!), {
+      'current_password': vin,
+      'new_password': '482915',
+    });
+    expect(find.text('TGCG Member'), findsOneWidget);
   });
 
   group('who needs an identity check', () {

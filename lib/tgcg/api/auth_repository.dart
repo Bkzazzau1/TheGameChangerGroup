@@ -17,9 +17,14 @@ class ServerUser {
     this.identityVerified = true,
     this.phoneNumber,
     this.email,
+    this.mustChangePin = false,
   });
 
   final String accessId;
+
+  /// Signed in with a first password others know (a VIN from a group's list):
+  /// the server refuses everything else until the account chooses its own PIN.
+  final bool mustChangePin;
   final String fullName;
 
   /// Raw role from the server; [role] is null for roles this app does not
@@ -89,6 +94,7 @@ class ServerUser {
       identityVerified: json['identity_verified'] as bool? ?? true,
       phoneNumber: json['phone_number'] as String?,
       email: json['email'] as String?,
+      mustChangePin: json['must_change_pin'] as bool? ?? false,
     );
   }
 }

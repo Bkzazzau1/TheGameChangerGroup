@@ -84,7 +84,10 @@ class _TgcgAppState extends State<TgcgApp> {
   Future<void> _restoreSession(BackendServices services) async {
     try {
       final user = await services.auth.restore();
-      if (user != null && user.usesMemberApp && mounted) {
+      if (user != null && user.mustChangePin) {
+        // Signing in again asks for their own PIN first.
+        await services.auth.logout();
+      } else if (user != null && user.usesMemberApp && mounted) {
         sessionController.signInMember(
           fullName: user.fullName,
           membershipNumber: user.membershipNumber ?? user.accessId,

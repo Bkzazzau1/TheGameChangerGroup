@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'api/api_client.dart';
 import 'api/backend.dart';
+import 'member/first_pin_page.dart';
 import 'member/forgot_pin_page.dart';
 import 'member/member_registration_page.dart';
 import 'member/referral.dart';
@@ -64,7 +65,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
     final identifier = accessIdController.text.trim();
     if (identifier.isEmpty || passwordController.text.isEmpty) {
       setState(() => serverError = signInAs == _SignInAs.member
-          ? 'Enter your phone number and PIN.'
+          ? 'Enter your phone number or VIN, and your PIN.'
           : 'Enter your access ID or phone number and password.');
       return;
     }
@@ -78,6 +79,19 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
         password: passwordController.text,
       );
       if (!mounted) return;
+      if (user.mustChangePin) {
+        // A first password others know: their own PIN before anything else.
+        final chosen = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => FirstPinPage(firstPassword: passwordController.text),
+          ),
+        );
+        if (!mounted) return;
+        if (chosen != true) {
+          await services.auth.logout();
+          return;
+        }
+      }
       if (user.usesMemberApp) {
         TgcgSession.of(context, listen: false).signInMember(
           fullName: user.fullName,
@@ -112,7 +126,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => serverError = error.isUnauthorized
-          ? 'Wrong access ID, phone number or password. After 5 failed attempts '
+          ? 'Wrong access ID, phone number, VIN or password. After 5 failed attempts '
               'the account locks for 15 minutes.'
           : error.message);
     } finally {
@@ -256,12 +270,13 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   key: ValueKey('sign-in-id-${signInAs.name}'),
                   controller: accessIdController,
                   autofillHints: const [AutofillHints.username],
-                  keyboardType:
-                      signInAs == _SignInAs.member ? TextInputType.phone : TextInputType.text,
+                  // Letters too: members without a phone sign in with their VIN.
+                  keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.next,
+                  onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     labelText: signInAs == _SignInAs.member
-                        ? 'Phone number'
+                        ? 'Phone number or VIN'
                         : 'Access ID or phone number',
                     hintText: signInAs == _SignInAs.member
                         ? 'e.g. 0803 123 4567'
@@ -278,13 +293,18 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
                   obscureText: obscurePassword,
                   onSubmitted: (_) => _signIn(),
                   autofillHints: const [AutofillHints.password],
-                  keyboardType:
-                      signInAs == _SignInAs.member ? TextInputType.number : TextInputType.text,
+                  // Digits for a PIN; letters too after a VIN, the first password
+                  // of a member without a phone.
+                  keyboardType: signInAs == _SignInAs.member &&
+                          !RegExp(r'[A-Za-z]').hasMatch(accessIdController.text)
+                      ? TextInputType.number
+                      : TextInputType.text,
                   decoration: InputDecoration(
                     labelText: signInAs == _SignInAs.member ? 'PIN' : 'Password',
                     hintText: signInAs == _SignInAs.member ? 'Your 6-digit PIN' : null,
                     helperText: signInAs == _SignInAs.member
-                        ? 'Registered by someone else? Use your phone number until you set a PIN.'
+                        ? 'Registered by someone else? Use your phone number, or your VIN, until '
+                            'you set a PIN.'
                         : null,
                     helperMaxLines: 2,
                     prefixIcon: const Icon(Icons.lock_outline_rounded),

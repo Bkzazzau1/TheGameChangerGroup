@@ -449,7 +449,7 @@ class _RegisteredCard extends StatelessWidget {
                     ),
                     _Detail(
                       'Phone',
-                      localPhone(card.phoneNumber),
+                      card.phoneNumber.isEmpty ? 'Not given' : localPhone(card.phoneNumber),
                       action: details.canChangePhone
                           ? TextButton(
                               onPressed: () => _editPhone(context, card),
@@ -674,7 +674,7 @@ class _CardTab extends StatelessWidget {
                 title: 'My details',
                 child: Column(
                   children: [
-                    _Detail('Phone', card.phoneNumber),
+                    _Detail('Phone', card.phoneNumber.isEmpty ? 'Not given' : card.phoneNumber),
                     ..._detailRows(context, card, edits),
                     _Detail(
                       'Membership',
