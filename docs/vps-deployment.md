@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `f7b90f1e456acc233a1751a525f0e79a7fbbdc8c`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `e08d5fa4ae3cab0ed8a94e450937b4264844e138`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261103-090940-42928a1f7631` (release directory timestamps use UTC).
-- Frontend build source: `dc4edd2` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261101-154116-20ecbad5f650` (pop-up messages, `9b2ab40`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261104-071352-21439c8d7362` (release directory timestamps use UTC).
+- Frontend build source: `66064dd` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261103-090940-42928a1f7631` (support groups, `dc4edd2`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `42928a1f763137e3decc62fd999f4f645f4732b4aff189aaca4df576ebb0d90c`.
-- Build: 856 files, 59,501,561 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `21439c8d7362a5dcb225fa7b08a679b3986600781f1aa58a98f89429c11443e0`.
+- Build: 856 files, 59,533,130 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,18 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Diaspora membership and support group types (4 November 2026)
+
+Backend `e08d5fa` over `f7b90f1`, and frontend `66064dd`, on the owner's word ("publish").
+
+- **Diaspora membership:** "Join from the diaspora" on the sign-in page opens its own form: the country and city where the person lives (address optional), an email, a phone from any country written with its code, and their home in Nigeria, by PVC (placed at its polling unit) or, without one, by LGA of origin and ward if known. Members registered with Nigerian details stay as they are. Sign-in reads numbers abroad by their country code and drops the 0 dialled at home where it is never part of the number. SMS codes still go to Nigerian numbers only, so a number abroad joins unconfirmed. Members & Exco shows a Diaspora tile and card by country; a country opens its members, with a `country` filter on the members list; the address abroad is personal. New table `diaspora_diasporaprofile`; public `register/places/countries/` (198 countries, Nigeria not among them).
+- **Support group types:** every group is of one type, chosen when it registers: Support Groups, Women Groups, Youth Groups and People With Disability (PWD) Groups to start with. Those who vet groups add types, rename them, stop offering one (groups keep theirs) and move a group to another type, each audited. The four groups registered before became Support Groups. The Support Groups page lists the types with their counts; one opens its groups. Public `register/support-group-kinds/`.
+- **No package or static-file changes.**
+
+**820 PostgreSQL tests** passed with 0 skipped in the isolated run at `e08d5fa`, on fresh throwaway databases; **545 Flutter tests** passed with analysis clean. With the API stopped, `migrate.py` applied exactly `diaspora.0001_initial`, `support_groups.0002_group_kinds` and `support_groups.0003_group_kind_required` (the type becomes required in its own transaction, after the groups have theirs), with the role-sync receiver disconnected. **Zero migrations are pending.** Protected fingerprints did not change during the migration (**92 roles, 2,414 appointments, 129 delegation grants**). Backup `20261104T072203Z-I3Bngp` preceded the deployment and `20261104T072322Z-lhxGBU` followed it.
+
+All 856 uploaded files matched the local checksums, the public checksum matched `21439c8d…`, health passed, and Chrome under phone emulation drew the live sign-in page with "Register an organization" and "Join from the diaspora" at 390 and 320 wide. The countries and group-type lists answer without sign-in; anonymous `/support-groups/kinds/`, `/support-groups/totals/` and `/members/analysis/` return 401. No server errors in the first 279 requests after. Android stays at version 5.
 
 ### Support groups (3 November 2026)
 
