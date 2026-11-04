@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `e08d5fa4ae3cab0ed8a94e450937b4264844e138`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `3714bd457b7a7ef1d07449b4f509d4bc83d5aae3`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261104-071352-21439c8d7362` (release directory timestamps use UTC).
-- Frontend build source: `66064dd` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261103-090940-42928a1f7631` (support groups, `dc4edd2`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261104-104541-9109075e4d76` (release directory timestamps use UTC).
+- Frontend build source: `cfd415d` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261104-083253-2fcd04244787` (VIN sign-in, `9df5a33`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `21439c8d7362a5dcb225fa7b08a679b3986600781f1aa58a98f89429c11443e0`.
-- Build: 856 files, 59,533,130 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `9109075e4d7647c3880397265455da31128357a4707c9343e4cd52a32803cb84`.
+- Build: 856 files, 59,546,398 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,24 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### Group analytics and shorter registration locks (4 November 2026)
+
+Backend `3714bd4` over `036f8c5`, and frontend `cfd415d`, on the owner's word ("publish the changes we have made"). The owner ran nothing; the deployment was by Claude Code. No migrations, packages or static files.
+
+- **Group analytics:** those who vet groups get `support-groups/{uuid}/analysis/`: what Members & Exco shows about members, for the group's own, with how each came into the group, how many are asked and have not said yes, where they are by state and how they sign in. The group's page shows them, finds its people by name, membership number, phone or VIN (`?q=`), and opens each person's full profile as Members & Exco does; a decision there refreshes the page.
+- **Shorter registration locks:** the membership number's row stays locked until a registration commits. The PIN (about half a second to hash) and the identity checks (which may read the card photo for many seconds) ran under it, so registrations queued one behind another. The PIN is now hashed before the number is taken, and the checks run after the registration commits. A leader's batch is saved person by person (the add view runs outside the request transaction), and an organization's serial is taken before the membership number, so the locks are always taken in one order. A review of 4 dimensions with 3 skeptics per finding confirmed 7 problems, all fixed here.
+- **API documentation:** the first-PIN sign-in is described as the JWT bearer it extends; `check --deploy` is back to its 8 known schema warnings (127 after `036f8c5`).
+
+**835 PostgreSQL tests** passed with 0 skipped in the isolated run at `3714bd4`; **549 Flutter tests** passed with analysis clean. Zero migrations are pending. The public checksum matched `9109075e…`, health passed, and an anonymous `/support-groups/{uuid}/analysis/` returns 401.
+
+### The Directorate of Contact and Mobilization's list (4 November 2026)
+
+Backend `036f8c5` over `e08d5fa`, and frontend `9df5a33`, on the owner's word ("now register the cleared ones"). The owner ran the deployment on the server, as Claude Code's safeguards refused it. Migrations `accounts.0003_user_must_change_password`, `membership.0017_alter_member_phone_number` and `support_groups.0004_alter_groupmember_via`, applied by `migrate.py`; protected fingerprints unchanged (92 roles, 2,414 appointments, 129 delegation grants). **826 PostgreSQL tests** passed with 0 skipped; **546 Flutter tests** passed.
+
+- **The list:** a 1,495-page PDF table (SN, name, state, LGA, ward, PU, VIN, phone, account number, bank name) of 88,045 rows from about 12 joined lists, read on the owner's PC by `read_group_list`; bank details were never read, and only the people to place (names, VINs, phones, places) reached the server. Only a VIN or phone listed under one name counts: 38,066 people were placed and 23,407 rows held (14,690 a VIN shared by other names, 3,261 a shared phone, about 4,900 a VIN of the wrong length, 515 neither), named by page and S/N only for the group to correct.
+- **Members without a phone:** a member with a VIN may have no phone, and signs in with the VIN. Their first password is the VIN, which whoever holds the list knows, so until they choose their own PIN the server answers only `auth/me`, `auth/password` and `auth/logout` (403 `pin_change_required`); the app asks for the PIN first. Bulk SMS and WhatsApp skip members without a phone.
+- **The import:** `import_group_list` in four shards at low priority; someone already a member (same VIN or phone) was placed in the group at once with an in-app notice, as the owner decided. Results from the database: **38,066 placed; 38,033 newly registered, 29,519 with a phone and 8,514 with a VIN only (all still to choose their PIN); 33 already members moved into the group; 6,715 with a place in Nigeria; 0 held at import and 0 errors.** The group now has 38,067 people with its leader; TGCG has 50,425 members. Backups `20261104T090751Z-ZbRNq0` before and `20261104T184841Z-YmHIxw` after. The list's working copies were removed from the server and the owner's PC afterwards.
 
 ### Diaspora membership and support group types (4 November 2026)
 
