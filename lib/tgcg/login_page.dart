@@ -82,7 +82,7 @@ class _TgcgLoginPageState extends State<TgcgLoginPage> {
       if (user.mustChangePin) {
         // A first password others know: their own PIN before anything else.
         // A NIN is 11 digits; a VIN has letters too.
-        final withNin = RegExp(r'^\d{11}$').hasMatch(identifier.replaceAll(' ', ''));
+        final withNin = RegExp(r'^\d{11}$').hasMatch(identifier.replaceAll(RegExp(r'\s'), ''));
         final chosen = await Navigator.of(context).push<bool>(
           MaterialPageRoute(
             builder: (_) => FirstPinPage(
