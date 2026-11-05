@@ -2,6 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../media/device_media.dart';
+import '../media/pvc_camera_page.dart' show voterCardPhotoName;
+
+/// Takes a photo of a PVC (replaced in tests); see takeCardPhoto.
+typedef TakeCardPhoto = Future<XFile?> Function({required Future<XFile?> Function() otherCamera});
+
 class PvcRecognitionResult {
   const PvcRecognitionResult({
     required this.imagePath,
@@ -35,10 +41,12 @@ class PvcRecognitionResult {
 /// Reads the front of a PVC with the phone's text recognition. What it reads
 /// saves typing; it never shows that the card is genuine.
 class PvcRecognitionService {
-  PvcRecognitionService({ImagePicker? picker})
-      : _picker = picker ?? ImagePicker();
+  PvcRecognitionService({ImagePicker? picker, TakeCardPhoto? takePhoto})
+      : _picker = picker ?? ImagePicker(),
+        _takePhoto = takePhoto ?? takeCardPhoto;
 
   final ImagePicker _picker;
+  final TakeCardPhoto _takePhoto;
 
   /// Text recognition runs in the Android and iPhone apps only. Elsewhere the
   /// photo is kept and nothing is read from it.
@@ -47,11 +55,15 @@ class PvcRecognitionService {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
+  /// The card photographed inside its frame on screen; the phone's camera
+  /// app when that camera cannot start.
   Future<PvcRecognitionResult?> captureAndRecognize() async {
-    final image = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 94,
-      preferredCameraDevice: CameraDevice.rear,
+    final image = await _takePhoto(
+      otherCamera: () => _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 94,
+        preferredCameraDevice: CameraDevice.rear,
+      ),
     );
     if (image == null) return null;
     return recognizeImage(image);
@@ -64,10 +76,12 @@ class PvcRecognitionService {
   }
 
   Future<PvcRecognitionResult> recognizeImage(XFile image) async {
+    // Never without a name: the server ignores an upload that has none.
+    final name = image.name.isEmpty ? voterCardPhotoName : image.name;
     if (!canReadText) {
       return PvcRecognitionResult(
         imagePath: image.path,
-        imageName: image.name,
+        imageName: name,
         rawText: '',
       );
     }
@@ -77,7 +91,7 @@ class PvcRecognitionService {
       final recognized = await recognizer.processImage(
         InputImage.fromFilePath(image.path),
       );
-      return fromText(recognized.text, imagePath: image.path, imageName: image.name);
+      return fromText(recognized.text, imagePath: image.path, imageName: name);
     } finally {
       await recognizer.close();
     }

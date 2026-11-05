@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 
 import 'camera_capture_page.dart';
+import 'pvc_camera_page.dart';
 
 /// Root navigator, so device services without a BuildContext (such as the
 /// image_picker camera delegate) can present the in-app camera.
@@ -60,6 +61,22 @@ class TgcgCameraDelegate extends ImagePickerCameraDelegate {
       ),
     );
   }
+}
+
+/// A photo of the front of a PVC, taken with the card's frame on screen
+/// (in the phone apps, in browsers and on Windows). [otherCamera] (the
+/// phone's camera app) is offered when that camera cannot start, and used
+/// before the app has a screen to show it on. On desktop there is no other
+/// camera app: image_picker's camera there is this same camera.
+Future<XFile?> takeCardPhoto({required Future<XFile?> Function() otherCamera}) {
+  final navigator = tgcgNavigatorKey.currentState;
+  if (navigator == null) return otherCamera();
+  return navigator.push<XFile>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => PvcCameraPage(otherCamera: isDesktopPlatform ? null : otherCamera),
+    ),
+  );
 }
 
 /// Turns plugin and OS errors into guidance an operator can act on.
