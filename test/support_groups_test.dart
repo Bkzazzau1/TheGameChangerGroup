@@ -484,7 +484,7 @@ void main() {
               {'code': 'BO', 'name': 'Borno', 'count': 80},
               {'code': '', 'name': '', 'count': 40},
             ],
-            'sign_in': {'phone': 90, 'vin_only': 30, 'pin_to_choose': 28},
+            'sign_in': {'phone': 80, 'vin_only': 30, 'nin_only': 10, 'pin_to_choose': 28},
           });
         case ('GET', 'support-groups/g1/members/'):
           return jsonResponse(_page([_person('p1', 'Musa Bello')]));
@@ -510,7 +510,8 @@ void main() {
     expect(find.text('No place given'), findsOneWidget);
     expect(find.text("From the group's list, placed by TGCG"), findsOneWidget);
     expect(find.text('With their VIN'), findsOneWidget);
-    expect(find.text('28 with a VIN have not chosen their own PIN yet.'), findsOneWidget);
+    expect(find.text('With their NIN'), findsOneWidget);
+    expect(find.text('28 with a VIN or NIN have not chosen their own PIN yet.'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Find by name, membership number, phone or VIN'),

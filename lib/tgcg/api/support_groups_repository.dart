@@ -517,6 +517,7 @@ class GroupAnalysis {
     this.states = const [],
     this.withPhone = 0,
     this.vinOnly = 0,
+    this.ninOnly = 0,
     this.pinToChoose = 0,
   });
 
@@ -531,10 +532,12 @@ class GroupAnalysis {
   /// The most first.
   final List<GroupStateCount> states;
 
-  /// How they sign in: with a phone, or with their VIN; and those with a VIN
-  /// who have not yet chosen their own PIN.
+  /// How they sign in: with a phone, with their VIN, or with neither, with
+  /// their NIN; and those with a VIN or NIN who have not yet chosen their own
+  /// PIN.
   final int withPhone;
   final int vinOnly;
+  final int ninOnly;
   final int pinToChoose;
 
   factory GroupAnalysis.fromJson(Map<String, dynamic> json) {
@@ -553,6 +556,7 @@ class GroupAnalysis {
       ],
       withPhone: signIn['phone'] as int? ?? 0,
       vinOnly: signIn['vin_only'] as int? ?? 0,
+      ninOnly: signIn['nin_only'] as int? ?? 0,
       pinToChoose: signIn['pin_to_choose'] as int? ?? 0,
     );
   }

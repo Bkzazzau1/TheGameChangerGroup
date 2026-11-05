@@ -5,15 +5,18 @@ import '../api/api_client.dart';
 import '../api/backend.dart';
 import '../ui/tgcg_design.dart';
 
-/// A member who signed in with a first password others know (their VIN, from
-/// a group's list) chooses their own 6-digit PIN before anything else; the
-/// server refuses everything until they do. Pops true once it is changed,
-/// false if they sign out instead.
+/// A member who signed in with a first password others know (their VIN or
+/// NIN, from a group's list) chooses their own 6-digit PIN before anything
+/// else; the server refuses everything until they do. Pops true once it is
+/// changed, false if they sign out instead.
 class FirstPinPage extends StatefulWidget {
-  const FirstPinPage({super.key, required this.firstPassword});
+  const FirstPinPage({super.key, required this.firstPassword, this.signedInWith = 'VIN'});
 
   /// What they signed in with, sent as the current password.
   final String firstPassword;
+
+  /// 'VIN' or 'NIN': what they signed in with, and go on signing in with.
+  final String signedInWith;
 
   @override
   State<FirstPinPage> createState() => _FirstPinPageState();
@@ -69,11 +72,11 @@ class _FirstPinPageState extends State<FirstPinPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           children: [
-            const Text(
-              'You signed in with your VIN, which is on the list your group gave TGCG. '
-              'Choose a 6-digit PIN only you know. From now on you sign in with your VIN '
-              'and this PIN.',
-              style: TextStyle(color: TgcgColors.muted, height: 1.4),
+            Text(
+              'You signed in with your ${widget.signedInWith}, which is on the list your group '
+              'gave TGCG. Choose a 6-digit PIN only you know. From now on you sign in with '
+              'your ${widget.signedInWith} and this PIN.',
+              style: const TextStyle(color: TgcgColors.muted, height: 1.4),
             ),
             const SizedBox(height: 16),
             if (_errors['general'] case final general?)

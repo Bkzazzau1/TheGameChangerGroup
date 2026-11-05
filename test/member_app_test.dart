@@ -1727,13 +1727,13 @@ void main() {
     expect(find.text('TGCG-000123'), findsOneWidget);
   });
 
-  testWidgets('signed in with a VIN, a member chooses their own PIN before anything else', (
+  for (final (kind, vin) in const [('VIN', '90F5B0E8D0295847263'), ('NIN', '12345678901')]) {
+  testWidgets('signed in with a $kind, a member chooses their own PIN before anything else', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(430, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    const vin = '90F5B0E8D0295847263';
     final server = _Server((request) => switch (_path(request)) {
           'auth/login/' => _json({
               'access': 'A',
@@ -1758,13 +1758,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(TextField, 'Phone number or VIN'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Phone number, VIN or NIN'), findsOneWidget);
     await tester.enterText(find.byType(TextField).at(0), vin);
     await tester.enterText(find.byType(TextField).at(1), vin);
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
 
     expect(find.text('Choose your own PIN'), findsOneWidget);
+    expect(find.textContaining('You signed in with your $kind,'), findsOneWidget);
     expect(_requestsTo(server, 'me/member/'), isEmpty);
     await tester.enterText(find.widgetWithText(TextField, 'New 6-digit PIN'), '482915');
     await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482916');
@@ -1781,6 +1782,7 @@ void main() {
     });
     expect(find.text('TGCG Member'), findsOneWidget);
   });
+  }
 
   group('who needs an identity check', () {
     Map<String, dynamic> user({String? membershipNumber, bool verified = false, List<String> can = const []}) => {

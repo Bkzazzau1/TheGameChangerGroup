@@ -41,11 +41,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('members sign in with a phone number or VIN, and a PIN', (tester) async {
+  testWidgets('members sign in with a phone number, VIN or NIN, and a PIN', (tester) async {
     await _pump(tester);
     await _openForm(tester);
 
-    expect(find.text('Phone number or VIN'), findsOneWidget);
+    expect(find.text('Phone number, VIN or NIN'), findsOneWidget);
     expect(find.text('PIN'), findsOneWidget);
     expect(find.text('Forgot PIN?'), findsOneWidget);
     // Letters for a VIN; digits for the PIN, until the VIN's letters come.
@@ -55,6 +55,10 @@ void main() {
     await tester.enterText(find.byType(TextField).first, '90F5B0E8D0295847263');
     await tester.pump();
     expect(_field(tester, 1).keyboardType, TextInputType.text);
+    // A NIN is digits, as its first password is.
+    await tester.enterText(find.byType(TextField).first, '12345678901');
+    await tester.pump();
+    expect(_field(tester, 1).keyboardType, TextInputType.number);
   });
 
   testWidgets('agents and coordinators sign in with an access ID and password', (tester) async {
@@ -85,7 +89,7 @@ void main() {
     await _openForm(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pump();
-    expect(find.text('Enter your phone number or VIN, and your PIN.'), findsOneWidget);
+    expect(find.text('Enter your phone number, VIN or NIN, and your PIN.'), findsOneWidget);
 
     await tester.tap(find.text('Agent or coordinator'));
     await tester.pumpAndSettle();

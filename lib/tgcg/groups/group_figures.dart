@@ -49,10 +49,12 @@ class GroupFigures extends StatelessWidget {
         rows: [
           ('With their phone number', analysis.withPhone),
           ('With their VIN', analysis.vinOnly),
+          if (analysis.ninOnly > 0) ('With their NIN', analysis.ninOnly),
         ],
         footnote: analysis.pinToChoose == 0
             ? null
-            : '${formatCount(analysis.pinToChoose)} with a VIN have not chosen their own PIN yet.',
+            : '${formatCount(analysis.pinToChoose)} with a VIN or NIN have not chosen their own '
+                'PIN yet.',
       ),
       _Bars(
         title: 'Gender',
