@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261105-111859-3d6fe73f8c92` (release directory timestamps use UTC).
-- Frontend build source: `284a2c7` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261104-104541-9109075e4d76` (group analytics, `cfd415d`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261105-191202-9944e8ebab1e` (release directory timestamps use UTC).
+- Frontend build source: `b01e0a7` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261105-111859-3d6fe73f8c92` (NIN sign-in, `284a2c7`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `3d6fe73f8c9211605acc5153e1ff7a727d2dab10dfa63229e18e5ba6a219d0aa`.
-- Build: 856 files, 59,547,613 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261104-group-analytics.json`, `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `9944e8ebab1eb003d24b433d348a504e5d135b137a1bceff1f01ebce783898ad`.
+- Build: 856 files, 59,573,963 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261105-nin-sign-in.json`, `web-release-20261104-group-analytics.json`, `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,17 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### The PVC's frame on screen, and browsers that refuse storage (5 November 2026)
+
+Frontend `b01e0a7` (commits `8ec4b9f` and `b01e0a7`) over `284a2c7`, website only, on the owner's word ("Publish now"). Backend unchanged at `f7761bf`. Deployed by Claude Code; the first upload was cut off by the connection, and its unfinished, never-live folder was removed before the upload was repeated.
+
+- **The PVC's frame:** every PVC camera capture (registration, a member's own scan, a polling unit change, PVC enrolment) opens the app's own camera with the card's frame (85.6 by 54 mm) over a full-screen picture, a faint sketch of the card's front, a hint, no flash and a light for the back camera in the phone apps, then a check of the photo (Retake / Use photo). The phone's camera app is offered when this camera cannot start. Pictures are 4K, under the server's 8 MB.
+- **Reviews:** three rounds (4, 4 and 3 dimensions, 2 skeptics per finding) confirmed 14 problems, all fixed before release: browser photos without a file name (the server dropped them; now `voter-card.jpg`), mirrored laptop and front cameras in browsers (turned back on a canvas, as JPEG), a frozen browser picture after Retake, Android permission prompts, background, switching or a quick reopen leaving a camera stopped (camera work now runs in turn for every page, and the camera is let go as the page closes), the picture's shape after the phone turns, and landscape and large-text layouts.
+- **Storage refused:** a member's screenshot showed "SecurityError: Failed to read the 'localStorage' property" after their card was read: their browser blocks this site's data, and every request read the sign-in from it first. In a browser the sign-in and the daily reminder are now kept for the visit, and the offline queue (in memory there) gets a key for the visit; on phones and Windows a storage error stands as before.
+- **Phones:** Android version 5 still opens the phone's camera app for a PVC; the frame reaches phones with version 6.
+
+**581 Flutter tests** passed with analysis clean (27 for the PVC camera, 4 for refused storage). The public checksum matched `9944e8eb…`, the page loads and health passed.
 
 ### NIN sign-in and the Persons with Disabilities TGCG Support Group (5 November 2026)
 
