@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'offline_database_contract.dart';
@@ -18,7 +18,17 @@ class OfflineCrypto {
 
   Future<void> initialize() async {
     if (_secretKey != null) return;
-    final stored = await _secureStorage.read(key: _keyName);
+    final String? stored;
+    try {
+      stored = await _secureStorage.read(key: _keyName);
+    } catch (_) {
+      // A browser keeps the offline queue in memory, so a key for this visit
+      // serves when it refuses this site its storage. On a phone the queue
+      // outlives the visit and needs its own key: the error stands.
+      if (!kIsWeb) rethrow;
+      _secretKey = SecretKey(await (await _algorithm.newSecretKey()).extractBytes());
+      return;
+    }
     if (stored != null && stored.isNotEmpty) {
       _secretKey = SecretKey(base64Decode(stored));
       return;
@@ -26,10 +36,14 @@ class OfflineCrypto {
 
     final generated = await _algorithm.newSecretKey();
     final bytes = await generated.extractBytes();
-    await _secureStorage.write(
-      key: _keyName,
-      value: base64Encode(bytes),
-    );
+    try {
+      await _secureStorage.write(
+        key: _keyName,
+        value: base64Encode(bytes),
+      );
+    } catch (_) {
+      if (!kIsWeb) rethrow;
+    }
     _secretKey = SecretKey(bytes);
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -21,23 +22,44 @@ abstract interface class ReminderLog {
   Future<void> shown(String account, DateTime at);
 }
 
+/// Kept on the device; for this visit only when a browser refuses this site
+/// its storage (see SecureTokenStore).
 class DeviceReminderLog implements ReminderLog {
-  DeviceReminderLog([FlutterSecureStorage? storage])
-    : _storage = storage ?? const FlutterSecureStorage();
+  DeviceReminderLog([FlutterSecureStorage? storage, bool? visitWhenRefused])
+    : _storage = storage ?? const FlutterSecureStorage(),
+      _visitWhenRefused = visitWhenRefused ?? kIsWeb;
 
   final FlutterSecureStorage _storage;
+  final bool _visitWhenRefused;
+  final _visit = MemoryReminderLog();
+  bool _refused = false;
 
   String _key(String account) => 'tgcg.reminder.$account';
 
   @override
   Future<DateTime?> lastShown(String account) async {
-    final value = await _storage.read(key: _key(account));
-    return value == null ? null : DateTime.tryParse(value);
+    if (_refused) return _visit.lastShown(account);
+    try {
+      final value = await _storage.read(key: _key(account));
+      return value == null ? null : DateTime.tryParse(value);
+    } catch (_) {
+      if (!_visitWhenRefused) rethrow;
+      _refused = true;
+      return _visit.lastShown(account);
+    }
   }
 
   @override
-  Future<void> shown(String account, DateTime at) =>
-      _storage.write(key: _key(account), value: at.toUtc().toIso8601String());
+  Future<void> shown(String account, DateTime at) async {
+    if (_refused) return _visit.shown(account, at);
+    try {
+      await _storage.write(key: _key(account), value: at.toUtc().toIso8601String());
+    } catch (_) {
+      if (!_visitWhenRefused) rethrow;
+      _refused = true;
+      await _visit.shown(account, at);
+    }
+  }
 }
 
 class MemoryReminderLog implements ReminderLog {

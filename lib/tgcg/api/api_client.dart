@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -77,33 +78,53 @@ abstract interface class TokenStore {
   Future<void> clear();
 }
 
+/// Tokens kept on the device. A browser that refuses this site its storage
+/// (site data blocked, or some private and in-app browsers) throws on every
+/// use of it; the tokens are then kept for this visit only, so signing in
+/// and everything after it still work until the page is closed. Elsewhere a
+/// storage error stands: signing out must not leave tokens on the device.
 class SecureTokenStore implements TokenStore {
-  SecureTokenStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+  SecureTokenStore([FlutterSecureStorage? storage, bool? visitWhenRefused])
+      : _storage = storage ?? const FlutterSecureStorage(),
+        _visitWhenRefused = visitWhenRefused ?? kIsWeb;
 
   final FlutterSecureStorage _storage;
+  final bool _visitWhenRefused;
+  final _visit = MemoryTokenStore();
+  bool _refused = false;
   static const _accessKey = 'tgcg.access';
   static const _refreshKey = 'tgcg.refresh';
 
-  @override
-  Future<({String access, String refresh})?> read() async {
-    final access = await _storage.read(key: _accessKey);
-    final refresh = await _storage.read(key: _refreshKey);
-    if (access == null || refresh == null) return null;
-    return (access: access, refresh: refresh);
+  Future<T> _kept<T>(Future<T> Function() stored, Future<T> Function() visit) async {
+    if (_refused) return visit();
+    try {
+      return await stored();
+    } catch (_) {
+      if (!_visitWhenRefused) rethrow;
+      _refused = true;
+      return visit();
+    }
   }
 
   @override
-  Future<void> write({required String access, required String refresh}) async {
-    await _storage.write(key: _accessKey, value: access);
-    await _storage.write(key: _refreshKey, value: refresh);
-  }
+  Future<({String access, String refresh})?> read() => _kept(() async {
+        final access = await _storage.read(key: _accessKey);
+        final refresh = await _storage.read(key: _refreshKey);
+        if (access == null || refresh == null) return null;
+        return (access: access, refresh: refresh);
+      }, _visit.read);
 
   @override
-  Future<void> clear() async {
-    await _storage.delete(key: _accessKey);
-    await _storage.delete(key: _refreshKey);
-  }
+  Future<void> write({required String access, required String refresh}) => _kept(() async {
+        await _storage.write(key: _accessKey, value: access);
+        await _storage.write(key: _refreshKey, value: refresh);
+      }, () => _visit.write(access: access, refresh: refresh));
+
+  @override
+  Future<void> clear() => _kept(() async {
+        await _storage.delete(key: _accessKey);
+        await _storage.delete(key: _refreshKey);
+      }, _visit.clear);
 }
 
 class MemoryTokenStore implements TokenStore {
