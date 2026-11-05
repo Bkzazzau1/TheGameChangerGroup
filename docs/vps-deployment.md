@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `3714bd457b7a7ef1d07449b4f509d4bc83d5aae3`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `f7761bf8ebc7cdefadd6985d92e538a34b36f419`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261104-104541-9109075e4d76` (release directory timestamps use UTC).
-- Frontend build source: `cfd415d` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261104-083253-2fcd04244787` (VIN sign-in, `9df5a33`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261105-111859-3d6fe73f8c92` (release directory timestamps use UTC).
+- Frontend build source: `284a2c7` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261104-104541-9109075e4d76` (group analytics, `cfd415d`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `9109075e4d7647c3880397265455da31128357a4707c9343e4cd52a32803cb84`.
-- Build: 856 files, 59,546,398 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `3d6fe73f8c9211605acc5153e1ff7a727d2dab10dfa63229e18e5ba6a219d0aa`.
+- Build: 856 files, 59,547,613 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261104-group-analytics.json`, `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,18 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### NIN sign-in and the Persons with Disabilities TGCG Support Group (5 November 2026)
+
+Backend `f7761bf` over `3714bd4` (two commits: `6665a38`, and `f7761bf` from its review), and frontend `284a2c7`, on the owner's word ("Publish and import"). Deployed by Claude Code. One migration, `membership.0018_member_nin` (a nullable unique column), applied by `migrate.py` with the role-sync receiver off; protected fingerprints unchanged (92 roles, 2,414 appointments, 129 delegation grants). No packages or static files. Backups `20261105T112551Z-3bwXQx` before and `20261105T113506Z-GdApkk` after the import.
+
+- **NIN sign-in:** a member from a group's list with neither a phone nor a VIN signs in with the NIN the list gives (`Member.nin`, kept only then, never shown, and not checked with NIMC). The first password is the NIN, so their own PIN comes first, as for the VIN; sign-in tries a phone number first, and a NIN that sign-in would read as a phone is held instead. The audit log never keeps a NIN.
+- **A spreadsheet's list:** `read_group_list --table --state` reads a spreadsheet's table printed to PDF by where its cells stand, from the header's column names, putting back rows moved one column right. Planning counts an own NIN as an own VIN or phone; people from a list keep its gender, disability and occupation. Each person carries their rows' phones that are not theirs alone, so a corrected list finds someone registered with one under the same name.
+- **Review:** 5 dimensions with 2 skeptics per finding (25 agents) confirmed two problems in `6665a38`, both fixed in `f7761bf`: a re-run of a corrected list could register someone twice, and crossed phones and NINs under one name made a person with nothing to sign in with. The app now removes every kind of space before naming a NIN.
+- **The group:** "Persons with Disabilities TGCG Support Group", `TGCG/0018/BAT/27`, People With Disability (PWD), all of Nigeria, approved at once, led by TGCG-009831, whose PIN was reset to his phone number on the owner's word (audited as `account.pin_reset`).
+- **The list:** "List of Kaduna State persons with disabilities farmers" compiled by the S.A. to the Kaduna State Governor on Disability Matters, 9 pages, 927 rows, read on the owner's PC: 869 people and 39 rows held (23 a phone shared by other names, 8 with neither phone nor NIN, 7 a wrong phone or NIN, 1 with no name), by page and S/N only. Imported in two shards: **867 placed; 863 newly registered, 797 with a phone and 66 with a NIN only (all still to choose their PIN); 4 already members moved into the group; 2 already in it (the leader, and a second row of a person matched by name and phone); 0 errors.** Of the new: 542 men, 319 women; physical 451, hearing 202, visual 141, leprosy 60, albinism 9; all farmers. All 867 are in Kaduna, 580 at ward level. The group has 868 people with its leader; TGCG has 51,636 members. The list's working copies were removed from the server and the owner's PC.
+
+**839 PostgreSQL tests** passed with 0 skipped in the isolated run at `f7761bf`; **550 Flutter tests** passed with analysis clean. Zero migrations are pending. The public checksum matched `3d6fe73f…`, health passed, and a sign-in with an unknown NIN returns 401.
 
 ### Group analytics and shorter registration locks (4 November 2026)
 
