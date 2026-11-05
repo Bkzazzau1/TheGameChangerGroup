@@ -105,6 +105,8 @@ enum TgcgCapability {
   approveAskMe,
   appointNationalAdministrator,
   approveAdministratorRemoval,
+  // Resetting a member's PIN to their phone number: National Administrators only.
+  resetMemberPins,
   // Scheduling projects: National Administrators only.
   manageProjects,
 }

@@ -4,7 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../access/access_widgets.dart'
-    show appointmentStatePill, areaLabel, failureMessage, formatDay, formatMoment, promptText;
+    show
+        appointmentStatePill,
+        areaLabel,
+        confirmAction,
+        failureMessage,
+        formatDay,
+        formatMoment,
+        promptText;
 import '../access/appointments_tab.dart' show AppointDialog, AppointmentDialog;
 import '../api/access_repository.dart' show AccessRepository, Appointment, AppointmentState;
 import '../api/api_client.dart' show ApiException;
@@ -77,6 +84,9 @@ class _MemberProfileState extends State<_MemberProfile> {
   /// This account suspends and ends memberships, and this is not its own.
   bool _mayChangeStanding = false;
 
+  /// A National Administrator, and this is not their own profile.
+  bool _mayResetPin = false;
+
   /// The member's positions, when this account may manage them: null until
   /// the server has listed them, and then they carry a Manage button.
   List<Appointment>? _positions;
@@ -97,6 +107,7 @@ class _MemberProfileState extends State<_MemberProfile> {
     if (session == null || session.membershipNumber == widget.number) return;
     _mayAssign = session.can(TgcgCapability.assignRoles);
     _mayChangeStanding = session.can(TgcgCapability.suspendMembers);
+    _mayResetPin = session.can(TgcgCapability.resetMemberPins);
     if (_mayAssign || session.can(TgcgCapability.manageAssignments)) {
       unawaited(_loadPositions());
     }
@@ -296,6 +307,34 @@ class _MemberProfileState extends State<_MemberProfile> {
     }
   }
 
+  Future<void> _resetPin(StaffMember member) async {
+    setState(_clearMessages);
+    final confirmed = await confirmAction(
+      context,
+      title: "Reset ${member.displayName}'s PIN?",
+      message:
+          'Their PIN becomes their phone number, or the VIN or NIN they joined with when '
+          'they have no phone. They are signed out everywhere and must choose a new PIN '
+          'when they next sign in. They are told in the app.',
+      action: 'Reset PIN',
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final kind = await _members.resetPin(member.membershipNumber);
+      if (!mounted) return;
+      setState(
+        () => _done =
+            'PIN reset. ${member.displayName} signs in with their $kind as the PIN, then '
+            'chooses a new one.',
+      );
+    } catch (error) {
+      if (mounted) setState(() => _problem = error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// Whatever this account may do to this member, in one place at the top.
   Widget? _manage(StaffMember member) {
     final state = member.membershipState;
@@ -324,6 +363,12 @@ class _MemberProfileState extends State<_MemberProfile> {
           style: OutlinedButton.styleFrom(foregroundColor: TgcgColors.danger),
           icon: const Icon(Icons.person_off_outlined),
           label: const Text('End membership'),
+        ),
+      if (_mayResetPin && member.hasAppAccount && state != 'deactivated')
+        OutlinedButton.icon(
+          onPressed: _busy ? null : () => _resetPin(member),
+          icon: const Icon(Icons.lock_reset_rounded),
+          label: const Text('Reset PIN'),
         ),
     ];
     if (buttons.isEmpty) return null;

@@ -391,6 +391,33 @@ void main() {
       expect(tester.getTopLeft(find.text('Assign position')).dy, lessThan(300));
     });
 
+    testWidgets("a National Administrator resets the member's PIN, once confirmed", (
+      tester,
+    ) async {
+      final server = ReviewServer(status: 'verified');
+      await open(tester, server, powers: {...manages, 'resetMemberPins'});
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Reset PIN'));
+      await tester.pumpAndSettle();
+      expect(find.text("Reset ${server.person['full_name']}'s PIN?"), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(server.requests, isNot(contains('POST members/$reviewedNumber/reset-pin/')));
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Reset PIN'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Reset PIN'));
+      await tester.pumpAndSettle();
+      expect(server.requests, contains('POST members/$reviewedNumber/reset-pin/'));
+      expect(find.textContaining('signs in with their phone number as the PIN'), findsOneWidget);
+    });
+
+    testWidgets('only a National Administrator is offered the reset', (tester) async {
+      await open(tester, ReviewServer(status: 'verified'), powers: manages);
+      expect(find.text('Suspend membership'), findsOneWidget);
+      expect(find.text('Reset PIN'), findsNothing);
+    });
+
     testWidgets('a membership is suspended, then restored', (tester) async {
       final server = ReviewServer(status: 'verified');
       var changes = 0;

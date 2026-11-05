@@ -1727,7 +1727,12 @@ void main() {
     expect(find.text('TGCG-000123'), findsOneWidget);
   });
 
-  for (final (kind, vin) in const [('VIN', '90F5B0E8D0295847263'), ('NIN', '12345678901')]) {
+  // (A server that says what the first PIN is, after a reset; and older ones.)
+  for (final (kind, vin, said, words) in const [
+    ('VIN', '90F5B0E8D0295847263', null, 'You signed in with your VIN,'),
+    ('NIN', '12345678901', null, 'You signed in with your NIN,'),
+    ('phone number', '08031234567', 'phone number', 'Your PIN was reset to your phone number'),
+  ]) {
   testWidgets('signed in with a $kind, a member chooses their own PIN before anything else', (
     tester,
   ) async {
@@ -1745,6 +1750,7 @@ void main() {
                 'scope': {'level': 'lga', 'country': 'Nigeria', 'lgaId': 'KD-ZARIA'},
                 'capabilities': <String>[],
                 'must_change_pin': true,
+                'first_pin': ?said,
               },
             }),
           'auth/password/' => _json({'access': 'A2', 'refresh': 'R2'}),
@@ -1765,7 +1771,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose your own PIN'), findsOneWidget);
-    expect(find.textContaining('You signed in with your $kind,'), findsOneWidget);
+    expect(find.textContaining(words), findsOneWidget);
     expect(_requestsTo(server, 'me/member/'), isEmpty);
     await tester.enterText(find.widgetWithText(TextField, 'New 6-digit PIN'), '482915');
     await tester.enterText(find.widgetWithText(TextField, 'New PIN again'), '482916');

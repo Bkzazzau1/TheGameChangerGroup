@@ -179,6 +179,7 @@ class ReviewServer {
         standing = 'active';
         return jsonResponse(person);
       }(),
+      'POST members/$reviewedNumber/reset-pin/' => jsonResponse({'first_password': 'phone number'}),
       'GET members/$reviewedNumber/photo/' => http.Response.bytes(selfie, 200),
       'GET members/$reviewedNumber/card-photo/' => http.Response.bytes(card, 200),
       _ => jsonResponse({'detail': 'Not found.'}, 404),

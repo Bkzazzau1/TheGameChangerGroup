@@ -6,16 +6,18 @@ import '../api/backend.dart';
 import '../ui/tgcg_design.dart';
 
 /// A member who signed in with a first password others know (their VIN or
-/// NIN, from a group's list) chooses their own 6-digit PIN before anything
-/// else; the server refuses everything until they do. Pops true once it is
-/// changed, false if they sign out instead.
+/// NIN, from a group's list, or their phone number after a National
+/// Administrator reset the PIN) chooses their own 6-digit PIN before
+/// anything else; the server refuses everything until they do. Pops true
+/// once it is changed, false if they sign out instead.
 class FirstPinPage extends StatefulWidget {
   const FirstPinPage({super.key, required this.firstPassword, this.signedInWith = 'VIN'});
 
   /// What they signed in with, sent as the current password.
   final String firstPassword;
 
-  /// 'VIN' or 'NIN': what they signed in with, and go on signing in with.
+  /// 'phone number' (or 'phone number with its country code'), 'VIN' or
+  /// 'NIN': what that first password is.
   final String signedInWith;
 
   @override
@@ -73,9 +75,14 @@ class _FirstPinPageState extends State<FirstPinPage> {
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           children: [
             Text(
-              'You signed in with your ${widget.signedInWith}, which is on the list your group '
-              'gave TGCG. Choose a 6-digit PIN only you know. From now on you sign in with '
-              'your ${widget.signedInWith} and this PIN.',
+              // A phone, at home or (with its country code) abroad, after a reset.
+              widget.signedInWith.startsWith('phone number')
+                  ? 'Your PIN was reset to your ${widget.signedInWith}, which others may know. '
+                        'Choose a 6-digit PIN only you know. From now on you sign in with your '
+                        'phone number and this PIN.'
+                  : 'You signed in with your ${widget.signedInWith}, which others may know. '
+                        'Choose a 6-digit PIN only you know. From now on you sign in with your '
+                        '${widget.signedInWith} and this PIN.',
               style: const TextStyle(color: TgcgColors.muted, height: 1.4),
             ),
             const SizedBox(height: 16),

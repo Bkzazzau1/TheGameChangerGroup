@@ -18,13 +18,19 @@ class ServerUser {
     this.phoneNumber,
     this.email,
     this.mustChangePin = false,
+    this.firstPin,
   });
 
   final String accessId;
 
-  /// Signed in with a first password others know (a VIN from a group's list):
+  /// Signed in with a first password others know (a VIN or NIN from a group's
+  /// list, or a phone number after a National Administrator reset the PIN):
   /// the server refuses everything else until the account chooses its own PIN.
   final bool mustChangePin;
+
+  /// While [mustChangePin]: what that first password is, 'phone number',
+  /// 'VIN' or 'NIN' (from servers that say).
+  final String? firstPin;
   final String fullName;
 
   /// Raw role from the server; [role] is null for roles this app does not
@@ -95,6 +101,7 @@ class ServerUser {
       phoneNumber: json['phone_number'] as String?,
       email: json['email'] as String?,
       mustChangePin: json['must_change_pin'] as bool? ?? false,
+      firstPin: json['first_pin'] as String?,
     );
   }
 }

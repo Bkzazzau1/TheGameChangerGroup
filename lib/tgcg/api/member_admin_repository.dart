@@ -553,6 +553,13 @@ class MemberAdminRepository {
   Future<StaffMember> restore(String number, {String reason = ''}) =>
       _standing(number, 'restore', reason);
 
+  /// Resets the member's PIN (National Administrators only); returns what it
+  /// now is: 'phone number', 'VIN' or 'NIN'. They choose their own at their
+  /// next sign-in.
+  Future<String> resetPin(String number) async =>
+      (await client.post('members/$number/reset-pin/') as Map<String, dynamic>)['first_password']
+          as String;
+
   Future<List<AuditEntry>> history(String number) async => [
     for (final item in await client.get('members/$number/history/') as List<dynamic>)
       AuditEntry.fromJson(item as Map<String, dynamic>),
