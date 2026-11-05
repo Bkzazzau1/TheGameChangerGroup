@@ -16,7 +16,7 @@ Initial setup on 12 October 2026; latest code release deployed on 26 October 202
 
 - Maintenance mode is off since 30 October 2026, 17:28 Africa/Lagos, when the owner asked for the site to go live. It last ran from 29 October, 21:01, with a countdown to the presidential election, and before that the same day from 09:38 to 16:56. The rules stay installed; see Operations.
 - VPS: `159.198.75.103`, AlmaLinux 9.8.
-- Source: `Bkzazzau1/tgcg_backend`, deployed commit `f7761bf8ebc7cdefadd6985d92e538a34b36f419`.
+- Source: `Bkzazzau1/tgcg_backend`, deployed commit `c35cbb836f765439a59e588f0aec40b352fe5b55`.
 - Application: `/opt/tgcg/backend`, running as the `tgcg` system account.
 - Python 3.12.15, Django 5.2.18, Gunicorn 26.2.0, PostgreSQL 16.
 - Tesseract 4.1.1 with English language data; `TESSERACT_CMD=/usr/bin/tesseract`.
@@ -33,13 +33,13 @@ Nginx publishes the API and administration over HTTPS while Gunicorn remains on 
 
 ## Web release and demo labels
 
-- Published release: `/var/www/tgcg/releases/web-20261105-191202-9944e8ebab1e` (release directory timestamps use UTC).
-- Frontend build source: `b01e0a7` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
-- Previous web release retained: `/var/www/tgcg/releases/web-20261105-111859-3d6fe73f8c92` (NIN sign-in, `284a2c7`); earlier releases are also retained.
+- Published release: `/var/www/tgcg/releases/web-20261105-213137-b8d753eeaa1e` (release directory timestamps use UTC).
+- Frontend build source: `edc0b30` from `Bkzazzau1/TheGameChangerGroup`, built on the owner's PC from a clean checkout. Android version 5 is from the earlier `cb5c7ac`: it still says "credits" and has neither the upload back-off nor the slower refreshes. The owner chose no new APK for now.
+- Previous web release retained: `/var/www/tgcg/releases/web-20261105-191202-9944e8ebab1e` (the PVC's frame, `b01e0a7`); earlier releases are also retained.
 - Active release link: `/var/www/tgcg/app-current`.
-- Main JavaScript SHA256: `9944e8ebab1eb003d24b433d348a504e5d135b137a1bceff1f01ebce783898ad`.
-- Build: 856 files, 59,573,963 uncompressed bytes. The public JavaScript checksum matched after publication.
-- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261105-nin-sign-in.json`, `web-release-20261104-group-analytics.json`, `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
+- Main JavaScript SHA256: `b8d753eeaa1ee25918372fa0d828dd8780e2dc44ca7ac276cb168753e784c485`.
+- Build: 856 files, 59,576,569 uncompressed bytes. The public JavaScript checksum matched after publication.
+- Release metadata: `/opt/tgcg/deployment/web-release.json`; earlier records are kept as `web-release-20261105-pvc-frame.json`, `web-release-20261105-nin-sign-in.json`, `web-release-20261104-group-analytics.json`, `web-release-20261104-vin-sign-in.json`, `web-release-20261104-diaspora-group-types.json`, `web-release-20261103-support-groups.json`, `web-release-20261101-popups.json`, `web-release-20261101-election-watch.json`, `web-release-20261101-daily-reminder.json`, `web-release-20261101-manage-from-profile.json`, `web-release-20261101-one-member-view.json`, `web-release-20261031-men-and-professions.json`, `web-release-20261030-redesign.json`, `web-release-20261030-before-redesign.json`, `web-release-20261026-tgc-tokens.json`, `web-release-20261026-video-pictures.json`, `web-release-20261026-askme-referrals.json`, `web-release-20261024-registrars.json` and `web-release-20261024-social-forum.json`.
 
 Production builds require `TGCG_API_URL=https://api.tgcg.online`. The app opens on the TGCG poster, logo and welcome note, with the sign-in form beside the poster on wide screens and opened by Sign in on phones. Menus offer server-backed screens, and dashboard/agent-home totals come from existing API counts and tracking coverage. The app now defaults to the production API, and production builds also set its address explicitly. Demo and presentation sign-in routes were removed.
 
@@ -175,6 +175,16 @@ An earlier deployment on 12 October 2026 published frontend `3f5405c` with backe
 The latest deployment on 12 October 2026 enabled Google-first/Tesseract-fallback reading and published the longer-timeout web build. The targeted Flutter API-client, member-app, server-login and PVC suites passed 53 tests, including deadline and streamed-response checks. Backend PVC-reading, registration, membership and USSD suites passed 85 tests using isolated SQLite without opening dotenv files. One native-Tesseract test was skipped locally; production verification used a real Google read, then a simulated Google failure with the real installed Tesseract, and both recognized the synthetic name and polling-unit code. The public HTTPS endpoint returned HTTP 200 with app CORS allowed, production settings passed, and API health and the served web checksum passed. No dependency or migration changes were needed. Backups ran before the update and after publication.
 
 ## Remaining configuration
+
+### A National Administrator resets a member's PIN (5 November 2026)
+
+Backend `c35cbb8` over `f7761bf`, and frontend `edc0b30`, on the owner's word ("Publish now"). Deployed by Claude Code. No migrations, packages or static files; backup `20261105T213930Z-u2UT0R` before the deployment.
+
+- **The reset:** a new protected power, `resetMemberPins`, held by National Administrators only and never delegable. `members/{number}/reset-pin/` sets the PIN to the account's phone number (08031234567; abroad, its digits with the country code), or with no phone the VIN or NIN, and answers which, never the PIN. The member must choose their own PIN at the next sign-in, every session ends, any lockout lifts, the reset is audited (`account.pin_reset`, without the PIN) and the member is told in the app. The member's profile offers Reset PIN with a confirmation; the first-PIN screen says what the PIN was reset to (`first_pin` on sign-in and `auth/me`).
+- **Refused:** one's own account, any National Administrator's account (suspended or not yet started too, so no administrator can act as two), staff accounts that keep a staff password, accounts that open the site's administration, and ended memberships. A review (3 dimensions, 2 skeptics per finding, 29 agents) confirmed four problems before release, all fixed: suspended administrators, phones abroad (the reset made no usable PIN), staff roles and site administrators.
+- **Phones:** Android version 5 has no first-PIN screen; a member whose PIN is reset finishes on the website until version 6.
+
+**846 PostgreSQL tests** passed with 0 skipped in the isolated run at `c35cbb8`; **584 Flutter tests** passed with analysis clean. Zero migrations are pending, health passed, the public checksum matched `b8d753ee…`, and an anonymous reset is refused (401).
 
 ### The PVC's frame on screen, and browsers that refuse storage (5 November 2026)
 
